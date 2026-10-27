@@ -105,6 +105,8 @@ def check_rich(value, where, problems, required=True):
 
 def check_structure(data):
     problems, warnings = [], []
+    for err in data.get("loadErrors", []):
+        problems.append("could not load " + err["file"] + ": " + err["error"])
     effects = set(data["sceneEffects"])
     seen_ids = set()
     orders = []
@@ -279,7 +281,10 @@ def main():
     if args.only:
         challenges = [ch for ch in challenges if ch["id"] == args.only or ch["chapterId"] == args.only]
         if not challenges:
-            print("No chapter or challenge called " + repr(args.only))
+            for p in problems:
+                if p.startswith("could not load"):
+                    print("STRUCTURE  " + p)
+            print("No chapter or challenge called " + repr(args.only) + " (did its file fail to load? see above)")
             return 2
         problems = [p for p in problems if any(ch["id"] in p for ch in challenges) or args.only in p]
         warnings = [w for w in warnings if any(ch["id"] in w for ch in challenges)]

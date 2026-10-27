@@ -29,12 +29,19 @@ sandbox.window = sandbox;
 sandbox.globalThis = sandbox;
 vm.createContext(sandbox);
 
+// The harness and registry must load. A broken chapter file is reported (loadErrors)
+// but does not stop the others, so several authors can work at the same time.
+const loadErrors = [];
 for (const file of files) {
+  const rel = path.relative(root, file);
   try {
     vm.runInContext(fs.readFileSync(file, "utf8"), sandbox, { filename: file });
   } catch (err) {
-    console.error(`Failed to load ${path.relative(root, file)}:\n${err.stack || err}`);
-    process.exit(2);
+    if (!rel.startsWith(path.join("js", "content")) || rel.endsWith("registry.js")) {
+      console.error(`Failed to load ${rel}:\n${err.stack || err}`);
+      process.exit(2);
+    }
+    loadErrors.push({ file: rel, error: String((err && err.stack) || err).split("\n").slice(0, 4).join("\n") });
   }
 }
 
@@ -58,6 +65,7 @@ process.stdout.write(
       characters: SS.CHARACTERS,
       contentFiles: chapterFiles.map((name) => "js/content/" + name),
       indexScripts,
+      loadErrors,
     },
     null,
     1
