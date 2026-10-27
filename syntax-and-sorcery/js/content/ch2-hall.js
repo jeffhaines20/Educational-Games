@@ -256,6 +256,29 @@
           SHUT = "The door stays shut."
 
 
+          def text_vs_text():
+              """A comparison between two pieces of quoted text, such as "password" == "pickled newt"."""
+              for node in _ast.walk(_ast.parse(source)):
+                  if (isinstance(node, _ast.Compare) and isinstance(node.left, _ast.Constant)
+                          and isinstance(node.left.value, str)
+                          and all(isinstance(side, _ast.Constant) and isinstance(side.value, str)
+                                  for side in node.comparators)):
+                      return node.left.value
+              return None
+
+
+          def missing_else():
+              """'elif' or 'if' when the spell's decision has no else branch, otherwise None."""
+              for node in _ast.parse(source).body:
+                  if isinstance(node, _ast.If):
+                      branch, elifs = node, 0
+                      while len(branch.orelse) == 1 and isinstance(branch.orelse[0], _ast.If):
+                          branch, elifs = branch.orelse[0], elifs + 1
+                      if not branch.orelse:
+                          return "elif" if elifs else "if"
+              return None
+
+
           def check_door(password, want):
               run = run_again([password])
               must_ask(run, "the password")
@@ -263,6 +286,17 @@
               if OPEN in run.lines and SHUT in run.lines:
                   fail(label + ", both messages appeared! Put the second " + code("print") + " under "
                        + code("else:") + ", so that only one of them runs.")
+              if run.lines == [want]:
+                  return
+              if not uses_syntax("if"):
+                  fail(label + ", your spell printed " + (short(run.lines[0]) if run.lines else "nothing")
+                       + ". The door has to decide: use " + code("if") + " to open it only when "
+                       + code('password == "pickled newt"') + ", and " + code("else:") + " to keep it shut otherwise.")
+              quoted = text_vs_text()
+              if quoted is not None:
+                  fail(label + ", the door got it wrong. Your " + code("if") + " compares two pieces of fixed text: in "
+                       "quotes, " + code('"' + quoted + '"') + " is just a word, not your variable, so the answer "
+                       "never changes. Leave the quotes off the variable's name: " + code('if password == "pickled newt":') + ".")
               if want == OPEN and run.lines == [SHUT]:
                   fail(label + ", the door stayed shut. Check the password in your " + code("if") + ": it must be "
                        "exactly " + code('"pickled newt"') + ", all in small letters with one space.")
@@ -270,9 +304,16 @@
                   warning = lonely_value('password == "a" or password == "b"')
                   if warning:
                       fail(label + ", the door opened." + warning)
-                  if password.lower() == "pickled newt":
+                  changes_case = any(uses_call(name) for name in ("lower", "upper", "casefold", "capitalize", "title"))
+                  if password.lower() == "pickled newt" and changes_case:
                       fail(label + ", the door opened, but the password is " + code("pickled newt") + " in small "
                            "letters. The door is precise: compare with " + code("==") + " without changing the capitals.")
+              if want == SHUT and not run.lines and missing_else() == "elif":
+                  fail(label + ", your spell didn't print anything: your " + code("elif") + " only catches one "
+                       "particular password. Use " + code("else:") + " to catch every other word.")
+              if want == SHUT and not run.lines and missing_else() == "if":
+                  fail(label + ", your spell didn't print anything. Add an " + code("else:") + " branch that prints "
+                       + short(SHUT) + ".")
               expect_lines(run.lines, [want], label, after_input=True)
 
 
@@ -338,7 +379,8 @@
             if hour < 9 or hour > 17:
                 print("The library is closed.")
           `, output: "The library is open." },
-          { tip: "Python also understands `9 <= hour <= 17`. And remember `int()`: `input()` gives text, and text can't be compared with numbers." }
+          { warning: "Each side of `and` and `or` must be a complete comparison: write `temp >= 30 and temp <= 40`, not `temp >= 30 and <= 40`." },
+          { tip: "Python also understands `9 <= hour <= 17`. And remember `int()`: `input()` gives text, so `\"35\" < 40` is an error, and `\"0\" == 0` is quietly `False`." }
         ],
         inputs: ["35"],
         starter: py`
@@ -601,7 +643,8 @@
                   fail(label + ", " + short(GLOW) + " appeared " + str(lines.count(GLOW)) + " times. Un-indent "
                        "that " + code("print") + " so that it runs once, after the loop has finished.")
               last = "Candle " + str(n) + " is lit"
-              if n >= 1 and GLOW in lines and last not in lines and (n == 1 or "Candle " + str(n - 1) + " is lit" in lines):
+              before_last = "Candle " + str(n - 1) + " is lit"
+              if n >= 1 and last not in lines and (lines == [GLOW] if n == 1 else (GLOW in lines and before_last in lines)):
                   fail(label + ", the last candle (" + short(last) + ") never got lit. " + code("range")
                        + " stops just before its end number, so use " + code("n + 1") + " as the end.")
               expect_lines(lines, want, label, after_input=True)
@@ -664,6 +707,7 @@
             print("Letters:", letters)
           `, output: "Word? owl\nWord? frog\nWord? stop\nLetters: 7" },
           "Notice the pattern: read the first value **before** the loop, then read the next one at the **end** of each round.",
+          { warning: "`input()` gives text, and text never equals a number: `\"0\" != 0` is `True`. So `while coins != 0:` never stops while `coins` holds text. Convert it first: `coins = int(input(\"Coins: \"))`." },
           { tip: "`total += 5` is a shortcut for `total = total + 5`." }
         ],
         inputs: ["5", "12", "8", "0"],
@@ -759,6 +803,10 @@
               got = run.lines[-1]
               if got == want:
                   return
+              if "total" in got.split() and "total" not in want:
+                  fail(label + ", your spell printed " + short(got) + ": the word total instead of the number stored "
+                       "in it. Leave the variable out of the quotes: " + code('print("The well holds", total, "coins")')
+                       + ".")
               found = _re.findall(r"-?\d+", got)
               number = int(found[0]) if len(found) == 1 else None
               if number == 0 and total > 0:
@@ -815,7 +863,7 @@
       {
         id: "hall-familiar-chorus",
         title: "The Familiar Chorus",
-        difficulty: "easy",
+        difficulty: "medium",
         concepts: ["for + if", "% (remainder)", "and"],
         story: [
           "In the hall's echoing gallery, the familiars are rehearsing their chorus. The owls hoot on every 3rd beat, the frogs croak on every 5th, and when both land on the same beat they sing together. Glitch has scrambled the sheet music, and the result is pandemonium.",
@@ -979,20 +1027,38 @@
                   if len(line.split()) >= 3:
                       fail(label + ", your spell printed " + short(line) + ": several beats on one line. Print each "
                            "beat on a line of its own, with one " + code("print()") + " per beat.")
-              if lines[0] in ("0", "HootCroak"):
+              if lines[0] == "0" or lines[:2] == ["HootCroak", "1"]:
                   fail(label + ", the song starts at beat 0. " + code("range(n)") + " starts counting at 0; to count "
                        "the beats from 1 to n, use " + code("range(1, n + 1)") + ".")
-              for index, (wanted, printed) in enumerate(zip(want, lines)):
+              for index, printed in enumerate(lines):
+                  wanted = want[index] if index < len(want) else None
                   if wanted == printed:
                       continue
                   beat = index + 1
-                  if index > 0 and printed == str(beat - 1):
-                      fail(label + ", beat " + str(beat - 1) + " printed two lines (" + short(lines[index - 1])
-                           + " and " + short(printed) + "). Each beat must print exactly one line: use "
-                           + code("elif") + " and " + code("else") + " so only one branch runs.")
+                  # The line after a correct one may belong to the same beat (index is that beat's number).
+                  if index > 0 and lines[index - 1] == want[index - 1] and (
+                          printed == str(index) or (want[index - 1] == "HootCroak" and printed in ("Hoot", "Croak"))):
+                      advice = ("turn the second " + code("if") + " into " + code("elif") + " so only one branch runs."
+                                if want[index - 1] == "HootCroak" else
+                                "use " + code("elif") + " and " + code("else") + " so only one branch runs.")
+                      fail(label + ", beat " + str(index) + " printed two lines (" + short(lines[index - 1]) + " and "
+                           + short(printed) + "): " + advice)
+                  if wanted is None:
+                      fail(label + ", your spell printed too many lines: the song should stop after beat " + str(n) + ".")
+                  if wanted == "HootCroak" and lines[index:index + 2] == ["Hoot", "Croak"]:
+                      fail(label + ", beat " + str(beat) + " printed " + short("Hoot") + " and " + short("Croak")
+                           + " on two lines. Print the single word " + short("HootCroak") + " with one " + code("print()") + ".")
                   message = (label + ", beat " + str(beat) + " should be " + short(wanted) + ", but your spell printed "
                              + short(printed) + ".")
-                  if wanted == "HootCroak" and printed in ("Hoot", "Croak"):
+                  if printed == "HootCroak":
+                      warning = lonely_value("beat % 3 == 0 and beat % 5 == 0")
+                      if warning:
+                          message += warning
+                      elif uses_or():
+                          message += (" With " + code("or") + ", only one side needs to be True, so a beat like "
+                                      + str(beat) + " counts as \"both\". Use " + code("and") + ": "
+                                      + code("beat % 3 == 0 and beat % 5 == 0") + ".")
+                  elif wanted == "HootCroak" and printed in ("Hoot", "Croak"):
                       message += (" Beat " + str(beat) + " is a multiple of both 3 and 5. An " + code("if") + "/"
                                   + code("elif") + " chain stops at the first true condition, so check the \"both\" "
                                   "case first.")
@@ -1002,8 +1068,6 @@
                                   "with the remainder: " + code("beat % 3 == 0") + " is True when 3 divides the "
                                   "beat exactly.")
                   fail(message + near_miss(wanted, printed))
-              if len(lines) > len(want):
-                  fail(label + ", your spell printed too many lines: the song should stop after beat " + str(n) + ".")
               if len(lines) < len(want):
                   fail(label + ", the song stopped too soon: it should go on until beat " + str(n)
                        + ", which is " + short(want[-1]) + "."
@@ -1225,24 +1289,42 @@
               must_ask(run, "the number on the gate")
               label = "For " + str(n)
               primes = primes_up_to(n)
-              want = [str(p) for p in primes] + ["Primes found: " + str(len(primes))]
+              count_want = "Primes found: " + str(len(primes))
+              want = [str(p) for p in primes] + [count_want]
               lines = run.lines
               if not lines:
                   fail(label + ", your spell didn't print anything after reading the number. It should print:\n"
                        + "\n".join(want))
-              for line in lines:
-                  if not line.isdigit() and not line.startswith("Primes found:"):
+
+              # The count line must appear once, as the very last line.
+              count_at = [i for i, line in enumerate(lines) if "found" in line.lower()]
+              if len(count_at) > 1:
+                  fail(label + ", your spell printed the " + short("Primes found:") + " line " + str(len(count_at))
+                       + " times. Print it once, at the very end: un-indent it so that it runs after the loops.")
+              if count_at and count_at[0] != len(lines) - 1:
+                  fail(label + ", " + short(lines[count_at[0]]) + " should be the very last line, but your spell "
+                       "printed " + short(lines[count_at[0] + 1]) + " after it.")
+              count_line = None if lines[-1].isdigit() else lines[-1]
+              body = lines[:-1] if count_line is not None else lines
+              count_numbers = _re.findall(r"\d+", count_line or "")
+              if count_line is not None and count_line != count_want and count_numbers == [str(len(primes))]:
+                  fail(label + ", the last line should be exactly " + short(count_want) + ", but your spell printed "
+                       + short(count_line) + "." + near_miss(count_want, count_line))
+
+              # Every other line must be one of the primes from 2 to n.
+              for line in body:
+                  if not line.isdigit():
                       fail(label + ", your spell printed " + short(line) + ". Print each prime on a line of its own, "
                            "as just the number (" + code("print(number)") + "), and end with the line "
-                           + short(want[-1]) + ".")
-              counts = [line for line in lines if line.startswith("Primes found:")]
-              if len(counts) > 1:
-                  fail(label + ", your spell printed the " + short("Primes found:") + " line " + str(len(counts))
-                       + " times. Print it once, at the very end: un-indent it so that it runs after the loops.")
-              numbers = [int(line) for line in lines if line.isdigit()]
+                           + short(count_want) + ".")
+              numbers = [int(line) for line in body]
               if 1 in numbers:
                   fail(label + ", your spell printed 1, but 1 is not a prime number: a prime has exactly two "
                        "divisors, 1 and itself. Start checking from 2.")
+              for k in numbers:
+                  if k > n:
+                      fail(label + ", your spell printed " + str(k) + ", but the gate only wants primes up to " + str(n)
+                           + ". End the outer loop with " + code("range(2, n + 1)") + ".")
               for k in numbers:
                   if 2 <= k <= n and k not in primes:
                       d = smallest_divisor(k)
@@ -1274,12 +1356,17 @@
                            + " is missing). Does every new candidate start with a fresh flag? Set "
                            + code("is_prime = True") + " inside the outer loop.")
                   fail(label + ", the prime " + str(p) + " is missing.")
-              if not lines[-1].startswith("Primes found:"):
-                  fail(label + ", the last line should be " + short(want[-1]) + ", but your spell printed "
-                       + short(lines[-1]) + ".")
-              if lines[-1] != want[-1]:
-                  fail(label + ", your spell printed the right primes, but the last line says " + short(lines[-1])
-                       + " instead of " + short(want[-1]) + ". Add 1 to your counter each time you print a prime.")
+
+              # Finally, the count line itself.
+              if count_line is None:
+                  fail(label + ", your spell printed the right primes, but not how many it found. Finish with the "
+                       "line " + short(count_want) + ".")
+              if count_line != count_want:
+                  if len(count_numbers) == 1 and "found" in count_line.lower():
+                      fail(label + ", your spell printed the right primes, but the last line says " + short(count_line)
+                           + " instead of " + short(count_want) + ". Add 1 to your counter each time you print a prime.")
+                  fail(label + ", the last line should be exactly " + short(count_want) + ", but your spell printed "
+                       + short(count_line) + "." + near_miss(count_want, count_line))
               expect_lines(lines, want, label, after_input=True)
 
 
