@@ -1,8 +1,10 @@
 /*
- * Syntax & Sorcery — SS.Save: profiles, save slots, Save Scrolls and SCORM storage.
+ * Pyromancer — SS.Save: profiles, save slots, Save Scrolls and SCORM storage.
  *
  * See docs/DESIGN.md §5.3 for the API. Notes on behaviour:
  *   * Slots are numbered 0 .. saveSlots-1 (show them to players as 1, 2, 3).
+ *     listSlots() gives null for an empty slot and { slot, damaged: true } for a slot
+ *     whose save can't be read (the UI can offer to delete it).
  *   * getProfile() returns the live profile object: read it, but change it only
  *     through these functions so that changes are saved.
  *   * Important changes (casts, hints, completions, settings…) are written at once;
@@ -10,16 +12,29 @@
  *     on pagehide / visibilitychange.
  *   * onChange(cb) → cb(profile, { type, challengeId }) after every saved change except
  *     draft / practice-code autosaves (so editors aren't re-rendered on each keystroke).
+ *     type "sync" means another tab of the game saved the same profile and its progress
+ *     was merged in.
+ *   * Two tabs on one save: before writing, the stored copy is merged in (best of each
+ *     challenge; names, settings and drafts follow whichever tab changed them), and a
+ *     `storage` event from another tab merges its changes straight away.
  *   * If localStorage is blocked or full, everything keeps working in memory and
- *     storageWarning() explains that the Save Scroll is needed.
+ *     storageWarning() explains that the Save Scroll is needed. Writes that failed are
+ *     retried with the next write; the warning stays until all of them succeed.
  *   * Imported data is sanitised: wrong types fall back to defaults, wizard names are
  *     cleaned (control characters removed, at most 24 characters) and unknown fields
- *     are dropped.
+ *     are dropped. Save codes start with "PYRO1." (older "SNS1." codes still import).
  *   * SCORM mode (an LMS API was found): one profile, no slots. Compact progress lives
  *     in cmi.suspend_data (always ≤ 4000 characters: challenge ids and "seen" keys are
  *     stored as 6-character hashes), drafts and code stay in localStorage keyed by the
  *     learner id. On init the LMS data is merged with the local copy, taking the best
- *     of each challenge; the LMS wins for name and settings.
+ *     of each challenge; the LMS wins for name and settings. A fresh attempt (also after
+ *     an instructor reset) keeps only the wizard's name, settings and code from the
+ *     local copy. Values are sent only when they change; commits happen at once after a
+ *     completion and when the page is hidden or closed, otherwise at most once a minute.
+ *     Importing a Save Scroll is off unless SS.config.scorm.allowImport is true.
+ *   * SS.config.scormRequired (set by tools/build.py in the SCORM package): if no LMS
+ *     connection can be made after a few tries (~2.5 s, during init()), the game runs
+ *     with local saves and storageWarning() says that nothing reaches the course.
  */
 (function (global) {
   "use strict";
@@ -28,11 +43,15 @@
   var hasOwn = Object.prototype.hasOwnProperty;
 
   var PROFILE_VERSION = 1;
-  var FILE_FORMAT = "syntax-and-sorcery-save";
-  var CODE_PREFIX = "SNS1.";
+  var FILE_FORMAT = "pyromancer-save";
+  var LEGACY_FILE_FORMATS = ["syntax-and-sorcery-save"];
+  var CODE_PREFIX = "PYRO1.";
+  var CODE_RE = /^(PYRO|SNS)(\d+)\./i;  // "SNS1." codes come from before the game was renamed
   var SUSPEND_PREFIX = "S1";
   var SUSPEND_BUDGET = 4000;           // fits SCORM 1.2 (4096) and SCORM 2004 2nd edition (4000)
   var DRAFT_DELAY_MS = 800;
+  var COMMIT_INTERVAL_MS = 60000;      // routine LMS commits: at most once a minute
+  var SCORM_RETRY_DELAYS_MS = [250, 500, 750, 1000];
   var MAX_NAME = 24;
   var MAX_CODE = 200000;               // characters per draft / bestCode / practice code
   var MAX_IMPORT = 20 * 1024 * 1024;
@@ -61,12 +80,15 @@
       "Your progress is still saved by your course.",
     scormFailed: "Your progress couldn't be sent to your course just now. It is still saved in this browser; " +
       "it will be sent again with your next spell.",
+    scormMissing: "This activity couldn't connect to your course, so your progress and score aren't being " +
+      "recorded. Close it and reopen it from the course.",
+    importOff: "Your course saves your progress automatically, so importing is turned off here.",
     empty: "Paste a save code or choose a Save Scroll file first.",
-    notScroll: "That doesn't look like a Save Scroll. Paste the whole save code (it starts with SNS1.) " +
+    notScroll: "That doesn't look like a Save Scroll. Paste the whole save code (it starts with PYRO1.) " +
       "or choose the .json file you downloaded.",
     damaged: "This Save Scroll is damaged or incomplete — part of it may be missing. Copy the whole code " +
       "(or download the file) again and retry.",
-    newer: "This Save Scroll was made by a newer version of Syntax & Sorcery. Open the newer version of the " +
+    newer: "This Save Scroll was made by a newer version of Pyromancer. Open the newer version of the " +
       "game to use it.",
     tooBig: "That file is far too large to be a Save Scroll.",
     badSlot: function (n) { return "Choose a save slot from 1 to " + n + "."; }
@@ -78,11 +100,18 @@
 
   var initialised = false;
   var initResult = null;
+  var initPromise = null;
   var local = null;          // a working localStorage object, or null
-  var memory = {};           // every key we wrote (newest value), used when localStorage fails
-  var storageMode = "memory";
-  var warning = null;
+  var localBlocked = false;  // localStorage can't be used at all
+  var probeFailed = false;   // localStorage was already full when the game started
+  var memory = {};           // values not (yet) in localStorage: the newest copy of each key
+  var failedKeys = {};       // keys whose last write to localStorage failed (retried with every write)
+  var lastSeen = {};         // key → the JSON this tab last read from / wrote to localStorage
   var scormMode = false;
+  var scormMissing = false;  // SCORM package, but no LMS connection could be made
+  var lmsFailing = false;    // the LMS rejected the last save
+  var lastCommitAt = 0;
+  var commitTimer = null;
   var learner = null;        // { id, name } in SCORM mode
   var active = null;         // { slot, profile }
   var listeners = [];
@@ -95,7 +124,7 @@
 
   function prefix() {
     var key = config().storageKey;
-    return typeof key === "string" && key ? key : "syntax-and-sorcery";
+    return typeof key === "string" && key ? key : "pyromancer";
   }
 
   function slotCount() {
@@ -311,49 +340,70 @@
     return { ls: ls, writable: writable };
   }
 
+  /** What localStorage itself holds (ignoring values only kept in memory). */
+  function readStored(key) {
+    if (!local) return null;
+    try {
+      var value = local.getItem(key);
+      return typeof value === "string" ? value : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /** The newest value of a key: one that couldn't be stored yet, else localStorage's. */
   function readKey(key) {
     if (hasOwn.call(memory, key)) return memory[key];
-    if (local) {
-      try {
-        var value = local.getItem(key);
-        if (typeof value === "string") return value;
-      } catch (e) { /* fall through */ }
-    }
-    return null;
+    return readStored(key);
   }
 
-  function storageFailed(error) {
-    storageMode = "memory";
-    if (!local) {
-      warning = scormMode ? MSG.scormLocal : MSG.blocked;
-    } else {
-      warning = scormMode ? MSG.scormLocal : MSG.full;
-    }
-    if (error) warn("could not write to localStorage", error);
-  }
-
-  /** Write a key. Returns true if it reached localStorage. */
-  function writeKey(key, value) {
-    memory[key] = value;
-    if (!local) { storageFailed(null); return false; }
+  function trySet(key, value) {
     try {
       local.setItem(key, value);
-      delete memory[key];
-      if (storageMode !== "local") {
-        storageMode = "local";
-        if (warning === MSG.full || warning === MSG.scormLocal) warning = null;
-      }
-      return true;
     } catch (e) {
-      storageFailed(e);
+      if (!failedKeys[key]) warn("could not write " + key + " to localStorage", e);
+      failedKeys[key] = true;
       return false;
     }
+    delete memory[key];
+    delete failedKeys[key];
+    probeFailed = false;
+    lastSeen[key] = value;
+    return true;
+  }
+
+  /** Write a key (kept in memory if localStorage refuses). Also retries earlier failed writes. */
+  function writeKey(key, value) {
+    memory[key] = value;
+    if (!local) return false;
+    var ok = trySet(key, value);
+    Object.keys(failedKeys).forEach(function (other) {
+      if (other !== key && hasOwn.call(memory, other)) trySet(other, memory[other]);
+    });
+    return ok;
   }
 
   function removeKey(key) {
     delete memory[key];
+    delete failedKeys[key];
+    delete lastSeen[key];
     if (!local) return;
     try { local.removeItem(key); } catch (e) { /* ignore */ }
+  }
+
+  function storageFailing() {
+    return localBlocked || probeFailed || Object.keys(failedKeys).length > 0;
+  }
+
+  /** The most important problem the player should know about, or null. */
+  function currentWarning() {
+    if (scormMissing) return MSG.scormMissing;
+    if (scormMode) {
+      if (lmsFailing) return MSG.scormFailed;
+      return storageFailing() ? MSG.scormLocal : null;
+    }
+    if (localBlocked) return MSG.blocked;
+    return storageFailing() ? MSG.full : null;
   }
 
   function parseJSON(text) {
@@ -469,7 +519,10 @@
     r.hintsUsed = Math.max(primary.hintsUsed, other.hintsUsed);
     r.answerRevealed = primary.answerRevealed || other.answerRevealed;
     r.draft = primary.draft !== null ? primary.draft : other.draft;
-    r.bestCode = primary.bestCode !== null ? primary.bestCode : other.bestCode;
+    // The best solution comes from the record with more stars (a tie keeps primary's).
+    var otherBetter = other.completed && other.bestCode !== null &&
+      (primary.bestCode === null || !primary.completed || other.stars > primary.stars);
+    r.bestCode = otherBetter ? other.bestCode : (primary.bestCode !== null ? primary.bestCode : other.bestCode);
     var dates = [primary.completedAt, other.completedAt].filter(Boolean).sort();
     r.completedAt = r.completed ? (dates[0] || null) : null;
     return r;
@@ -741,27 +794,123 @@
     return p;
   }
 
-  function pushScorm(commit) {
-    if (!scormMode || !active || !SS.Scorm) return false;
+  // ---------------------------------------------------------------------------
+  // Keeping two tabs of the game in step
+  // ---------------------------------------------------------------------------
+
+  function own(obj, key) {
+    return obj && hasOwn.call(obj, key) ? obj[key] : null;
+  }
+
+  function sameValue(a, b) {
+    return JSON.stringify(a === undefined ? null : a) === JSON.stringify(b === undefined ? null : b);
+  }
+
+  /** Three-way choice: if this tab changed the value since `base`, keep ours, else take theirs. */
+  function pick(base, mine, theirs) {
+    return sameValue(mine, base) ? theirs : mine;
+  }
+
+  /**
+   * Merge another tab's copy of the same profile into ours. Progress is the best of each
+   * challenge; the name, settings, last challenge, drafts and practice code come from
+   * whichever tab changed them since `base` (what this tab last saw stored).
+   */
+  function mergeTabs(base, mine, theirs) {
+    var out = mergeProfiles(mine, theirs, false);
+    if (!base) return out;
+    out.wizardName = pick(base.wizardName, mine.wizardName, theirs.wizardName);
+    Object.keys(out.settings).forEach(function (k) {
+      out.settings[k] = pick(base.settings[k], mine.settings[k], theirs.settings[k]);
+    });
+    out.lastChallengeId = pick(base.lastChallengeId, mine.lastChallengeId, theirs.lastChallengeId);
+    out.practiceCode = pick(base.practiceCode, mine.practiceCode, theirs.practiceCode);
+    Object.keys(out.challenges).forEach(function (id) {
+      var b = own(base.challenges, id), m = own(mine.challenges, id), t = own(theirs.challenges, id);
+      out.challenges[id].draft = pick(b ? b.draft : null, m ? m.draft : null, t ? t.draft : null);
+    });
+    return out;
+  }
+
+  /** Replace the contents of a profile object without changing its identity. */
+  function assignInPlace(target, source) {
+    Object.keys(target).forEach(function (k) { if (!hasOwn.call(source, k)) delete target[k]; });
+    Object.keys(source).forEach(function (k) { target[k] = source[k]; });
+  }
+
+  /**
+   * If another tab stored a different version of the active profile since this tab last
+   * looked, merge it in (or, if that slot now holds a different wizard, switch to it).
+   * Returns true if the active profile changed.
+   */
+  function syncActive() {
+    if (!active || !local) return false;
+    var key = activeKey();
+    var stored = readStored(key);
+    if (stored === null || stored === lastSeen[key]) return false;
+    var theirs = sanitizeProfile(parseJSON(stored));
+    var base = sanitizeProfile(parseJSON(lastSeen[key]));
+    lastSeen[key] = stored;
+    if (!theirs) return false;
+    if (theirs.id !== active.profile.id) {
+      assignInPlace(active.profile, theirs);      // a new game or an import in another tab
+    } else {
+      assignInPlace(active.profile, mergeTabs(base, active.profile, theirs));
+    }
+    return true;
+  }
+
+  // ---------------------------------------------------------------------------
+  // SCORM: sending progress to the LMS
+  // ---------------------------------------------------------------------------
+
+  function lmsReady() {
+    try { return scormMode && !!SS.Scorm && SS.Scorm.isActive(); } catch (e) { return false; }
+  }
+
+  function commitLms() {
+    if (commitTimer) { clearTimeout(commitTimer); commitTimer = null; }
+    lastCommitAt = Date.now();
+    try { return SS.Scorm.commit() === true; } catch (e) { return false; }
+  }
+
+  /** Routine changes: commit at once if the last commit was a minute ago, else when it is. */
+  function scheduleCommit() {
+    if (commitTimer) return true;
+    var wait = lastCommitAt + COMMIT_INTERVAL_MS - Date.now();
+    if (wait <= 0) return commitLms();
+    commitTimer = setTimeout(function () {
+      commitTimer = null;
+      if (lmsReady() && !commitLms()) lmsFailing = true;
+    }, wait);
+    return true;
+  }
+
+  /**
+   * Send the active profile to the LMS. SS.Scorm skips values that haven't changed and
+   * only commits when something was sent. urgent (a completion, init, the page being
+   * hidden or closed): commit now; otherwise at most once a minute.
+   */
+  function pushScorm(urgent) {
+    if (!active || !lmsReady()) return false;
     adoptExtras();
-    var limit = Math.min(SUSPEND_BUDGET, SS.Scorm.suspendDataLimit ? SS.Scorm.suspendDataLimit() : 4096);
-    var ok = false;
+    var merged = syncActive();
+    var ok = true;
     try {
-      ok = SS.Scorm.saveSuspendData(encodeSuspend(active.profile, limit));
-      if (commit) {
-        var P = progress();
-        if (P) {
-          var stats = P.overallStats(active.profile);
-          SS.Scorm.reportProgress({ completed: stats.completed, total: stats.total });
-        }
-        ok = SS.Scorm.commit() && ok;
+      var limit = Math.min(SUSPEND_BUDGET, SS.Scorm.suspendDataLimit ? SS.Scorm.suspendDataLimit() : 4096);
+      ok = SS.Scorm.saveSuspendData(encodeSuspend(active.profile, limit)) && ok;
+      var P = progress();
+      if (P) {
+        var stats = P.overallStats(active.profile);
+        ok = SS.Scorm.reportProgress({ completed: stats.completed, total: stats.total }) && ok;
       }
+      ok = (urgent ? commitLms() : scheduleCommit()) && ok;
     } catch (e) {
       ok = false;
       warn("could not save to the LMS", e);
     }
-    if (!ok) warning = MSG.scormFailed;
-    else if (warning === MSG.scormFailed) warning = null;
+    lmsFailing = !ok;
+    if (merged) notify("sync", null);
     return ok;
   }
 
@@ -778,6 +927,7 @@
     if (draftTimer) { clearTimeout(draftTimer); draftTimer = null; }
     pending = false;
     if (!active) return false;
+    syncActive();
     active.profile.updatedAt = nowISO();
     var ok;
     try {
@@ -786,7 +936,7 @@
       ok = false;
       warn("could not serialise the profile", e);
     }
-    if (!scormMode) writeKey(lastSlotKey(), String(active.slot));
+    if (!scormMode && readKey(lastSlotKey()) !== String(active.slot)) writeKey(lastSlotKey(), String(active.slot));
     return ok;
   }
 
@@ -799,9 +949,9 @@
   }
 
   /** Save an important change right away (and send it to the LMS in SCORM mode). */
-  function commitChange(type, challengeId, lmsCommit) {
+  function commitChange(type, challengeId, urgent) {
     writeActive();
-    if (scormMode) pushScorm(!!lmsCommit);
+    if (scormMode) pushScorm(!!urgent);
     notify(type, challengeId);
   }
 
@@ -814,23 +964,43 @@
     }, DRAFT_DELAY_MS);
   }
 
+  /** Write pending drafts now; in SCORM mode send changes (committing at most once a minute). */
   function flush() {
     if (pending || draftTimer) writeActive();
-    if (scormMode && active) pushScorm(true);
+    if (scormMode && active) pushScorm(false);
+  }
+
+  /** The page is being hidden or closed: save everything and commit to the LMS now. */
+  function flushNow() {
+    if (pending || draftTimer) writeActive();
+    if (!scormMode) return;
+    if (active) pushScorm(true);
+    else if (lmsReady()) commitLms();
+  }
+
+  function onStorageEvent(event) {
+    try {
+      if (!active || !event || event.key !== activeKey()) return;
+      if (event.storageArea && local && event.storageArea !== local) return;
+      if (syncActive()) notify("sync", null);
+    } catch (e) {
+      warn("could not merge another tab's save", e);
+    }
   }
 
   function installPageHooks() {
     try {
       if (typeof global.addEventListener === "function") {
         global.addEventListener("pagehide", function (event) {
-          flush();
+          flushNow();
           if (scormMode && SS.Scorm && !(event && event.persisted)) SS.Scorm.finish();
         });
+        global.addEventListener("storage", onStorageEvent);
       }
       var doc = global.document;
       if (doc && typeof doc.addEventListener === "function") {
         doc.addEventListener("visibilitychange", function () {
-          if (doc.visibilityState === "hidden") flush();
+          if (doc.visibilityState === "hidden") flushNow();
         });
       }
     } catch (e) {
@@ -842,53 +1012,19 @@
   // Init
   // ---------------------------------------------------------------------------
 
-  function ensureInit() {
-    if (initialised) return initResult;
-    initialised = true;
-    var opened = openLocalStorage();
-    local = opened.ls;
-    storageMode = opened.ls && opened.writable ? "local" : "memory";
-    if (!opened.ls) warning = MSG.blocked;
-    else if (!opened.writable) warning = MSG.full;
-
+  function scormWanted() {
     var cfg = config();
-    var useScorm = !(cfg.scorm && cfg.scorm.enabled === false);
-    if (useScorm && SS.Scorm && typeof SS.Scorm.connect === "function") {
-      try { scormMode = SS.Scorm.connect() === true; } catch (e) { scormMode = false; }
-    }
+    return !(cfg.scorm && cfg.scorm.enabled === false) && !!SS.Scorm && typeof SS.Scorm.connect === "function";
+  }
 
-    if (scormMode) {
-      try { learner = SS.Scorm.getLearner(); } catch (e) { learner = null; }
-      learner = learner || { id: "", name: "" };
-      if (warning === MSG.blocked || warning === MSG.full) warning = MSG.scormLocal;
-      var localCopy = sanitizeProfile(parseJSON(readKey(scormKey())));
-      var lms = null;
-      try { lms = decodeSuspend(SS.Scorm.loadSuspendData(), localCopy); } catch (e) { lms = null; }
-      var profile = null;
-      if (localCopy && lms) {
-        if (!lms.wizardName) lms.wizardName = localCopy.wizardName;
-        profile = mergeProfiles(localCopy, lms, true);
-      } else if (lms) {
-        if (!lms.wizardName) lms.wizardName = defaultWizardName() || DEFAULT_NAME;
-        profile = lms;
-      } else {
-        profile = localCopy;
-      }
-      if (profile) {
-        active = { slot: 0, profile: profile };
-        writeActive();
-        pushScorm(true);
-      }
-    }
-
-    installPageHooks();
-    initResult = {
-      storage: storageMode,
+  function makeInitResult() {
+    return {
+      storage: local && !storageFailing() ? "local" : "memory",
       scorm: scormMode,
       learnerName: scormMode && learner && learner.name ? learner.name : null,
-      defaultWizardName: scormMode ? defaultWizardName() : null
+      defaultWizardName: scormMode ? defaultWizardName() : null,
+      scormMissing: scormMissing
     };
-    return initResult;
   }
 
   /** The learner's first name, cleaned (for the default wizard name in SCORM mode). */
@@ -898,13 +1034,126 @@
     return first || null;
   }
 
+  /** A profile's name, settings and code without any progress (for a fresh LMS attempt). */
+  function codeOnly(profile) {
+    var p = newProfile(profile.wizardName);
+    p.settings = sanitizeSettings(profile.settings);
+    p.practiceCode = profile.practiceCode;
+    Object.keys(profile.challenges).forEach(function (id) {
+      var rec = profile.challenges[id];
+      if (rec.draft === null && rec.bestCode === null) return;
+      var kept = emptyRecord();
+      kept.draft = rec.draft;
+      kept.bestCode = rec.bestCode;
+      p.challenges[id] = kept;
+    });
+    return p;
+  }
+
+  /** Try to connect to the LMS; on success, switch to SCORM mode and load the learner's profile. */
+  function connectLms() {
+    var ok = false;
+    try { ok = SS.Scorm.connect() === true; } catch (e) { ok = false; }
+    if (!ok) return false;
+    if (active) flush();
+    scormMode = true;
+    scormMissing = false;
+    try { learner = SS.Scorm.getLearner(); } catch (e) { learner = null; }
+    learner = learner || { id: "", name: "" };
+    var key = scormKey();
+    var raw = readKey(key);
+    if (raw !== null && readStored(key) === raw) lastSeen[key] = raw;
+    var localCopy = sanitizeProfile(parseJSON(raw));
+    var suspend = "";
+    try { suspend = SS.Scorm.loadSuspendData(); } catch (e) { suspend = ""; }
+    var fresh = false;
+    try { fresh = !suspend && SS.Scorm.isFreshAttempt(); } catch (e) { fresh = false; }
+    var lms = null;
+    if (suspend) {
+      try { lms = decodeSuspend(suspend, localCopy); } catch (e) { lms = null; }
+    }
+    var profile = null;
+    if (fresh) {
+      // A new attempt (or the instructor reset this one): start again, keeping only the
+      // wizard's name, settings and code from an earlier attempt on this computer.
+      profile = localCopy ? codeOnly(localCopy) : null;
+      lastSeen[key] = readStored(key);
+    } else if (localCopy && lms) {
+      if (!lms.wizardName) lms.wizardName = localCopy.wizardName;
+      profile = mergeProfiles(localCopy, lms, true);
+    } else if (lms) {
+      if (!lms.wizardName) lms.wizardName = defaultWizardName() || DEFAULT_NAME;
+      profile = lms;
+    } else {
+      profile = localCopy;
+    }
+    active = profile ? { slot: 0, profile: profile } : null;
+    if (active) {
+      writeActive();
+      pushScorm(true);
+    } else {
+      commitLms();      // the "incomplete" status and exit=suspend set by connect()
+    }
+    return true;
+  }
+
+  function ensureInit() {
+    if (initialised) return initResult;
+    initialised = true;
+    var opened = openLocalStorage();
+    local = opened.ls;
+    localBlocked = !opened.ls;
+    probeFailed = !!(opened.ls && !opened.writable);
+    if (scormWanted()) connectLms();
+    installPageHooks();
+    initResult = makeInitResult();
+    return initResult;
+  }
+
+  function logScormMissing() {
+    var f = null;
+    try { f = SS.Scorm && SS.Scorm.lastError ? SS.Scorm.lastError() : null; } catch (e) { f = null; }
+    warn("This is a SCORM package, but no connection to the LMS could be made " +
+      (f ? "(" + f.call + ": error " + f.code + (f.text ? " " + f.text : "") + (f.diagnostic ? ", " + f.diagnostic : "") + ")"
+        : "(no SCORM API in this window, its parents or its opener)") +
+      ". Progress is only saved in this browser.");
+  }
+
   function init() {
+    if (initPromise) return initPromise;
+    var result;
     try {
-      return Promise.resolve(ensureInit());
+      result = ensureInit();
     } catch (e) {
       warn("init failed", e);
-      return Promise.resolve({ storage: "memory", scorm: false, learnerName: null, defaultWizardName: null });
+      result = { storage: "memory", scorm: false, learnerName: null, defaultWizardName: null, scormMissing: false };
     }
+    if (scormMode || !config().scormRequired || !scormWanted()) {
+      initPromise = Promise.resolve(result);
+      return initPromise;
+    }
+    // A SCORM package, but no LMS yet: the LMS may still be setting up its API. Try a few
+    // more times (~2.5 s), then tell the player that nothing reaches the course.
+    initPromise = new Promise(function (resolve) {
+      var attempt = 0;
+      function next() {
+        if (!scormMode && attempt < SCORM_RETRY_DELAYS_MS.length) {
+          setTimeout(function () {
+            try { if (!scormMode) connectLms(); } catch (e) { /* keep trying */ }
+            next();
+          }, SCORM_RETRY_DELAYS_MS[attempt++]);
+          return;
+        }
+        if (!scormMode) {
+          scormMissing = true;
+          logScormMissing();
+        }
+        initResult = makeInitResult();
+        resolve(initResult);
+      }
+      next();
+    });
+    return initPromise;
   }
 
   // ---------------------------------------------------------------------------
@@ -917,13 +1166,17 @@
     return n;
   }
 
+  /** { profile, damaged, raw } for a slot; damaged when something is stored there that can't be read. */
   function readSlot(slot) {
-    return sanitizeProfile(parseJSON(readKey(slotKey(slot))));
+    var raw = readKey(slotKey(slot));
+    if (raw === null) return { profile: null, damaged: false, raw: null };
+    var profile = sanitizeProfile(parseJSON(raw));
+    return { profile: profile, damaged: !profile, raw: raw };
   }
 
   function storageWarning() {
     ensureInit();
-    return warning;
+    return currentWarning();
   }
 
   function isScorm() {
@@ -931,13 +1184,28 @@
     return scormMode;
   }
 
+  /** Whether importData() is allowed (always, except in an LMS unless scorm.allowImport). */
+  function canImport() {
+    ensureInit();
+    var cfg = config();
+    return !scormMode || !!(cfg.scorm && cfg.scorm.allowImport === true);
+  }
+
   function listSlots() {
     ensureInit();
-    if (scormMode) return [active ? summary(0, active.profile) : null];
+    if (scormMode) {
+      if (active) syncActive();
+      return [active ? summary(0, active.profile) : null];
+    }
     var out = [];
     for (var slot = 0; slot < slotCount(); slot++) {
-      var profile = active && active.slot === slot ? active.profile : readSlot(slot);
-      out.push(profile ? summary(slot, profile) : null);
+      if (active && active.slot === slot) {
+        syncActive();
+        out.push(summary(slot, active.profile));
+        continue;
+      }
+      var state = readSlot(slot);
+      out.push(state.profile ? summary(slot, state.profile) : state.damaged ? { slot: slot, damaged: true } : null);
     }
     return out;
   }
@@ -952,28 +1220,37 @@
         return active.profile;
       }
       active = { slot: 0, profile: newProfile(wizardName || defaultWizardName()) };
+      lastSeen[scormKey()] = readStored(scormKey());     // the new profile replaces whatever is stored
       commitChange("create", null, true);
       return active.profile;
     }
     slot = checkSlot(slot);
     if (active) flush();
     active = { slot: slot, profile: newProfile(wizardName) };
+    lastSeen[slotKey(slot)] = readStored(slotKey(slot));
     commitChange("create", null);
     return active.profile;
   }
 
   function loadProfile(slot) {
     ensureInit();
-    if (scormMode) return active ? active.profile : null;
+    if (scormMode) {
+      if (active) syncActive();
+      return active ? active.profile : null;
+    }
     slot = checkSlot(slot);
-    if (active && active.slot === slot) return active.profile;
-    var profile = readSlot(slot);
-    if (!profile) return null;
+    if (active && active.slot === slot) {
+      syncActive();                    // another tab may have moved on
+      return active.profile;
+    }
+    var state = readSlot(slot);
+    if (!state.profile) return null;
     if (active) flush();
-    active = { slot: slot, profile: profile };
-    writeKey(lastSlotKey(), String(slot));
+    active = { slot: slot, profile: state.profile };
+    if (readStored(slotKey(slot)) === state.raw) lastSeen[slotKey(slot)] = state.raw;
+    if (readKey(lastSlotKey()) !== String(slot)) writeKey(lastSlotKey(), String(slot));
     notify("load", null);
-    return profile;
+    return state.profile;
   }
 
   function deleteSlot(slot) {
@@ -1003,7 +1280,7 @@
     var slot = clampInt(readKey(lastSlotKey()), -1, 1000, -1);
     if (slot < 0 || slot >= slotCount()) return null;
     if (active && active.slot === slot) return slot;
-    return readSlot(slot) ? slot : null;
+    return readSlot(slot).profile ? slot : null;
   }
 
   function renameWizard(name) {
@@ -1221,7 +1498,7 @@
     return JSON.stringify({
       format: FILE_FORMAT,
       version: PROFILE_VERSION,
-      game: cfg.title || "Syntax & Sorcery",
+      game: cfg.title || "Pyromancer",
       gameVersion: cfg.version || "",
       exportedAt: nowISO(),
       profile: active.profile
@@ -1231,7 +1508,7 @@
   function fileName(name) {
     var slug = String(name || "").replace(/[\\/:*?"<>|\u0000-\u001F\u007F]+/g, "").replace(/\s+/g, "-")
       .replace(/-+/g, "-").replace(/^[-.]+|[-.]+$/g, "");
-    return "syntax-and-sorcery-" + (slug || "wizard") + ".json";
+    return "pyromancer-" + (slug || "wizard") + ".json";
   }
 
   function exportFile() {
@@ -1296,10 +1573,10 @@
   }
 
   function decodeCode(code) {
-    var body = code.slice(code.indexOf(".") + 1);
-    var version = parseInt(code.slice(3), 10);
-    if (version > PROFILE_VERSION) throw new Error(MSG.newer);
-    var bytes = base64urlDecode(body);
+    var match = CODE_RE.exec(code);
+    if (!match) throw new Error(MSG.notScroll);
+    if (parseInt(match[2], 10) > PROFILE_VERSION) throw new Error(MSG.newer);
+    var bytes = base64urlDecode(code.slice(match[0].length));
     if (!bytes || !bytes.length) throw new Error(MSG.damaged);
     var data;
     try { data = JSON.parse(utf8Decode(bytes)); } catch (e) { throw new Error(MSG.damaged); }
@@ -1313,7 +1590,7 @@
     try { data = JSON.parse(text); } catch (e) { throw new Error(MSG.damaged); }
     if (!isPlainObject(data)) throw new Error(MSG.notScroll);
     var raw = data;
-    if (data.format === FILE_FORMAT || isPlainObject(data.profile)) {
+    if (data.format === FILE_FORMAT || LEGACY_FILE_FORMATS.indexOf(data.format) !== -1 || isPlainObject(data.profile)) {
       if (typeof data.version === "number" && data.version > PROFILE_VERSION) throw new Error(MSG.newer);
       raw = data.profile;
     } else if (!("challenges" in data) && !("wizardName" in data)) {
@@ -1336,19 +1613,21 @@
     var compact = text.replace(/\s+/g, "")
       .replace(/^["'\u201C\u201D\u2018\u2019<(\[]+/, "")
       .replace(/["'\u201C\u201D\u2018\u2019>)\].,;]+$/, "");
-    if (/^SNS\d+\./i.test(compact)) return decodeCode(compact.replace(/^sns/i, "SNS"));
+    if (CODE_RE.test(compact)) return decodeCode(compact);
     if (text.charAt(0) === "{") return decodeFile(text);
     throw new Error(MSG.notScroll);
   }
 
   function importData(textOrCode, slot) {
     ensureInit();
+    if (scormMode && !canImport()) throw new Error(MSG.importOff);
     var imported = parseSaveScroll(textOrCode);
     if (scormMode) {
       if (active) {
-        active.profile = mergeProfiles(active.profile, imported, false);
+        assignInPlace(active.profile, mergeProfiles(active.profile, imported, false));
       } else {
         active = { slot: 0, profile: imported };
+        lastSeen[scormKey()] = readStored(scormKey());
       }
       commitChange("import", null, true);
       return active.profile;
@@ -1357,6 +1636,7 @@
     if (active && active.slot !== slot) flush();
     imported.updatedAt = nowISO();
     active = { slot: slot, profile: imported };
+    lastSeen[slotKey(slot)] = readStored(slotKey(slot));      // the import replaces the slot
     commitChange("import", null);
     return active.profile;
   }
@@ -1374,6 +1654,7 @@
     init: init,
     storageWarning: storageWarning,
     isScorm: isScorm,
+    canImport: canImport,
     listSlots: listSlots,
     createProfile: createProfile,
     loadProfile: loadProfile,

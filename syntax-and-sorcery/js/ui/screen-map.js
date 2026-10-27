@@ -227,7 +227,7 @@
       h("div", { class: "map-top" },
         wizardCard,
         cta ? h("div", { class: "map-actions" }, cta,
-          h("p", { class: "map-actions-help" }, "Your Grimoire, the Practice Chamber, the Save Scroll and Settings are in the bar at the top.")) : null),
+          h("p", { class: "map-actions-help" }, "Your Grimoire, the Practice Chamber, the Save Scroll and Settings are in the bar at the top of the screen.")) : null),
       notices,
       h("header", { class: "map-heading" },
         h("h1", { class: "screen-title" }, "The Grounds of Coilspire Academy"),

@@ -223,19 +223,20 @@ function test(name, fn) { tests.push({ name, fn }); }
 test("config: defaults match the design document", () => {
   const { SS } = makeEngine({ files: ["js/config.js"], content: false });
   const c = SS.config;
-  assert.strictEqual(c.title, "Syntax & Sorcery");
+  assert.strictEqual(c.title, "Pyromancer");
   assert.strictEqual(c.pyodideVersion, "0.29.5");
   assert.deepStrictEqual(plain(c.pyodideBaseURLs), ["https://cdn.jsdelivr.net/pyodide/v0.29.5/full/", "https://unpkg.com/pyodide@0.29.5/"]);
   assert.strictEqual(c.defaultTimeLimitMs, 8000);
   assert.strictEqual(c.outputLimitChars, 50000);
   assert.strictEqual(c.stepLimit, 2000000);
-  assert.strictEqual(c.recursionLimit, 350);
+  assert.strictEqual(c.recursionLimit, 1000);
   assert.strictEqual(c.saveSlots, 3);
-  assert.strictEqual(c.storageKey, "syntax-and-sorcery");
+  assert.strictEqual(c.storageKey, "pyromancer");
   assert.strictEqual(c.allowAnswerScroll, true);
   assert.strictEqual(c.answerScrollAfterFailedCasts, 3);
   assert.strictEqual(c.unlockAll, false);
-  assert.deepStrictEqual(plain(c.scorm), { enabled: true, completionThreshold: 1 });
+  assert.deepStrictEqual(plain(c.scorm), { enabled: true, completionThreshold: 1, allowImport: false });
+  assert.strictEqual(c.scormRequired, false);
 });
 
 test("config: SS_CONFIG overrides are validated", () => {
@@ -247,7 +248,7 @@ test("config: SS_CONFIG overrides are validated", () => {
   assert.strictEqual(SS.config.saveSlots, 10);
   assert.strictEqual(SS.config.defaultTimeLimitMs, 8000);
   assert.strictEqual(SS.config.allowAnswerScroll, true);
-  assert.deepStrictEqual(plain(SS.config.scorm), { enabled: false, completionThreshold: 0.8 });
+  assert.deepStrictEqual(plain(SS.config.scorm), { enabled: false, completionThreshold: 0.8, allowImport: false });
   assert.strictEqual(SS.config.extra, 7);
 });
 
@@ -398,7 +399,7 @@ async function initSave(engine) {
 test("save: create, list, persist and reload a profile", async () => {
   const storage = makeLocalStorage();
   let e = makeEngine({ storage });
-  assert.deepStrictEqual(await initSave(e), { storage: "local", scorm: false, learnerName: null, defaultWizardName: null });
+  assert.deepStrictEqual(await initSave(e), { storage: "local", scorm: false, learnerName: null, defaultWizardName: null, scormMissing: false });
   const S = e.SS.Save;
   assert.strictEqual(S.storageWarning(), null);
   assert.strictEqual(S.isScorm(), false);
@@ -407,8 +408,8 @@ test("save: create, list, persist and reload a profile", async () => {
   const p = S.createProfile(1, "  Merlin\u0007 the\n Wise ");
   assert.strictEqual(p.wizardName, "Merlin the Wise");
   assert.strictEqual(S.getProfile(), p);
-  assert.ok(storage.getItem("syntax-and-sorcery:slot:1"));
-  assert.strictEqual(storage.getItem("syntax-and-sorcery:lastSlot"), "1");
+  assert.ok(storage.getItem("pyromancer:slot:1"));
+  assert.strictEqual(storage.getItem("pyromancer:lastSlot"), "1");
   assert.strictEqual(S.getLastSlot(), 1);
   const slots = plain(S.listSlots());
   assert.strictEqual(slots[0], null);
@@ -520,7 +521,7 @@ test("save: seen flags, settings and practice code", async () => {
   S.savePracticeCode("print(42)");
   assert.strictEqual(S.getPracticeCode(), "print(42)");
   S.flush();
-  assert.strictEqual(JSON.parse(storage.getItem("syntax-and-sorcery:slot:0")).practiceCode, "print(42)");
+  assert.strictEqual(JSON.parse(storage.getItem("pyromancer:slot:0")).practiceCode, "print(42)");
 });
 
 test("save: drafts are debounced, and flushed on pagehide / visibilitychange", async () => {
@@ -529,7 +530,7 @@ test("save: drafts are debounced, and flushed on pagehide / visibilitychange", a
   await initSave(e);
   const S = e.SS.Save;
   S.createProfile(0, "Ada");
-  const stored = () => JSON.parse(storage.getItem("syntax-and-sorcery:slot:0"));
+  const stored = () => JSON.parse(storage.getItem("pyromancer:slot:0"));
   const changes = [];
   S.onChange((p, info) => changes.push(info.type));
   S.saveDraft("alpha-one", "print(1)");
@@ -568,7 +569,7 @@ test("save: delete a slot", async () => {
   assert.strictEqual(S.getProfile(), null);
   assert.strictEqual(S.getLastSlot(), null);
   assert.deepStrictEqual(plain(S.listSlots()).map((s) => s && s.wizardName), ["One", null, null]);
-  assert.strictEqual(storage.getItem("syntax-and-sorcery:slot:2"), null);
+  assert.strictEqual(storage.getItem("pyromancer:slot:2"), null);
 });
 
 test("save: blocked storage falls back to memory with a warning", async () => {
@@ -585,7 +586,7 @@ test("save: blocked storage falls back to memory with a warning", async () => {
     assert.strictEqual(S.getProfile(), p);
     assert.strictEqual(plain(S.listSlots())[0].wizardName, "Ghost");
     assert.strictEqual(S.getLastSlot(), 0);
-    assert.ok(S.exportCode().startsWith("SNS1."));
+    assert.ok(S.exportCode().startsWith("PYRO1."));
   }
 });
 
@@ -603,24 +604,24 @@ test("save: quota errors keep data in memory, warn, and recover", async () => {
   storage.failWrites = false;
   S.recordCast("alpha-two", { passed: false });
   assert.strictEqual(S.storageWarning(), null, "warning cleared once saving works again");
-  assert.strictEqual(JSON.parse(storage.getItem("syntax-and-sorcery:slot:0")).challenges["alpha-one"].completed, true);
+  assert.strictEqual(JSON.parse(storage.getItem("pyromancer:slot:0")).challenges["alpha-one"].completed, true);
 });
 
 test("save: corrupt and partly corrupt slots", async () => {
   const storage = makeLocalStorage();
-  storage.setItem("syntax-and-sorcery:slot:0", "{not json");
-  storage.setItem("syntax-and-sorcery:slot:1", JSON.stringify({
+  storage.setItem("pyromancer:slot:0", "{not json");
+  storage.setItem("pyromancer:slot:1", JSON.stringify({
     wizardName: 42, createdAt: "yesterday-ish", challenges: { "alpha-one": { completed: true, stars: 7, casts: -4, hintsUsed: "2" }, "bad id!": {}, "beta-one": "nope" },
     seen: { prologue: 1, "": true }, settings: { editorFontSize: "18", sound: "loud" }, practiceCode: 5, lastChallengeId: "alpha-one", hack: "<script>",
   }));
-  storage.setItem("syntax-and-sorcery:slot:2", "[1,2,3]");
-  storage.setItem("syntax-and-sorcery:lastSlot", "0");
+  storage.setItem("pyromancer:slot:2", "[1,2,3]");
+  storage.setItem("pyromancer:lastSlot", "0");
   const e = makeEngine({ storage });
   await initSave(e);
   const S = e.SS.Save;
   const slots = plain(S.listSlots());
-  assert.strictEqual(slots[0], null);
-  assert.strictEqual(slots[2], null);
+  assert.deepStrictEqual(slots[0], { slot: 0, damaged: true }, "a damaged save is reported, not shown as empty");
+  assert.deepStrictEqual(slots[2], { slot: 2, damaged: true });
   assert.strictEqual(slots[1].wizardName, "42");
   assert.strictEqual(S.getLastSlot(), null, "lastSlot points at a damaged slot");
   assert.strictEqual(S.loadProfile(0), null);
@@ -632,7 +633,7 @@ test("save: corrupt and partly corrupt slots", async () => {
   assert.strictEqual(p.practiceCode, "");
   assert.strictEqual(p.hack, undefined);
   assert.ok(!isNaN(Date.parse(p.createdAt)));
-  storage.setItem("syntax-and-sorcery:lastSlot", "7");
+  storage.setItem("pyromancer:lastSlot", "7");
   assert.strictEqual(S.getLastSlot(), null);
 });
 
@@ -645,8 +646,8 @@ test("save: name cleaning (control characters, 24 characters, emoji)", () => {
   assert.strictEqual(clean("\ud800lone"), "lone");
   assert.strictEqual(clean(null), "");
   assert.strictEqual(clean("Ada\u200D♀"), "Ada\u200D♀", "ZWJ is kept for emoji sequences");
-  assert.strictEqual(SS.Save._fileName("Zoë / the: Great"), "syntax-and-sorcery-Zoë-the-Great.json");
-  assert.strictEqual(SS.Save._fileName("///"), "syntax-and-sorcery-wizard.json");
+  assert.strictEqual(SS.Save._fileName("Zoë / the: Great"), "pyromancer-Zoë-the-Great.json");
+  assert.strictEqual(SS.Save._fileName("///"), "pyromancer-wizard.json");
 });
 
 test("save: exportCode round-trips through importData (compact, no code)", async () => {
@@ -664,7 +665,7 @@ test("save: exportCode round-trips through importData (compact, no code)", async
   S.markSeen("chapter:alpha");
   S.updateSettings({ sound: false, editorFontSize: 20, unlockAll: true });
   const code = S.exportCode();
-  assert.match(code, /^SNS1\.[A-Za-z0-9_-]+$/);
+  assert.match(code, /^PYRO1\.[A-Za-z0-9_-]+$/);
   const json = Buffer.from(code.slice(5), "base64url").toString("utf8");
   assert.ok(!/secret solution|draft code/.test(json), "the code holds no drafts or solutions");
   assert.ok(code.length < 1000);
@@ -713,10 +714,10 @@ test("save: exportFile downloads everything and importData reads the file", asyn
   S.recordCompletion("alpha-two", { code: "best code" });
   S.savePracticeCode("practice!");
   assert.strictEqual(S.exportFile(), true);
-  assert.deepStrictEqual(clicks, ["syntax-and-sorcery-Merlin-the-Great.json"]);
+  assert.deepStrictEqual(clicks, ["pyromancer-Merlin-the-Great.json"]);
   assert.strictEqual(blobs[0].type, "application/json");
   const file = JSON.parse(blobs[0].text);
-  assert.strictEqual(file.format, "syntax-and-sorcery-save");
+  assert.strictEqual(file.format, "pyromancer-save");
   assert.strictEqual(file.profile.challenges["alpha-one"].draft, "my draft");
   const restored = S.importData(blobs[0].text, 1);
   assert.strictEqual(restored.challenges["alpha-one"].draft, "my draft");
@@ -900,8 +901,15 @@ test("scorm: a broken LMS API never makes the game throw", () => {
   assert.strictEqual(SS.Scorm.connect(), true);
   assert.strictEqual(SS.Scorm.saveSuspendData("x"), false);
   assert.strictEqual(SS.Scorm.reportProgress({ completed: 1, total: 1 }), false);
-  assert.strictEqual(SS.Scorm.commit(), false);
+  assert.strictEqual(SS.Scorm.commit(), true, "nothing was stored, so there is nothing to commit");
   assert.strictEqual(SS.Scorm.finish(), false);
+  // Values are accepted but committing fails.
+  const noCommit = makeScorm12();
+  noCommit.LMSCommit = boom;
+  ({ SS } = makeEngine({ parent: topWindow({ API: noCommit }) }));
+  assert.strictEqual(SS.Scorm.connect(), true);
+  assert.strictEqual(SS.Scorm.saveSuspendData("S1|x"), true);
+  assert.strictEqual(SS.Scorm.commit(), false);
   assert.strictEqual(SS.Scorm._friendlyName("Smith, John"), "John Smith");
   assert.strictEqual(SS.Scorm._friendlyName("  Grace  Hopper "), "Grace Hopper");
 });
@@ -914,7 +922,7 @@ test("save+scorm: one LMS profile; progress, score and status go to the LMS", as
   const api = makeScorm12();
   const storage = makeLocalStorage();
   const e = makeEngine({ parent: topWindow({ API: api }), storage });
-  assert.deepStrictEqual(await initSave(e), { storage: "local", scorm: true, learnerName: "Jane Doe", defaultWizardName: "Jane" });
+  assert.deepStrictEqual(await initSave(e), { storage: "local", scorm: true, learnerName: "Jane Doe", defaultWizardName: "Jane", scormMissing: false });
   const S = e.SS.Save;
   assert.strictEqual(S.isScorm(), true);
   assert.strictEqual(S.getProfile(), null, "first launch: the UI asks for a wizard name");
@@ -934,10 +942,10 @@ test("save+scorm: one LMS profile; progress, score and status go to the LMS", as
   assert.strictEqual(api.data["cmi.core.score.raw"], String(Math.round(100 / 6)));
   assert.strictEqual(api.data["cmi.core.lesson_status"], "incomplete");
   assert.ok(!api.data["cmi.suspend_data"].includes("draft"), "no code in suspend_data");
-  const local = JSON.parse(storage.getItem("syntax-and-sorcery:scorm:learner-42"));
+  const local = JSON.parse(storage.getItem("pyromancer:scorm:learner-42"));
   assert.strictEqual(local.challenges["alpha-one"].draft, "draft in progress");
   assert.strictEqual(local.challenges["alpha-one"].bestCode, "print('done')");
-  assert.strictEqual(storage.getItem("syntax-and-sorcery:slot:0"), null, "no slots in SCORM mode");
+  assert.strictEqual(storage.getItem("pyromancer:slot:0"), null, "no slots in SCORM mode");
   for (const id of ["alpha-two", "beta-one", "gamma-one", "gamma-two", "gamma-three"]) S.recordCompletion(id, { code: "x" });
   assert.strictEqual(api.data["cmi.core.score.raw"], "100");
   assert.strictEqual(api.data["cmi.core.lesson_status"], "completed");
@@ -997,10 +1005,10 @@ test("save+scorm: resume on the same computer, on a new computer, and merging", 
   assert.strictEqual(S.getSettings().sound, false);
 
   // Merging: the LMS knows something the local copy doesn't, and vice versa.
-  const localProfile = JSON.parse(storage.getItem("syntax-and-sorcery:scorm:learner-42"));
+  const localProfile = JSON.parse(storage.getItem("pyromancer:scorm:learner-42"));
   localProfile.challenges["beta-one"] = { completed: true, stars: 3, casts: 4, failedCasts: 1, hintsUsed: 0, answerRevealed: false, draft: "local only", bestCode: "local best", completedAt: "2026-01-02T03:04:05.000Z" };
   localProfile.wizardName = "Old Local Name";
-  storage.setItem("syntax-and-sorcery:scorm:learner-42", JSON.stringify(localProfile));
+  storage.setItem("pyromancer:scorm:learner-42", JSON.stringify(localProfile));
   e = makeEngine({ parent: topWindow({ API: makeScorm12() }), storage, content: FAKE_CONTENT });
   await initSave(e);
   e.SS.Save.recordCompletion("gamma-one", { code: "lms" });         // only in this "other device" LMS data…
@@ -1008,7 +1016,7 @@ test("save+scorm: resume on the same computer, on a new computer, and merging", 
   const lmsSuspend = e.SS.Scorm.loadSuspendData();
   // …now open the course again on the computer holding the local copy.
   const api4 = makeScorm12({ "cmi.suspend_data": lmsSuspend });
-  storage.setItem("syntax-and-sorcery:scorm:learner-42", JSON.stringify(localProfile));
+  storage.setItem("pyromancer:scorm:learner-42", JSON.stringify(localProfile));
   e = makeEngine({ parent: topWindow({ API: api4 }), storage });
   await initSave(e);
   p = e.SS.Save.getProfile();
@@ -1147,6 +1155,11 @@ test("save+scorm: import merges into the LMS profile; blocked storage still save
   const S = e.SS.Save;
   S.createProfile(0, "LMS Jane");
   S.recordCompletion("beta-one", {});
+  assert.strictEqual(S.canImport(), false, "importing is off in an LMS by default");
+  assert.throws(() => S.importData(code, 0), /importing is turned off here/);
+  assert.strictEqual(api.data["cmi.core.score.raw"], "17", "the failed import changed nothing");
+  e.SS.config.scorm.allowImport = true;
+  assert.strictEqual(S.canImport(), true);
   const merged = S.importData(code, 0);
   assert.strictEqual(merged.wizardName, "LMS Jane");
   assert.deepStrictEqual(Object.keys(merged.challenges).filter((id) => merged.challenges[id].completed).sort(), ["alpha-one", "alpha-two", "beta-one"]);

@@ -4,70 +4,30 @@
  * linked lists, binary search, merge sort, DFS / flood fill, BFS, Big-O intuition.
  *
  * Trial notes for maintainers:
- *  - Every challenge's trials start with LINE_BUDGET (below): a small sys.settrace
- *    "line budget" that fails a spell running far more lines than the task needs (an
- *    endless while loop, a search without a visited set...). The player then gets a
- *    friendly failure for that trial — and still sees the other trials — instead of a
- *    timeout. It only traces frames whose code comes from the spell ("<spell>").
+ *  - Trials use the harness's step_limit() with challenge-specific advice (most of them
+ *    through the small _budget() decorator in STEP_BUDGET below), so an endless loop or a
+ *    search without a visited set fails that one trial with a clear message while the
+ *    other trials still show. Limits are about 10x what the correct solutions use.
  *  - Some trials hand the spell list subclasses that count reads (twin runes, binary
  *    search) or objects that count comparisons (merge sort), to check Big-O behaviour
  *    and to turn would-be IndexErrors inside the trial into clear messages.
- *  - Keep every limit generous: correct solutions use a small fraction of each budget.
  */
 (function () {
   "use strict";
   var py = SS.py;
 
-  // Shared by every challenge's trials: a "line budget" that fails a runaway spell (an endless loop,
-  // a search with no visited set...) with friendly advice, instead of letting it hit the time limit.
-  var LINE_BUDGET = py`
-    import sys as _sys
-
-
-    class _Budget:
-        """Fails the trial if the spell runs far more lines of code than the task needs.
-
-        Only frames whose code comes from the spell are traced, so the trials
-        themselves are neither slowed down nor counted.
-        """
-
-        def __init__(self, limit, message):
-            self.limit = limit
-            self.message = message
-            self.lines = 0
-
-        def _calls(self, frame, event, arg):
-            if frame.f_code.co_filename == "<spell>":
-                return self._lines
-            return None
-
-        def _lines(self, frame, event, arg):
-            if event == "line":
-                self.lines += 1
-                if self.lines > self.limit:
-                    raise SpellFailure(self.message)
-            return self._lines
-
-        def __enter__(self):
-            self._previous = _sys.gettrace()
-            _sys.settrace(self._calls)
-            return self
-
-        def __exit__(self, kind, problem, trace):
-            _sys.settrace(self._previous)
-            if kind is None and self.lines > self.limit:   # the spell swallowed the failure and carried on
-                raise SpellFailure(self.message)
-            return False
-
-
+  // Shared by most challenges' trials: _budget(limit, advice) wraps a trial in the harness's step_limit(),
+  // so a runaway spell (an endless loop, a stack that never empties...) stops early with advice that
+  // fits the challenge, instead of the generic step-limit message.
+  var STEP_BUDGET = py`
     def _budget(limit, advice):
-        """Decorator for a trial: fail it, with advice, if the spell runs more than limit lines."""
-        message = ("Your spell ran more than " + format(limit, ",") + " lines of code during this trial without finishing, "
+        """Decorator for a trial: fail it, with advice, if the spell takes more than limit steps."""
+        message = ("Your spell took more than " + format(limit, ",") + " steps during this trial without finishing, "
                    + "far more than this task needs. " + advice)
 
         def wrap(trial):
             def guarded():
-                with _Budget(limit, message):
+                with step_limit(limit, message):
                     return trial()
             return guarded
         return wrap
@@ -239,7 +199,7 @@
                 return result
           `
         ],
-        tests: LINE_BUDGET + py`
+        tests: STEP_BUDGET + py`
           _ADVICE = ("Is a loop running forever? If you keep your own stack of items to look at, make sure every item you look at "
                      + "is also taken off it.")
 
@@ -467,7 +427,7 @@
                 return not stack
           `
         ],
-        tests: LINE_BUDGET + py`
+        tests: STEP_BUDGET + py`
           _ADVICE = "Is a loop running forever? If you step through the seal with an index, make sure it moves forward every time."
 
           def _verdict(seal, expected, why, label=None):
@@ -695,7 +655,7 @@
                 return rested
           `
         ],
-        tests: LINE_BUDGET + py`
+        tests: STEP_BUDGET + py`
           import ast as _ast
           from collections import deque as _deque
 
@@ -713,6 +673,32 @@
                       line.append((name, needed - 1))
               return order
 
+          def _served_from_back(spirits):
+              """What a spell gets if it takes spirits from the BACK of the line (pop) instead of the front."""
+              line = _deque(spirits)
+              order = []
+              while line:
+                  name, needed = line.pop()
+                  if needed <= 1:
+                      order.append(name)
+                  else:
+                      line.append((name, needed - 1))
+              return order
+
+          def _why(spirits, result, expected):
+              """Point at the likely mistake behind a wrong order ('' if there is no clear pattern)."""
+              if result == [name for name, needed in spirits]:
+                  return (" Your spirits went to rest in the order they queued, as if each one got all its blessings at once. "
+                          + "Give the spirit at the front just ONE blessing, then send it to the BACK of the line ("
+                          + code("append") + ") if it still needs more.")
+              if result == _served_from_back(spirits):
+                  return (" Your spell serves the spirit at the BACK of the line. Take the spirit at the front with "
+                          + code("popleft()") + ".")
+              if sorted(result, key=repr) == sorted(expected, key=repr):
+                  return (" Every spirit rests, but in the wrong order. Each turn, the spirit at the front gets one blessing; "
+                          + "if it still needs more, it goes to the back of the line.")
+              return ""
+
           def _check(spirits, note="", label=None):
               rest_order = need_function("rest_order", 1)
               given = list(spirits)
@@ -724,20 +710,22 @@
               expect(isinstance(result, list), call + " should return a list of names, but it returned " + short(result) + ".")
               expect(spirits == given, code("rest_order") + " changed the list it was given. Copy the spirits into your own line "
                      + "instead: " + code("deque(spirits)") + ".")
-              extra = (" " + note) if note else ""
+              if result == expected:
+                  return result
+              extra = _why(spirits, result, expected) or ((" " + note) if note else "")
+              if len(result) != len(expected):
+                  fail(call + " should return " + str(len(expected)) + " names, but your list has " + str(len(result)) + "."
+                       + extra)
               if len(expected) <= 10:
-                  expect_equal(result, expected, call + ":" + extra)
-              elif result != expected:
-                  if len(result) != len(expected):
-                      fail(call + " should return " + str(len(expected)) + " names, but your list has " + str(len(result)) + "." + extra)
-                  k = 0
-                  while result[k] == expected[k]:
-                      k += 1
-                  if k == 0:
-                      fail(call + ": the first spirit to rest should be " + short(expected[0]) + ", not " + short(result[0]) + "." + extra)
-                  fail(call + ": the first " + ("name is" if k == 1 else str(k) + " names are") + " right, but name number "
-                       + str(k + 1) + " should be " + short(expected[k]) + ", not " + short(result[k]) + "." + extra)
-              return result
+                  fail(call + " should return " + short(expected) + ", but it returned " + short(result) + "." + extra)
+              k = 0
+              while result[k] == expected[k]:
+                  k += 1
+              if k == 0:
+                  fail(call + ": the first spirit to rest should be " + short(expected[0]) + ", not " + short(result[0]) + "."
+                       + extra)
+              fail(call + ": the first " + ("name is" if k == 1 else str(k) + " names are") + " right, but name number "
+                   + str(k + 1) + " should be " + short(expected[k]) + ", not " + short(result[k]) + "." + extra)
 
 
           @test("The example: Shade, then Wisp, then Moan")
@@ -781,12 +769,37 @@
               return names
 
 
-          @test("The line is a deque, served from the front with popleft()")
+          def _calls_pop_zero():
+              """True if the spell calls .pop(0) somewhere."""
+              for node in _ast.walk(_ast.parse(source)):
+                  if (isinstance(node, _ast.Call) and isinstance(node.func, _ast.Attribute) and node.func.attr == "pop"
+                          and len(node.args) == 1 and isinstance(node.args[0], _ast.Constant) and node.args[0].value == 0):
+                      return True
+              return False
+
+          def _serves_front():
+              """popleft(), rotate() or del line[0]: the ways to take the front of a deque."""
+              for node in _ast.walk(_ast.parse(source)):
+                  if isinstance(node, _ast.Call) and isinstance(node.func, _ast.Attribute) and node.func.attr in ("popleft", "rotate"):
+                      return True
+                  if isinstance(node, _ast.Delete):
+                      for target in node.targets:
+                          if (isinstance(target, _ast.Subscript) and isinstance(target.slice, _ast.Constant)
+                                  and target.slice.value == 0):
+                              return True
+              return False
+
+
+          @test("The line is a deque, served from the front")
           def _():
-              expect(any(uses_call(name) for name in _deque_names()), "Make the line a deque: " + code("from collections import deque") + ", then "
-                     + code("line = deque(spirits)") + ". (A list gives the right answers, but " + code("list.pop(0)")
-                     + " has to shuffle every other spirit forward; a deque's " + code("popleft()") + " is instant.)")
-              expect(uses_call("popleft"), "Take the spirit at the front of the line with " + code("line.popleft()") + ".")
+              simulate = ("This challenge is about simulating the line: keep the spirits in a deque, serve the front with "
+                          + code("popleft()") + " and send unfinished spirits to the back with " + code("append()") + ".")
+              if not any(uses_call(name) for name in _deque_names()):
+                  if _calls_pop_zero():
+                      fail(simulate + " (" + code("list.pop(0)") + " gives the right answers, but it has to shuffle every other "
+                           + "spirit forward; a deque's " + code("popleft()") + " is instant.)")
+                  fail(simulate)
+              expect(_serves_front(), simulate)
         `,
         scene: { icon: "👻", successIcon: "🕊️", successText: "One by one, the spirits sigh with relief and drift peacefully to rest.", effect: "rise" }
       },
@@ -922,7 +935,7 @@
                 return None
           `
         ],
-        tests: LINE_BUDGET + py`
+        tests: STEP_BUDGET + py`
           _ADVICE = "Is a loop running forever? Walk along the runes once, from the first to the last."
 
           class _RuneRow(list):
@@ -1400,7 +1413,7 @@
                     # forgot: self.tail still points at the old last node
           `
         ],
-        tests: LINE_BUDGET + py`
+        tests: STEP_BUDGET + py`
           _ADVICE = ("Is a while loop forgetting to step along the chain (" + code("node = node.next") + ")? Or has the chain been "
                      + "joined into a loop?")
 
@@ -1512,8 +1525,12 @@
                               + "not build and return a new one.")
                   fail("After " + code("reverse()") + ", following the arrows from " + code("head") + " should give "
                        + "['find', 'the', 'way'], but it gives " + short(values) + "." + hint)
-              expect(all(a is b for a, b in zip(after, reversed(before))), code("reverse()") + " should turn around the arrows of "
-                     + "the nodes already in the chain, not create new nodes.")
+              if not all(a is b for a, b in zip(after, reversed(before))):
+                  if all(a is b for a, b in zip(after, before)):
+                      fail("Your " + code("reverse()") + " swapped the values between the nodes, but every " + code("next")
+                           + " arrow still points the same way. Turn the next arrows around instead, so that the old last node "
+                           + "becomes the new head.")
+                  fail(code("reverse()") + " should turn around the arrows of the nodes already in the chain, not create new nodes.")
               expect_equal(_values(chain), ["find", "the", "way"], code("to_list()") + " after reverse():")
               expect_equal(_length(chain), 3, code("len()") + " after reverse():")
 
@@ -1692,7 +1709,7 @@
                 return -1
           `
         ],
-        tests: LINE_BUDGET + py`
+        tests: STEP_BUDGET + py`
           import ast as _ast
 
           _ADVICE = ("Every step must shrink the search: move " + code("low") + " past " + code("mid") + " or " + code("high")
@@ -2016,7 +2033,7 @@
                 return result
           `
         ],
-        tests: LINE_BUDGET + py`
+        tests: STEP_BUDGET + py`
           import ast as _ast
 
           _ADVICE = "Is a while loop forgetting to move " + code("i") + " or " + code("j") + " forward?"
@@ -2103,8 +2120,9 @@
                   while got[k] == names[k]:
                       k += 1
                   fail("Equally loud echoes must stay in the order they arrived in (a stable sort), but " + repr(got[k])
-                       + " came before " + repr(names[k]) + ". When the fronts of the two halves are equal, which one should "
-                       + "you take first?")
+                       + " came before " + repr(names[k]) + ". Split the list into a left part and a right part ("
+                       + code("items[:mid]") + " and " + code("items[mid:]") + "), so everything on the left arrived first, and "
+                       + "when the two fronts are equal, think about which one to take first.")
 
 
           @test("merge_sort([38, 27, 43, 3, 9, 82, 10]) returns [3, 9, 10, 27, 38, 43, 82]")
@@ -2155,21 +2173,27 @@
               _echo_check(result, [e.name for e in in_order], [e.loudness for e in in_order])
 
 
-          @test("Sorted by your own hand: no sorted() or .sort()")
+          @test("Sorted by your own hand: no sorted(), .sort(), heapq or bisect")
           def _():
               own = {name for name, value in spell.items()
                      if getattr(getattr(value, "__code__", None), "co_filename", "") == "<spell>"}
-              found = []
+              yourself = (" Sort the items yourself: split the list, " + code("merge_sort") + " each half, and merge.")
               for node in _ast.walk(_ast.parse(source)):
                   if isinstance(node, _ast.Call):
                       func = node.func
                       if isinstance(func, _ast.Name) and func.id == "sorted" and "sorted" not in own:
-                          found.append("sorted()")
+                          fail("Your spell uses " + code("sorted()") + ", the very spell Glitch broke!" + yourself)
                       if isinstance(func, _ast.Attribute) and func.attr in ("sort", "sorted"):
-                          found.append("." + func.attr + "()")
-              if found:
-                  fail("Your spell uses " + code(found[0]) + ", the very spell Glitch broke! Sort the items yourself: split the "
-                       + "list, " + code("merge_sort") + " each half, and merge.")
+                          fail("Your spell uses " + code("." + func.attr + "()") + ", the very spell Glitch broke!" + yourself)
+                  names = []
+                  if isinstance(node, _ast.Import):
+                      names = [alias.name for alias in node.names]
+                  elif isinstance(node, _ast.ImportFrom):
+                      names = [node.module or ""]
+                  for name in names:
+                      module = name.split(".")[0]
+                      if module in ("heapq", "bisect"):
+                          fail("Your spell imports the " + code(module) + " module, which does the sorting work for you." + yourself)
         `,
         scene: { icon: "🪞", successIcon: "✨", successText: "The shards glide into place, quietest to loudest, and the Echo Mirror shines whole again.", effect: "frost" }
       },
@@ -2372,7 +2396,7 @@
                 return islands
           `
         ],
-        tests: LINE_BUDGET + py`
+        tests: py`
           _EDGES = ("in Python " + code("cavern[-1]") + " is the LAST row and " + code("row[-1]") + " the last square, so stepping "
                     + "off the top or left edge silently wraps around to the other side. Check " + code("0 <= row") + " and "
                     + code("0 <= col") + " before you look at a square.")
@@ -2405,11 +2429,16 @@
               limit = 400 * squares + 5000
               call = label or code("count_islands(" + short(given, 80) + ")")
               try:
-                  with _Budget(limit, "Your spell ran more than " + format(limit, ",") + " lines of code on a map of only "
+                  with step_limit(limit, "Your spell took more than " + format(limit, ",") + " steps on a map of only "
                                + format(squares, ",") + " squares without finishing. It seems to explore the same squares again "
                                + "and again. Add each square to your " + code("seen") + " set the moment you reach it, and never "
                                + "explore a seen square again."):
                       result = count_islands(cavern)
+              except IndexError:
+                  if not cavern:
+                      fail(code("count_islands([])") + " crashed: a map with no rows has no " + code("cavern[0]") + ". Return 0 "
+                           + "straight away for an empty map.")
+                  raise
               except RecursionError:
                   fail(call + " never stopped calling itself (RecursionError). Without marking squares as seen, a flood steps back "
                        + "and forth between two rock squares forever. Add each square to " + code("seen") + " before you explore "
@@ -2677,7 +2706,7 @@
                 return -1
           `
         ],
-        tests: LINE_BUDGET + py`
+        tests: py`
           from collections import deque as _deque
 
           def _bfs(maze):
@@ -2721,7 +2750,7 @@
               limit = 300 * squares + 5000
               call = label or code("shortest_path(" + short(given, 80) + ")")
               try:
-                  with _Budget(limit, "Your spell ran more than " + format(limit, ",") + " lines of code on a maze of only "
+                  with step_limit(limit, "Your spell took more than " + format(limit, ",") + " steps on a maze of only "
                                + format(squares, ",") + " squares without finishing. It seems to explore the same squares again "
                                + "and again, or to try every possible route. Keep a set of seen squares: add each square the moment "
                                + "you queue it, and never queue a seen square again."):
