@@ -136,14 +136,21 @@
     });
   }
 
+  /** One sentence about where progress lives, for the current mode. */
+  function savingSentence() {
+    return app().isScorm()
+      ? "Your course saves your progress automatically."
+      : "Progress saves itself in this browser; a Save Scroll carries it to another computer.";
+  }
+
   function about() {
     var conf = u.config();
     var py = conf.pyodideVersion ? " " + conf.pyodideVersion : "";
     return h("details", { class: "about" },
-      h("summary", null, u.emoji("📜"), " About Syntax & Sorcery"),
+      h("summary", null, u.emoji("📜"), " About " + u.GAME_NAME),
       h("div", { class: "about-body" },
-        h("p", null, h("strong", null, (conf.title || "Syntax & Sorcery") + " " + (conf.version || "")), " — learn Python, data structures & algorithms and object-oriented programming by casting real Python spells."),
-        h("p", null, "Your spells run in real Python (CPython via Pyodide" + py + ") inside your browser. Nothing you type is sent anywhere; progress stays in this browser unless you export a Save Scroll" + (app().isScorm() ? " (here, your LMS also keeps it)." : ".")),
+        h("p", null, h("strong", null, u.GAME_NAME + (conf.version ? " " + conf.version : "")), " — " + u.TAGLINE + " Learn Python, data structures & algorithms and object-oriented programming by casting real Python spells."),
+        h("p", null, "Your spells run in real Python (CPython via Pyodide" + py + ") inside your browser. Nothing you type is sent anywhere. " + savingSentence()),
         h("ul", { class: "credits" },
           h("li", null, "Python in the browser: Pyodide (MPL-2.0)"),
           h("li", null, "Code editor: CodeMirror 5 (MIT)"),
@@ -187,12 +194,17 @@
     opts = opts || {};
     var p = opts.chooseSlot ? null : u.profile();
     var scorm = app().isScorm();
+    var framed = u.isFramed();
+    var scormConf = (u.config().scorm || {});
+    var allowImport = !scorm || scormConf.allowImport === true;
     var body = h("div", { class: "savescroll" });
     var m;
 
-    body.appendChild(h("p", { class: "lead" }, p
-      ? "Your progress saves itself in this browser. A Save Scroll lets you carry it to another computer, or keep a backup."
-      : "Bring a wizard from another computer: choose a save file, or paste a save code."));
+    body.appendChild(h("p", { class: "lead" }, scorm
+      ? "Your course saves your progress automatically. You can still copy a save code as a personal backup."
+      : p
+        ? "Your progress saves itself in this browser. A Save Scroll lets you carry it to another computer, or keep a backup."
+        : "Bring a wizard from another computer: choose a save file, or paste a save code."));
     var banner = storageBanner(null);
     if (banner) body.appendChild(banner);
 
@@ -205,7 +217,9 @@
       codeBox.addEventListener("focus", function () { u.safe(function () { codeBox.select(); }); });
       body.appendChild(h("section", { class: "scroll-section" },
         h("h3", null, u.emoji("📤"), " Take your progress with you"),
-        h("p", { class: "section-help" }, "Copy this save code (it holds your stars, hints and settings) or download a save file (which also keeps the spells you wrote)."),
+        h("p", { class: "section-help" }, framed
+          ? "Copy this save code and keep it somewhere safe (an email to yourself works). It holds your stars, hints and settings. Course pages sometimes block downloads, so the code is the surest way."
+          : "Copy this save code (it holds your stars, hints and settings) or download a save file (which also keeps the spells you wrote)."),
         h("label", { class: "field-label", for: codeId }, "Save code for ", h("strong", null, p.wizardName || "your wizard")),
         codeBox,
         h("div", { class: "button-row" },
@@ -219,7 +233,7 @@
               });
             }
           }),
-          u.button("Download save file", {
+          u.button(framed ? "Try downloading a save file" : "Download save file", {
             kind: "ghost", icon: "⬇️", onClick: function () {
               var ok = u.safe(function () { return SS.Save.exportFile(); }, false);
               exportStatus.className = "field-status" + (ok !== false ? " ok" : "");
@@ -275,6 +289,12 @@
           message: h("p", null, "Importing replaces the progress of ", h("strong", null, who || "this wizard"), " in this save slot. This can't be undone.")
         })
         : Promise.resolve(true);
+      if (scorm) {
+        ask = UI.dialogs.confirm({
+          title: "Add this Save Scroll to your course save?", icon: "📜", confirmLabel: "Import it",
+          message: "Its progress is combined with the progress your course already has, keeping the best result for every spell."
+        });
+      }
       ask.then(function (ok) {
         if (!ok) return;
         var profile;
@@ -302,19 +322,23 @@
     });
     importBtn.addEventListener("click", function () { doImport(paste.value); });
 
-    body.appendChild(h("section", { class: "scroll-section" },
-      h("h3", null, u.emoji("📥"), " Import a Save Scroll"),
-      h("p", { class: "section-help" }, scorm
-        ? "Importing adds the Save Scroll's progress to this course's save, keeping the best result for every spell."
-        : p ? "Importing replaces the progress in this save slot." : "Choose where the wizard should go, then pick a file or paste a code."),
-      slotPicker,
-      h("div", { class: "button-row" },
-        fileInput,
-        h("label", { class: "btn btn-ghost file-label", for: fileId }, u.emoji("📂"), h("span", { class: "btn-label" }, "Choose a save file…"))),
-      h("label", { class: "field-label", for: pasteId }, "…or paste a save code"),
-      paste,
-      h("div", { class: "button-row" }, importBtn),
-      importError));
+    if (allowImport) {
+      body.appendChild(h("section", { class: "scroll-section" },
+        h("h3", null, u.emoji("📥"), " Import a Save Scroll"),
+        h("p", { class: "section-help" }, scorm
+          ? "Importing adds the Save Scroll's progress to this course's save, keeping the best result for every spell."
+          : p ? "Importing replaces the progress in this save slot." : "Choose where the wizard should go, then pick a file or paste a code."),
+        slotPicker,
+        h("div", { class: "button-row" },
+          fileInput,
+          h("label", { class: "btn btn-ghost file-label", for: fileId }, u.emoji("📂"), h("span", { class: "btn-label" }, "Choose a save file…"))),
+        h("label", { class: "field-label", for: pasteId }, "…or paste a save code"),
+        paste,
+        h("div", { class: "button-row" }, importBtn),
+        importError));
+    } else {
+      body.appendChild(h("p", { class: "scroll-note" }, u.emoji("🎓"), " Your course saves your progress automatically, so there is nothing to import here."));
+    }
 
     m = UI.dialogs.open({
       title: "Save Scroll", icon: "📜", size: "md", className: "modal-savescroll", body: body, focusInput: false,
@@ -377,6 +401,7 @@
     saveScroll: saveScroll,
     engineHelp: engineHelp,
     storageBanner: storageBanner,
+    savingSentence: savingSentence,
     about: about
   };
 })(typeof window !== "undefined" ? window : globalThis);

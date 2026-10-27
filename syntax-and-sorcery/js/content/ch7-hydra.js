@@ -1681,7 +1681,7 @@
             print(edit_distance("spell", "spells"))   # insert an s
             print(edit_distance("", "abc"))           # insert a, b and c
           `, output: "3\n1\n3" },
-          "Words in the trials can be over 40 letters long."
+          "Words in the trials can be about 25 letters long."
         ],
         lesson: [
           "Edit distance is the sternest table in the lair, but it is built just like the twin scrolls' one. Let `table[i][j]` be the cheapest way to turn the first `i` letters of `a` into the first `j` letters of `b`. The answer is `table[len(a)][len(b)]`.",
@@ -1697,15 +1697,15 @@
                 print(row)
           `, output: "[0, 1, 2, 3, 4]\n[1, 0, 0, 0, 0]\n[2, 0, 0, 0, 0]\n[3, 0, 0, 0, 0]\n[4, 0, 0, 0, 0]" },
           "Then each inner entry looks at the last letters, `a[i - 1]` and `b[j - 1]`. If they already match, they cost nothing: the entry diagonally up-left already holds the answer. If they differ, the last change was one of the three spells, and each spell matches one neighbouring entry — above, left or up-left. Work out which is which, then pay 1 drop plus the cheapest of the three. Here is the whole table for `\"rune\"` → `\"ruin\"`:",
-          { output: [
-            "      \"\"  r  u  i  n",
-            "  \"\"   0  1  2  3  4",
-            "   r   1  0  1  2  3",
-            "   u   2  1  0  1  2",
-            "   n   3  2  1  1  1",
-            "   e   4  3  2  2  2"
-          ].join("\n") },
-          { tip: "Prefer recursion? Memoize `cost(i, j)` for the suffixes `a[i:]` and `b[j:]`: when one of them is empty, the answer is the length of the other." }
+          { diagram: py`
+                  ""  r  u  i  n
+              ""   0  1  2  3  4
+               r   1  0  1  2  3
+               u   2  1  0  1  2
+               n   3  2  1  1  1
+               e   4  3  2  2  2
+          ` },
+          { tip: "Prefer recursion? Memoize `cost(i, j)` for the suffixes `a[i:]` and `b[j:]`: when one of them is empty, the answer is the length of the other. But recursion in the browser can only go a few hundred calls deep, and `@lru_cache` and generators inside `sum()`/`min()`/`max()` use extra room. For long inputs a table is safest." }
         ],
         starter: py`
           def edit_distance(a, b):
@@ -1837,9 +1837,10 @@
         ],
         tests: LAIR_TRIALS + py`
           def check_edit(a, b, want, note="", when="wrong"):
-              result = need_function("edit_distance", 2)(a, b)
+              result = call_spell("edit_distance", 2, a, b)
               expect_number(result, want, "edit_distance(" + repr(a) + ", " + repr(b) + ")",
-                            shared_memo_note() or note_when(result, want, note, when))
+                            shared_memo_note("edit_distance", "both words")
+                            or note_when(result, want, note, when))
 
 
           shifting = (" Remember that you can insert and delete letters, not only replace them, so "
@@ -1877,14 +1878,15 @@
               check_edit("sorcery", "sorcerer", 2)
 
 
-          @test("Two incantations of over 40 letters, without waking the Hydra")
+          @test("Two incantations of about 25 letters, without waking the Hydra")
           def _():
               need_function("edit_distance", 2)
-              a = "ABRACADABRAALAKAZAMHOCUSPOCUSPRESTOCHANGEOSHAZAM"
-              b = "ALAKAZAMABRACADABRASHAZAMHOCUSPOCUSOPENSESAME"
+              a = "ABRACADABRAHOCUSPOCUSPRESTO"
+              b = "ALAKAZAMSHAZAMOPENSESAME"
               with without_waking_the_hydra("edit_distance", 30000, budget=30000):
-                  result = need_function("edit_distance")(a, b)
-              expect_number(result, 26, "edit_distance(" + repr(a) + ", " + repr(b) + ")")
+                  result = call_spell("edit_distance", None, a, b)
+              expect_number(result, 20, "edit_distance(" + repr(a) + ", " + repr(b) + ")",
+                            shared_memo_note("edit_distance", "both words"))
         `,
         scene: { icon: "⚗️", successIcon: "✨", successText: "The alembic bubbles, and lead turns to gold in exactly three drops of mana.", effect: "bubble" }
       },

@@ -438,6 +438,7 @@
   function refreshTopbar() {
     var p = u.profile();
     if (!els.wizard) return;
+    renderWarning();
     if (!p) { els.wizard.hidden = true; return; }
     els.wizard.hidden = false;
     var xp = u.safe(function () { return SS.Progress.totalXp(p); }, 0) || 0;
