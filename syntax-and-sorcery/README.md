@@ -143,6 +143,7 @@ Add these to the game's address:
 |---|---|
 | `?unlock=all` | Free practice: every chapter and challenge is open. |
 | `?answers=off` | Hide the Answer Scroll (no reference solutions). |
+| `?editor=plain` | Use a plain text box instead of the highlighting code editor (simpler for screen readers; avoids loading the editor from cdnjs). |
 
 They can be combined: `…/syntax-and-sorcery/?unlock=all&answers=off`. Defaults live in
 [`js/config.js`](js/config.js).
@@ -165,8 +166,9 @@ They can be combined: `…/syntax-and-sorcery/?unlock=all&answers=off`. Defaults
 
 The game has no accounts, analytics or tracking; nothing a student types leaves their
 browser (except what an LMS stores through SCORM). It downloads the Python engine, editor
-and fonts from public CDNs. It is fully keyboard-playable, respects *reduce motion*
-settings, and is designed for readable contrast.
+and fonts from public CDNs. It is fully keyboard-playable (in the code editor, **Tab** indents;
+press **Esc** then **Tab** to move on), respects *reduce motion* settings, and is designed
+for readable contrast.
 
 ---
 

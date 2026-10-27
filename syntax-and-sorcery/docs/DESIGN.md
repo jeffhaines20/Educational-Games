@@ -71,13 +71,7 @@ change in someone else's file, write it down in your final report instead.
 ## 3. Script loading order (index.html)
 
 ```html
-<!-- Optional editor (CodeMirror 5 from cdnjs). The game falls back to a textarea. -->
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/codemirror.min.css">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/codemirror.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/mode/python/python.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/addon/edit/matchbrackets.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/addon/edit/closebrackets.min.js"></script>
-
+<script>/* tiny inline recorder: notes any <script> that fails to load (e.g. a missing chapter file) */</script>
 <script src="js/config.js"></script>
 <script src="js/engine/harness.js"></script>
 <script src="js/engine/runner.js"></script>
@@ -95,6 +89,13 @@ change in someone else's file, write it down in your final report instead.
 <script src="js/content/ch7-hydra.js"></script>
 <script src="js/ui/…"></script>   <!-- UI files; app.js last, it boots the game on DOMContentLoaded -->
 ```
+
+**The code editor** (CodeMirror 5 from cdnjs, with the Python mode and the
+matchbrackets/closebrackets add-ons) is *not* a static script tag: `js/ui/editor.js`
+loads it on demand, so a slow or blocked cdnjs never holds up the page. The editor
+starts as a plain `<textarea>` (Tab indents, Ctrl/⌘+Enter casts) and upgrades in place
+when CodeMirror arrives. `?editor=plain` in the URL, or `SS_CONFIG.plainEditor = true`,
+keeps the plain editor (useful for screen-reader users and locked-down networks).
 
 `tools/validate_content.py` fails if a `js/content/*.js` file is not referenced by
 `index.html`. Fonts come from Google Fonts with system fallbacks (the game must look
