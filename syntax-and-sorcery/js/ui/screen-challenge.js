@@ -60,6 +60,7 @@
     var castCode = "";
     var failStreak = 0;
     var nudged = false;
+    var nudgeTimer = null;
     var editor = null;
     var ada = (SS.CHARACTERS && SS.CHARACTERS.ada) || { name: "Archmage Ada", icon: "🧙‍♀️" };
     var MOD = UI.Editor.modKey;
@@ -232,19 +233,24 @@
       coach = h("aside", { class: "coach", "aria-labelledby": coachId },
         h("p", { class: "coach-title", id: coachId }, u.emoji("✨"), " How to cast a spell"),
         h("ol", { class: "coach-steps" },
-          h("li", null, "Read ", h("strong", null, "Your Task"), ". The ", h("strong", null, "Spell Scroll"), " teaches what you need."),
-          h("li", null, "Write Python in the editor below."),
-          h("li", null, "Press ", h("strong", null, "✨ Cast Spell"), " (or ", h("kbd", null, MOD + "+Enter"), "). The ", h("strong", null, "Scrying Pool"), " shows what your spell printed; the ", h("strong", null, "Trials"), " show whether it worked."),
+          h("li", null, "Read ", h("strong", null, "Your Task"), ". The ", h("strong", null, "Spell Scroll"), " lesson teaches what you need."),
+          h("li", null, "Write Python in the editor above."),
+          h("li", null, "Press ", h("strong", null, "✨ Cast Spell"), " (or ", h("kbd", null, MOD + "+Enter"), "). Right here, the ", h("strong", null, "Scrying Pool"), " shows what your spell printed and the ", h("strong", null, "Trials"), " show whether it worked."),
           h("li", null, "Something went wrong? Read the explanation, fix the highlighted line and cast again. Pip the owl has hints too.")),
         u.button("Got it!", {
           kind: "primary", size: "sm", class: "coach-ok",
           onClick: function () {
-            app().markSeen("tutorial");
-            u.remove(coach);
-            coach = null;
-            if (editor) { editor.refresh(); editor.focus(); }
+            dismissCoach();
+            UI.results.idle(results);
+            if (editor) editor.focus();
           }
         }));
+    }
+    function dismissCoach() {
+      if (!coach) return;
+      app().markSeen("tutorial");
+      u.remove(coach);
+      coach = null;
     }
 
     var engineBanner = h("div", { class: "banner banner-error engine-banner", role: "alert", hidden: true });
@@ -301,11 +307,11 @@
       castReason);
 
     var results = h("div", { class: "results", tabindex: "-1", "aria-label": "Results of your cast" });
-    UI.results.idle(results);
-    var resultsPanel = h("section", { class: "results-panel", "aria-label": "Results" }, results);
+    if (!coach) UI.results.idle(results);
+    var resultsPanel = h("section", { class: "results-panel", "aria-label": "Results" }, coach, results);
 
     var work = h("div", { class: "ch-work" },
-      h("div", { class: "work-inner" }, coach, engineBanner, editorPanel, castBar, resultsPanel));
+      h("div", { class: "work-inner" }, engineBanner, editorPanel, castBar, resultsPanel));
 
     var layout = h("div", { class: "challenge-layout" }, brief, work, help);
     var el = h("section", { class: "challenge-screen" }, bar, layout);
@@ -390,6 +396,8 @@
       casting = true;
       updateCast();
       editor.clearMarks();
+      dismissCoach();
+      clearTimeout(nudgeTimer);
       stage.reset();
       stage.casting(true);
       UI.results.casting(results);
@@ -440,9 +448,9 @@
       var e = entry();
       if (!nudged && failStreak >= 2 && (e.hintsUsed || 0) < hints.length) {
         nudged = true;
-        setTimeout(function () {
-          if (!destroyed) UI.dialogs.toast("Pip hoots softly: a hint is ready whenever you want one.", { icon: "🦉" });
-        }, 900);
+        nudgeTimer = setTimeout(function () {
+          if (!destroyed && !casting && !UI.dialogs.isOpen()) UI.dialogs.toast("Pip hoots softly: a hint is ready whenever you want one.", { icon: "🦉" });
+        }, 1200);
       }
     }
 
@@ -511,10 +519,10 @@
       }
       var actions = [];
       if (info.chapterDone || info.gameDone) {
-        actions.push({ label: "Continue", kind: "primary", icon: "▶", onClick: function () { app().go("map"); } });
+        actions.push({ label: "Continue ▸", kind: "primary", onClick: function () { app().go("map"); } });
       } else if (info.next) {
         actions.push({
-          label: "Next spell", kind: "primary", icon: "▶",
+          label: "Next spell ▸", kind: "primary",
           onClick: function () {
             var next = info.next;
             if (next.chapterId !== ch.chapterId && !app().hasSeen("chapter:" + next.chapterId)) app().go("chapter", { id: next.chapterId });
@@ -610,7 +618,7 @@
         editor.clearMarks();
         u.safe(function () { SS.Save.saveDraft(ch.id, editor.getValue()); });
         stage.reset();
-        UI.results.idle(results);
+        if (!coach) UI.results.idle(results);
         UI.sound.play("reset");
         editor.focus();
       });
@@ -653,6 +661,7 @@
       refresh: function () { renderNextLock(); renderHints(); },
       destroy: function () {
         destroyed = true;
+        clearTimeout(nudgeTimer);
         document.removeEventListener("keydown", onKey);
         unsubEngine();
         saveDraft.flush();

@@ -245,7 +245,7 @@
         cm.setGutterMarker(idx, "ss-marks", h("span", {
           class: "ss-gutter-mark " + kind,
           title: kind === "error" ? "Python stopped on this line" : "A trial pointed at this line"
-        }, kind === "error" ? "✖" : "!"));
+        }));
         marks.push({ handle: handle, kind: kind });
         cm.scrollIntoView({ line: idx, ch: 0 }, 80);
         return true;

@@ -299,6 +299,49 @@ async function otherSuites(browser, port, localBase) {
     await close();
   });
 
+  await check("Blob URLs unavailable: falls back to a data: URL worker", async () => {
+    const { page, close } = await openPage(browser, httpURL + "?noBlob=1", { pyodideBaseURLs: [localBase] });
+    const r = await page.evaluate(async () => { await SS.PythonRunner.init(); return SS.PythonRunner.run({ code: "print('data worker')" }); });
+    assert.strictEqual(r.stdout, "data worker\n");
+    await close();
+  });
+
+  async function withCsp(policy) {
+    const context = await browser.newContext();
+    const page = await context.newPage();
+    const html = fs.readFileSync(path.join(GAME, PAGE), "utf8");
+    await page.route(httpURL, (route) => route.fulfill({ status: 200, contentType: "text/html", headers: { "Content-Security-Policy": policy }, body: html }));
+    await page.addInitScript((cfg) => { window.SS_CONFIG = cfg; }, { pyodideBaseURLs: [localBase] });
+    await page.goto(httpURL);
+    return { page, close: () => context.close() };
+  }
+
+  await check("a strict Content-Security-Policy (self + worker-src blob: + wasm) works", async () => {
+    // What a site with a CSP needs: worker-src blob:, 'wasm-unsafe-eval', and the Pyodide host in script-src.
+    const { page, close } = await withCsp("default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; worker-src blob:; style-src 'self' 'unsafe-inline'");
+    const r = await page.evaluate(async () => { await SS.PythonRunner.init(); return SS.PythonRunner.run({ code: "print('csp ok')" }); });
+    assert.strictEqual(r.stdout, "csp ok\n");
+    await close();
+  });
+
+  await check("a CSP that blocks blob: workers: retries with a data: URL worker, never hangs", async () => {
+    const { page, close } = await withCsp("worker-src data:");
+    const outcome = await page.evaluate(() => SS.PythonRunner.init().then(
+      () => SS.PythonRunner.run({ code: "print('data ok')" }).then((r) => "ran: " + r.stdout),
+      () => "rejected: " + SS.PythonRunner.getStatus().detail));
+    // Chrome then also refuses importScripts() inside the data: worker under this policy;
+    // the detail proves the data: worker started and reported why.
+    assert.ok(outcome === "ran: data ok\n" || /^rejected: .*\[bootstrap\]/.test(outcome), outcome);
+    await close();
+  });
+
+  await check("a Content-Security-Policy that blocks every worker: clear error, init() rejects", async () => {
+    const { page, close } = await withCsp("worker-src 'none'");
+    const outcome = await page.evaluate(() => SS.PythonRunner.init().then(() => "resolved", (e) => "rejected: " + e.message));
+    assert.match(outcome, /^rejected: .*background worker/);
+    await close();
+  });
+
   await check("inside a sandboxed iframe (opaque origin, like some LMS embeds)", async () => {
     const context = await browser.newContext();
     const page = await context.newPage();

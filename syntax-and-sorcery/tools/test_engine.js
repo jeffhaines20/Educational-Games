@@ -676,8 +676,6 @@ test("save: exportCode round-trips through importData (compact, no code)", async
     delete out.updatedAt;
     return out;
   };
-  const original = strip(p);
-  delete original.challenges["alpha-two"].draft;
   const copy = strip(imported);
   assert.deepStrictEqual(copy.challenges, strip(p).challenges);
   assert.strictEqual(copy.wizardName, p.wizardName);
@@ -1112,6 +1110,24 @@ test("save+scorm: unknown suspend_data entries are kept, junk is ignored", async
   assert.strictEqual(junk.SS.Save.createProfile(0, "Fresh").wizardName, "Fresh");
 });
 
+test("save+scorm: progress is adopted even if the LMS loads before the chapters register", async () => {
+  const S0 = makeEngine().SS.Save;
+  const suspend = ["S1", "1f", "Late", "", S0._hash6("alpha-one") + "d1.4.2," + S0._hash6("beta-one") + "50", ""].join("|");
+  const api = makeScorm12({ "cmi.suspend_data": suspend });
+  const e = makeEngine({ parent: topWindow({ API: api }), content: false });
+  await initSave(e);                                   // no chapters yet
+  assert.deepStrictEqual(Object.keys(e.SS.Save.getProfile().challenges), []);
+  e.run(FAKE_CONTENT);                                 // chapters register afterwards
+  const p = e.SS.Save.getProfile();
+  assert.strictEqual(p.challenges["alpha-one"].stars, 3);
+  assert.strictEqual(p.challenges["alpha-one"].hintsUsed, 1);
+  assert.strictEqual(p.challenges["alpha-one"].casts, 4);
+  assert.strictEqual(p.challenges["beta-one"].stars, 1);
+  e.SS.Save.recordCast("alpha-two", { passed: false });
+  const saved = api.data["cmi.suspend_data"];
+  assert.strictEqual(saved.split("|")[4].split(",").length, 3, "no duplicated entries: " + saved);
+});
+
 test("save+scorm: import merges into the LMS profile; blocked storage still saves to the LMS", async () => {
   const plainEngine = makeEngine();
   await initSave(plainEngine);
@@ -1187,6 +1203,125 @@ test("runner: results from the worker are validated and normalised", () => {
   assert.match(t.error.friendly, /base case/);
   assert.strictEqual(t.error.phase, "runtime");
   assert.strictEqual(plain(e.SS.PythonRunner._timeoutResult(1500, 0)).error.friendly.includes("1.5 seconds"), true);
+});
+
+// ---------------------------------------------------------------------------
+// tools/build.py, on a small fake game folder in a temporary directory
+// ---------------------------------------------------------------------------
+
+const os = require("os");
+const { spawnSync } = require("child_process");
+
+function python() {
+  for (const cmd of ["python3", "python"]) {
+    const r = spawnSync(cmd, ["-c", "import sys; print(sys.version_info[0])"], { encoding: "utf8" });
+    if (r.status === 0 && r.stdout.trim() === "3") return cmd;
+  }
+  return null;
+}
+
+function fakeGame(files) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ss-build-test-"));
+  const all = Object.assign({
+    "scorm/imsmanifest.xml": source("scorm/imsmanifest.xml"),
+    "index.html": [
+      "<!DOCTYPE html>", "<html><head><meta charset=\"utf-8\"><title>T</title>",
+      "<link rel=\"stylesheet\" href=\"https://cdn.example.invalid/x.css\">",
+      "<link rel=\"stylesheet\" href=\"css/style.css\">",
+      "<!-- <script src=\"js/old.js\"></script> -->",
+      "<script>window.order = ['inline'];</script>",
+      "<script src=\"https://cdn.example.invalid/lib.js\"></script>",
+      "</head><body>",
+      "<script src=\"js/a.js\"></script>",
+      "<script src=\"js/b.js\"></script>",
+      "</body></html>", "",
+    ].join("\n"),
+    "css/style.css": "body { color: red; background: url(img/dot.svg); }\n",
+    "css/img/dot.svg": "<svg xmlns=\"http://www.w3.org/2000/svg\"/>\n",
+    "js/a.js": "window.order.push('a');\n",
+    "js/b.js": "window.order.push('b'); var s = '<\\/script>';\n",
+  }, files || {});
+  for (const [rel, text] of Object.entries(all)) {
+    if (text === null) continue;
+    fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true });
+    fs.writeFileSync(path.join(dir, rel), text);
+  }
+  return dir;
+}
+
+function build(py, dir, out) {
+  return spawnSync(py, [path.join(ROOT, "tools", "build.py"), "--root", dir, "--out", out], { encoding: "utf8" });
+}
+
+function zipListing(py, zipPath) {
+  const script = "import json, sys, zipfile\nz = zipfile.ZipFile(sys.argv[1])\n" +
+    "print(json.dumps([[i.filename, list(i.date_time), i.external_attr >> 16, z.read(i.filename).decode('utf-8')] for i in z.infolist()]))";
+  const r = spawnSync(py, ["-c", script, zipPath], { encoding: "utf8" });
+  assert.strictEqual(r.status, 0, r.stderr);
+  return JSON.parse(r.stdout);
+}
+
+test("build: inlines local CSS/JS, keeps CDN tags and comments, deterministic SCORM zip", () => {
+  const py = python();
+  if (!py) { console.log("       (skipped: python3 not found)"); return; }
+  const dir = fakeGame();
+  try {
+    let r = build(py, dir, path.join(dir, "out1"));
+    assert.strictEqual(r.status, 0, r.stderr);
+    r = build(py, dir, path.join(dir, "out2"));
+    assert.strictEqual(r.status, 0, r.stderr);
+    const read = (p) => fs.readFileSync(path.join(dir, p));
+    const page = read("out1/syntax-and-sorcery.html").toString("utf8");
+    assert.ok(read("out1/syntax-and-sorcery.html").equals(read("out2/syntax-and-sorcery.html")), "deterministic HTML");
+    assert.ok(read("out1/syntax-and-sorcery-scorm.zip").equals(read("out2/syntax-and-sorcery-scorm.zip")), "deterministic zip");
+    assert.ok(page.startsWith("<!DOCTYPE html>\n<!-- Single-file build"), "doctype stays first");
+    assert.ok(!/<script[^>]*src="js\//.test(page.replace(/<!--[\s\S]*?-->/g, "")), "no local script tags left");
+    assert.ok(page.includes("<!-- <script src=\"js/old.js\"></script> -->"), "comments untouched");
+    assert.ok(page.includes("<script src=\"https://cdn.example.invalid/lib.js\"></script>"));
+    assert.ok(page.includes("<link rel=\"stylesheet\" href=\"https://cdn.example.invalid/x.css\">"));
+    assert.ok(page.includes("<script data-inlined=\"js/a.js\">\nwindow.order.push('a');\n</script>"));
+    assert.ok(page.includes("<style data-inlined=\"css/style.css\">"));
+    assert.ok(page.includes("url(\"data:image/svg+xml;base64,"));
+    assert.ok(page.indexOf("js/a.js") < page.indexOf("js/b.js"), "order kept");
+    const entries = zipListing(py, path.join(dir, "out1", "syntax-and-sorcery-scorm.zip"));
+    assert.deepStrictEqual(entries.map((e) => e[0]), ["imsmanifest.xml", "index.html"]);
+    assert.ok(entries.every((e) => e[1].join() === "1980,1,1,0,0,0" && e[2] === 0o100644));
+    assert.strictEqual(entries[1][3], page);
+    assert.match(entries[0][3], /<title>Syntax &amp; Sorcery<\/title>/);
+    assert.match(entries[0][3], /adlcp:scormtype="sco" href="index.html"/);
+    assert.match(entries[0][3], /<schemaversion>1\.2<\/schemaversion>/);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("build: refuses unsafe or broken input with a clear message", () => {
+  const py = python();
+  if (!py) { console.log("       (skipped: python3 not found)"); return; }
+  const cases = [
+    [{ "js/b.js": "var x = 1;\nvar s = '</script>';\n" }, /js\/b\.js contains "<\/script" on line 2/],
+    [{ "js/b.js": "var a = '<!--';\nvar b = '<script>';\n" }, /js\/b\.js contains "<!--"/],
+    [{ "css/style.css": "/* </style> */\n" }, /css\/style\.css contains "<\/style"/],
+    [{ "js/a.js": null }, /'js\/a\.js' was not found/],
+    [{ "scorm/imsmanifest.xml": null }, /imsmanifest\.xml was not found/],
+    [{ "scorm/imsmanifest.xml": "<manifest><oops></manifest>" }, /not valid XML/],
+    [{ "index.html": "<!DOCTYPE html><script type=\"module\" src=\"js/a.js\"></script>" }, /module script/],
+    [{ "index.html": "<!DOCTYPE html><script src=\"../outside.js\"></script>" }, /outside the game folder/],
+    [{ "index.html": null }, /index\.html was not found/],
+  ];
+  for (const [files, message] of cases) {
+    const dir = fakeGame(files);
+    try {
+      const out = path.join(dir, "out");
+      const r = build(py, dir, out);
+      assert.strictEqual(r.status, 1, "expected a failure for " + message + "\n" + r.stdout + r.stderr);
+      assert.match(r.stderr, /^build\.py: error: /);
+      assert.match(r.stderr, message);
+      assert.ok(!fs.existsSync(path.join(out, "syntax-and-sorcery.html")), "nothing is written on failure");
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  }
 });
 
 // ---------------------------------------------------------------------------

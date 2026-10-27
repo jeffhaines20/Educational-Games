@@ -166,11 +166,14 @@
 
     var initial = typeof opts.initialFocus === "string" ? dialog.querySelector(opts.initialFocus) : opts.initialFocus;
     if (!initial) {
+      // Small dialogs (confirm, prompt, success) focus their main action; long ones focus
+      // the dialog itself so they open at the top and screen readers announce the title.
       initial = dialog.querySelector("[data-autofocus]") ||
         (opts.focusInput !== false ? body.querySelector("input:not([type=hidden]):not([type=file]), textarea:not([readonly])") : null) ||
-        footer.querySelector(".btn-primary") || dialog;
+        ((opts.size || "md") === "sm" ? footer.querySelector(".btn-primary") : null) || dialog;
     }
-    u.focusEl(initial);
+    try { initial.focus({ preventScroll: true }); } catch (err) { u.focusEl(initial); }
+    dialog.scrollTop = 0;
     if (opts.sound !== false) UI.sound.play("open");
     return api;
   }
@@ -328,7 +331,7 @@
       el.setAttribute("data-speaker", who.key);
       portrait.textContent = p.icon || who.icon;
       nameEl.textContent = p.name !== undefined ? p.name : who.name;
-      roleEl.textContent = p.name !== undefined ? (p.role || "") : who.role;
+      roleEl.textContent = p.name !== undefined ? (p.role || "") : (who.key === "narrator" ? "" : who.role);
       nameEl.hidden = !nameEl.textContent;
       roleEl.hidden = !roleEl.textContent;
       u.clear(textEl);

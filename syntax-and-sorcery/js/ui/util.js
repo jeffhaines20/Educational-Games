@@ -332,9 +332,10 @@
     return text.split(/\s+/)[0] || "";
   }
 
-  /** Tidy a wizard name typed by the player: trimmed, single spaces, at most 30 characters. */
+  /** Tidy a wizard name typed by the player: trimmed, single spaces, at most 24 characters (like SS.Save). */
   function cleanName(name) {
-    return String(name || "").replace(/[\u0000-\u001f\u007f]/g, "").replace(/\s+/g, " ").trim().slice(0, 30);
+    var text = String(name || "").replace(/[\u0000-\u001f\u007f]/g, "").replace(/\s+/g, " ").trim();
+    return Array.from(text).slice(0, 24).join("").trim();
   }
 
   // --------------------------------------------------------------------------

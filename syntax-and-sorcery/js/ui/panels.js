@@ -85,7 +85,7 @@
     if (p) {
       body.appendChild(h("h3", { class: "settings-heading" }, "Your wizard"));
       var nameId = u.uid("rename");
-      var input = h("input", { class: "input", id: nameId, type: "text", maxlength: "30", autocomplete: "off", spellcheck: "false" });
+      var input = h("input", { class: "input", id: nameId, type: "text", maxlength: "24", autocomplete: "off", spellcheck: "false" });
       input.value = p.wizardName || "";
       var note = h("p", { class: "field-status", role: "status" });
       function rename() {
@@ -258,7 +258,7 @@
       var slotData = slots ? slots.filter(function (s) { return s.slot === slot; })[0] : null;
       var occupied = slots ? !!(slotData && slotData.data) : !!p;
       var who = slots ? (slotData && slotData.data && slotData.data.wizardName) : (p && p.wizardName);
-      var ask = occupied
+      var ask = occupied && !scorm
         ? UI.dialogs.confirm({
           title: "Replace this save?", icon: "📜", danger: true, confirmLabel: "Replace it",
           message: h("p", null, "Importing replaces the progress of ", h("strong", null, who || "this wizard"), " in this save slot. This can't be undone.")
@@ -293,7 +293,9 @@
 
     body.appendChild(h("section", { class: "scroll-section" },
       h("h3", null, u.emoji("📥"), " Import a Save Scroll"),
-      h("p", { class: "section-help" }, p ? "Importing replaces the progress in this save slot." : "Choose where the wizard should go, then pick a file or paste a code."),
+      h("p", { class: "section-help" }, scorm
+        ? "Importing adds the Save Scroll's progress to this course's save, keeping the best result for every spell."
+        : p ? "Importing replaces the progress in this save slot." : "Choose where the wizard should go, then pick a file or paste a code."),
       slotPicker,
       h("div", { class: "button-row" },
         h("label", { class: "btn btn-ghost file-label", for: fileId }, u.emoji("📂"), h("span", { class: "btn-label" }, "Choose a save file…")),

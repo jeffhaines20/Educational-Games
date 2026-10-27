@@ -1,10 +1,15 @@
 /*
  * Syntax & Sorcery — showing what a cast did (SS.UI.results).
  *
- *   render(container, result, { trials, inputs, onGoToLine(line) })
+ *   render(container, result, { trials, inputs, onGoToLine(line), getLine(n) })
  *   casting(container, label)      the "Casting…" state
  *   idle(container, text)          before the first cast
  *   announcement(result)           a short sentence for the aria-live region
+ *
+ * Layout of a result: one verdict card at the top that says what happened and,
+ * for problems, why (the friendly explanation, the offending line and Python's
+ * real traceback, or the first failed trial); then the Scrying Pool (what the
+ * spell printed) and the Trials list.
  *
  * A RunResult (docs/DESIGN.md §5.2) comes from Python, so every string in it is
  * untrusted: it is inserted as text, and friendly errors / trial messages go
@@ -38,6 +43,10 @@
     return null;
   }
 
+  function isProblem(status) {
+    return status === "error" || status === "timeout" || status === "internal-error";
+  }
+
   function summary(result) {
     var err = result.error || {};
     var total = result.total || 0, passed = result.passed || 0;
@@ -46,7 +55,7 @@
       case "passed":
         return { tone: "passed", icon: "✨", headline: "Spell mastered!", detail: total ? "All " + u.plural(total, "trial") + " passed." : "It worked." };
       case "failed":
-        return { tone: "failed", icon: "⚖️", headline: passed + " of " + u.plural(total, "trial") + " passed", detail: "Close! The first ✗ trial below says what to change." };
+        return { tone: "failed", icon: "⚖️", headline: passed + " of " + u.plural(total, "trial") + " passed", detail: "Not quite yet. Here is the first trial that didn't pass:" };
       case "error":
         if (err.phase === "syntax") {
           return { tone: "error", icon: "📜", headline: "Python couldn't read your spell", detail: (err.type || "SyntaxError") + where + ". Nothing ran yet." };
@@ -74,29 +83,6 @@
     return meter;
   }
 
-  function verdict(result, opts) {
-    var s = summary(result);
-    var text = h("div", { class: "verdict-text" },
-      h("p", { class: "verdict-headline" }, s.headline),
-      h("p", { class: "verdict-detail" }, s.detail));
-    var el = h("div", { class: "verdict verdict-" + s.tone },
-      h("span", { class: "verdict-icon", "aria-hidden": "true" }, s.icon),
-      text,
-      h("div", { class: "verdict-side" },
-        result.total ? trialMeter(result.tests || []) : null,
-        typeof result.durationMs === "number" ? h("span", { class: "verdict-time", title: "How long the cast took" }, formatDuration(result.durationMs)) : null));
-    if (result.status === "failed") {
-      var fail = firstFailure(result);
-      if (fail) {
-        text.appendChild(h("div", { class: "first-fail" },
-          h("p", { class: "first-fail-name" }, h("span", { class: "x", "aria-hidden": "true" }, "✗ "), fail.name),
-          fail.message ? h("p", { class: "first-fail-msg" }, codeText(fail.message)) : null,
-          fail.line ? h("p", { class: "first-fail-line" }, "Look at ", lineButton(fail.line, opts), " of your spell.") : null));
-      }
-    }
-    return el;
-  }
-
   function tracebackBlock(err, status) {
     var text = err.traceback || "";
     if (!text && err.type && status === "error") text = err.type + (err.message ? ": " + err.message : "");
@@ -111,27 +97,62 @@
       h("pre", { class: "traceback-text", tabindex: "0", "aria-label": "Python's error message" }, text));
   }
 
-  function errorCard(result, opts) {
+  /** The "why" part of an error / timeout / internal error, placed inside the verdict. */
+  function problemDetails(result, opts) {
     var err = result.error || {};
     var status = result.status;
-    var icon = status === "timeout" ? "⏳" : status === "internal-error" ? "🌀" : err.phase === "syntax" ? "📜" : "💥";
-    var head = h("p", { class: "error-head" },
-      h("span", { class: "error-icon", "aria-hidden": "true" }, icon),
-      h("strong", { class: "error-type" }, status === "timeout" ? "Time's up" : status === "internal-error" ? "Not your fault" : (err.type || "Error")),
-      err.line ? [" on ", lineButton(err.line, opts)] : null);
-    var friendly = err.friendly || err.message || "Something went wrong while casting.";
-    var card = h("div", { class: "error-card error-" + (status === "error" ? (err.phase || "runtime") : status), role: "group", "aria-label": "What went wrong" },
-      head,
-      h("p", { class: "error-friendly" }, codeText(friendly)),
-      tracebackBlock(err, status));
+    var parts = [];
     if (status === "error" && err.line && opts && opts.getLine) {
       var src = opts.getLine(err.line);
       if (src !== null && src !== undefined && String(src).trim() !== "") {
-        card.insertBefore(h("pre", { class: "error-line-code", "aria-label": "Line " + err.line + " of your spell" },
-          h("span", { class: "error-line-no", "aria-hidden": "true" }, String(err.line)), String(src)), card.childNodes[1] || null);
+        parts.push(h("pre", { class: "error-line-code", "aria-label": "Line " + err.line + " of your spell" },
+          h("span", { class: "error-line-no", "aria-hidden": "true" }, String(err.line)), String(src)));
       }
     }
-    return card;
+    var friendly = err.friendly || err.message || "Something went wrong while casting.";
+    parts.push(h("p", { class: "error-friendly" }, codeText(friendly)));
+    parts.push(tracebackBlock(err, status));
+    return parts;
+  }
+
+  function verdict(result, opts) {
+    var s = summary(result);
+    var err = result.error || {};
+    var detail = h("p", { class: "verdict-detail" });
+    if (result.status === "error") {
+      var type = err.type || (err.phase === "syntax" ? "SyntaxError" : "Error");
+      u.append(detail, [h("strong", { class: "error-type" }, type),
+        err.line ? [" on ", lineButton(err.line, opts)] : null,
+        err.phase === "syntax" ? ". Nothing ran yet." : "."]);
+    } else {
+      detail.textContent = s.detail;
+    }
+    var problem = isProblem(result.status);
+    var text = h("div", { class: "verdict-text" },
+      h("p", { class: "verdict-headline" }, s.headline),
+      detail);
+    var el = h("div", {
+      class: "verdict verdict-" + s.tone + (problem ? " verdict-problem" : ""),
+      role: problem ? "group" : null,
+      "aria-label": problem ? "What went wrong" : null
+    },
+      h("span", { class: "verdict-icon", "aria-hidden": "true" }, s.icon),
+      text,
+      h("div", { class: "verdict-side" },
+        result.total ? trialMeter(result.tests || []) : null,
+        typeof result.durationMs === "number" ? h("span", { class: "verdict-time", title: "How long the cast took" }, formatDuration(result.durationMs)) : null));
+    if (problem) {
+      u.append(text, problemDetails(result, opts));
+    } else if (result.status === "failed") {
+      var fail = firstFailure(result);
+      if (fail) {
+        text.appendChild(h("div", { class: "first-fail" },
+          h("p", { class: "first-fail-name" }, h("span", { class: "x", "aria-hidden": "true" }, "✗ "), fail.name),
+          fail.message ? h("p", { class: "first-fail-msg" }, codeText(fail.message)) : null,
+          fail.line ? h("p", { class: "first-fail-line" }, "Look at ", lineButton(fail.line, opts), " of your spell.") : null));
+      }
+    }
+    return el;
   }
 
   function outputSection(result, opts) {
@@ -171,16 +192,17 @@
       return section;
     }
     var list = h("ol", { class: "trial-list" });
-    var firstFail = true;
+    var first = firstFailure(result);
     tests.forEach(function (t) {
-      var cls = "trial " + (t.passed ? "pass" : "fail") + (!t.passed && firstFail ? " first-fail" : "");
-      list.appendChild(h("li", { class: cls },
+      var isFirst = t === first;
+      // The first failure's message is already shown in the verdict card above.
+      var showMessage = !t.passed && t.message && !(isFirst && result.status === "failed");
+      list.appendChild(h("li", { class: "trial " + (t.passed ? "pass" : "fail") + (isFirst ? " first-fail" : "") },
         h("span", { class: "trial-mark", "aria-hidden": "true" }, t.passed ? "✓" : "✗"),
         h("div", { class: "trial-body" },
           h("p", { class: "trial-name" }, h("span", { class: "sr-only" }, t.passed ? "Passed: " : "Failed: "), t.name),
-          !t.passed && t.message ? h("p", { class: "trial-msg" }, codeText(t.message)) : null,
-          !t.passed && t.line ? h("p", { class: "trial-line" }, "See ", lineButton(t.line, opts), ".") : null)));
-      if (!t.passed) firstFail = false;
+          showMessage ? h("p", { class: "trial-msg" }, codeText(t.message)) : null,
+          !t.passed && t.line && !isFirst ? h("p", { class: "trial-line" }, "See ", lineButton(t.line, opts), ".") : null)));
     });
     section.appendChild(list);
     return section;
@@ -194,9 +216,6 @@
     }
     container.setAttribute("data-status", result.status);
     container.appendChild(verdict(result, opts));
-    if (result.error && (result.status === "error" || result.status === "timeout" || result.status === "internal-error")) {
-      container.appendChild(errorCard(result, opts));
-    }
     container.appendChild(outputSection(result, opts));
     if (opts.trials !== false) container.appendChild(trialsSection(result, opts));
   }
@@ -227,7 +246,7 @@
       var fail = firstFailure(result);
       return s.headline + ". " + (fail ? "First failed trial: " + fail.name + ". " + plain(fail.message) : "");
     }
-    if (result.status === "error" || result.status === "timeout" || result.status === "internal-error") {
+    if (isProblem(result.status)) {
       var err = result.error || {};
       return s.headline + ". " + s.detail + " " + plain(err.friendly || err.message);
     }

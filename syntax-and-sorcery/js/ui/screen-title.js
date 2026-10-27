@@ -52,7 +52,7 @@
   function summaryLine(data) {
     if (!data) return "";
     var parts = [];
-    if (data.rankTitle) parts.push(rankIconFor(data.rankTitle) + " " + data.rankTitle);
+    if (data.rankTitle) parts.push((data.rankIcon || rankIconFor(data.rankTitle)) + " " + data.rankTitle);
     if (typeof data.completed === "number" && typeof data.total === "number") parts.push(data.completed + " of " + data.total + " spells");
     return parts.join(" · ");
   }
@@ -180,7 +180,7 @@
       var headingId = u.uid("slot");
       return h("article", { class: "slot-card filled panel", "aria-labelledby": headingId },
         h("p", { class: "slot-num" }, "Scroll " + u.roman(entry.index + 1)),
-        h("div", { class: "slot-portrait", "aria-hidden": "true" }, rankIconFor(d.rankTitle)),
+        h("div", { class: "slot-portrait", "aria-hidden": "true" }, d.rankIcon || rankIconFor(d.rankTitle)),
         h("h2", { class: "slot-name", id: headingId }, d.wizardName || "Apprentice"),
         h("p", { class: "slot-rank" }, d.rankTitle || ""),
         u.progressBar(fraction, "Spells mastered"),
@@ -190,7 +190,7 @@
           h("span", null, (d.xp || 0) + " XP")),
         d.updatedAt ? h("p", { class: "slot-time" }, "Last played " + u.relativeTime(d.updatedAt)) : null,
         h("div", { class: "slot-actions" },
-          u.button("Continue", { kind: "primary", icon: "▶", ariaLabel: "Continue as " + (d.wizardName || "Apprentice"), onClick: function () { app().loadSlot(entry.slot); } }),
+          u.button("Continue ▸", { kind: "primary", ariaLabel: "Continue as " + (d.wizardName || "Apprentice"), onClick: function () { app().loadSlot(entry.slot); } }),
           u.button("Delete", {
             kind: "danger-ghost", size: "sm", icon: "🗑️", ariaLabel: "Delete " + (d.wizardName || "this save"),
             onClick: function () {

@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Syntax & Sorcery: SCORM 1.2 package manifest (template).
+  tools/build.py copies this file to the root of dist/syntax-and-sorcery-scorm.zip,
+  next to index.html (the single-file build of the game). One SCO: the whole game.
+  The game reports cmi.core.score.raw (percentage of challenges completed),
+  cmi.core.lesson_status (incomplete / completed) and keeps progress in cmi.suspend_data.
+-->
+<manifest identifier="syntax-and-sorcery" version="1.0"
+          xmlns="http://www.imsproject.org/xsd/imscp_rootv1p1p2"
+          xmlns:adlcp="http://www.adlnet.org/xsd/adlcp_rootv1p2"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:schemaLocation="http://www.imsproject.org/xsd/imscp_rootv1p1p2 imscp_rootv1p1p2.xsd http://www.imsglobal.org/xsd/imsmd_rootv1p2p1 imsmd_rootv1p2p1.xsd http://www.adlnet.org/xsd/adlcp_rootv1p2 adlcp_rootv1p2.xsd">
+  <metadata>
+    <schema>ADL SCORM</schema>
+    <schemaversion>1.2</schemaversion>
+  </metadata>
+  <organizations default="syntax-and-sorcery-org">
+    <organization identifier="syntax-and-sorcery-org">
+      <title>Syntax &amp; Sorcery</title>
+      <item identifier="syntax-and-sorcery-item" identifierref="syntax-and-sorcery-sco" isvisible="true">
+        <title>Syntax &amp; Sorcery</title>
+      </item>
+    </organization>
+  </organizations>
+  <resources>
+    <resource identifier="syntax-and-sorcery-sco" type="webcontent" adlcp:scormtype="sco" href="index.html">
+      <file href="index.html"/>
+    </resource>
+  </resources>
+</manifest>

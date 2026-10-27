@@ -15,8 +15,10 @@
      (or by hand: open the console and call <code>SS.PythonRunner.run({ code: "print(1)" })</code>).</p>
   <pre id="status">(no status yet)</pre>
   <script>
-    // Optional: ?noWorker=1 simulates a browser/iframe without Web Workers.
+    // ?noWorker=1 simulates a browser/iframe without Web Workers;
+    // ?noBlob=1 one where Blob URLs can't be created (the runner falls back to a data: URL).
     if (/[?&]noWorker=1/.test(location.search)) { window.Worker = undefined; }
+    if (/[?&]noBlob=1/.test(location.search)) { URL.createObjectURL = function () { throw new Error("Blob URLs are blocked"); }; }
   </script>
   <script src="../../js/config.js"></script>
   <script src="../../js/engine/harness.js"></script>

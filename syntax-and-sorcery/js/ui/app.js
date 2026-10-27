@@ -210,7 +210,7 @@
 
   function learnerFirstName() {
     var info = state.bootInfo || {};
-    return u.firstName(info.learnerName || "");
+    return info.defaultWizardName || u.firstName(info.learnerName || "");
   }
 
   /** Ask for a wizard name, create the profile in `slot`, then start the story. */
@@ -223,7 +223,7 @@
       label: "Your wizard name",
       value: scorm ? learnerFirstName() : "",
       placeholder: "e.g. Morgana",
-      maxLength: 30,
+      maxLength: 24,
       help: "This is how the academy will address you. You can change it later in Settings.",
       confirmLabel: "Begin my apprenticeship",
       confirmIcon: "✨",
@@ -407,7 +407,7 @@
     current = null;
     u.safe(function () { if (SS.Save && SS.Save.flush) SS.Save.flush(); });
     u.clear(els.main);
-    els.main.className = "screen screen-" + name;
+    els.main.className = "screen view-" + name;
     state.screen = name;
     state.params = params;
     var screen = u.safe(function () { return UI.screens[name](params); }, null);
@@ -441,7 +441,7 @@
   function fatal(missing) {
     els.topbar.hidden = true;
     u.clear(els.main);
-    els.main.className = "screen screen-fatal";
+    els.main.className = "screen view-fatal";
     var errors = loadErrors();
     els.main.appendChild(h("section", { class: "fatal panel" },
       h("h1", null, u.emoji("🌀"), " The academy gates won't open"),

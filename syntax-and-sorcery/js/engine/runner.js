@@ -29,6 +29,90 @@
   var SS = (global.SS = global.SS || {});
 
   // ---------------------------------------------------------------------------
+  // Python set-up for each worker
+  // ---------------------------------------------------------------------------
+
+  // Python run once in each new worker. It is constant source: no player data is ever
+  // pasted in here. It imports the harness and defines
+  //     _ss_run(code, tests, inputs_json, output_limit) -> JSON string
+  // which first resets interpreter-wide state that an earlier spell may have changed
+  // (builtins, the harness module, sys streams and hooks, the recursion limit, sys.path,
+  // warning filters) and then calls spellcheck.run_spell_json().
+  //
+  // It also makes functools.lru_cache / functools.cache use CPython's own pure-Python
+  // wrapper. A worker has a small native stack: recursion that passes through the C
+  // wrapper overflows it after ~400 levels and kills Python, whereas Python-to-Python
+  // calls barely use it. With the pure-Python wrapper, too-deep memoised recursion
+  // raises a normal RecursionError, and sys.setrecursionlimit() works as on a desktop.
+  //
+  // Exposed as SS.PythonRunner.SETUP_PY so tools can reproduce the in-game environment.
+  var SETUP_PY = [
+    "import builtins, functools, gc, importlib.util, sys, warnings",
+    "if '/home/pyodide' not in sys.path:",
+    "    sys.path.insert(0, '/home/pyodide')",
+    "import spellcheck",
+    "_ss_missing = object()",
+    "",
+    "def _ss_pure_lru_wrapper():",
+    "    spec = importlib.util.find_spec('functools')",
+    "    source = spec.loader.get_source('functools')",
+    "    namespace = {'__name__': '_ss_pure_functools', '__builtins__': builtins}",
+    "    saved = sys.modules.get('_functools', _ss_missing)",
+    "    sys.modules['_functools'] = None",
+    "    try:",
+    "        exec(compile(source, spec.origin or 'functools.py', 'exec'), namespace)",
+    "    finally:",
+    "        if saved is _ss_missing:",
+    "            sys.modules.pop('_functools', None)",
+    "        else:",
+    "            sys.modules['_functools'] = saved",
+    "    wrapper = namespace['_lru_cache_wrapper']",
+    "    if getattr(wrapper, '__module__', '') != '_ss_pure_functools':",
+    "        raise RuntimeError('pure-Python lru_cache wrapper not found')",
+    "    return wrapper",
+    "",
+    "try:",
+    "    _ss_lru = _ss_pure_lru_wrapper()",
+    "except Exception:",
+    "    _ss_lru = None",
+    "if _ss_lru is not None:",
+    "    functools._lru_cache_wrapper = _ss_lru",
+    "_ss_builtins = dict(builtins.__dict__)",
+    "_ss_harness = dict(spellcheck.__dict__)",
+    "_ss_sys = {name: getattr(sys, name) for name in ('stdout', 'stderr', 'stdin', 'displayhook', 'excepthook', 'breakpointhook') if hasattr(sys, name)}",
+    "_ss_limit = sys.getrecursionlimit()",
+    "_ss_path = list(sys.path)",
+    "_ss_filters = list(warnings.filters)",
+    "",
+    "def _ss_restore(target, snapshot):",
+    "    for key in [k for k in target if k not in snapshot]:",
+    "        del target[key]",
+    "    for key, value in snapshot.items():",
+    "        if target.get(key, _ss_missing) is not value:",
+    "            target[key] = value",
+    "",
+    "def _ss_run(code, tests, inputs_json, output_limit):",
+    "    _ss_restore(builtins.__dict__, _ss_builtins)",
+    "    _ss_restore(spellcheck.__dict__, _ss_harness)",
+    "    for name, value in _ss_sys.items():",
+    "        setattr(sys, name, value)",
+    "    sys.settrace(None)",
+    "    sys.setprofile(None)",
+    "    sys.setrecursionlimit(_ss_limit)",
+    "    sys.path[:] = _ss_path",
+    "    warnings.filters[:] = _ss_filters",
+    "    gc.enable()",
+    "    if _ss_lru is not None:",
+    "        functools._lru_cache_wrapper = _ss_lru",
+    "    return _ss_harness['run_spell_json'](code, tests, inputs_json, output_limit)",
+    ""
+  ].join("\n");
+
+  // A quick check that Python, the harness and the trial helpers all work.
+  var SELF_TEST_CODE = "x = 6 * 7\nprint('ready')\n";
+  var SELF_TEST_TRIALS = "@test('self-test')\ndef _():\n    expect_equal(spell['x'], 42)\n    expect_output('ready')\n";
+
+  // ---------------------------------------------------------------------------
   // The worker. This function is serialised with toString() and runs inside the
   // worker, so it must not use anything from the surrounding scope.
   // ---------------------------------------------------------------------------
@@ -43,81 +127,6 @@
       : Date.now;
     var runSpell = null;
     var initialised = false;
-
-    // Constant Python source (no player data is ever pasted in here). It imports the
-    // harness and defines _ss_run(), which resets interpreter-wide state that a spell
-    // may have changed (builtins, the harness module, sys streams and hooks, the
-    // recursion limit, sys.path, warning filters) before every run.
-    //
-    // It also makes functools.lru_cache / functools.cache use CPython's own pure-Python
-    // wrapper. A worker has a small native stack: recursion that passes through the C
-    // wrapper overflows it after ~400 levels and kills Python, whereas Python-to-Python
-    // calls barely use it. With the pure-Python wrapper, too-deep memoised recursion
-    // raises a normal RecursionError, and sys.setrecursionlimit() works as on a desktop.
-    var SETUP_PY = [
-      "import builtins, functools, gc, importlib.util, sys, warnings",
-      "if '/home/pyodide' not in sys.path:",
-      "    sys.path.insert(0, '/home/pyodide')",
-      "import spellcheck",
-      "_ss_missing = object()",
-      "",
-      "def _ss_pure_lru_wrapper():",
-      "    spec = importlib.util.find_spec('functools')",
-      "    source = spec.loader.get_source('functools')",
-      "    namespace = {'__name__': '_ss_pure_functools', '__builtins__': builtins}",
-      "    saved = sys.modules.get('_functools', _ss_missing)",
-      "    sys.modules['_functools'] = None",
-      "    try:",
-      "        exec(compile(source, spec.origin or 'functools.py', 'exec'), namespace)",
-      "    finally:",
-      "        if saved is _ss_missing:",
-      "            sys.modules.pop('_functools', None)",
-      "        else:",
-      "            sys.modules['_functools'] = saved",
-      "    wrapper = namespace['_lru_cache_wrapper']",
-      "    if getattr(wrapper, '__module__', '') != '_ss_pure_functools':",
-      "        raise RuntimeError('pure-Python lru_cache wrapper not found')",
-      "    return wrapper",
-      "",
-      "try:",
-      "    _ss_lru = _ss_pure_lru_wrapper()",
-      "except Exception:",
-      "    _ss_lru = None",
-      "if _ss_lru is not None:",
-      "    functools._lru_cache_wrapper = _ss_lru",
-      "_ss_builtins = dict(builtins.__dict__)",
-      "_ss_harness = dict(spellcheck.__dict__)",
-      "_ss_sys = {name: getattr(sys, name) for name in ('stdout', 'stderr', 'stdin', 'displayhook', 'excepthook', 'breakpointhook') if hasattr(sys, name)}",
-      "_ss_limit = sys.getrecursionlimit()",
-      "_ss_path = list(sys.path)",
-      "_ss_filters = list(warnings.filters)",
-      "",
-      "def _ss_restore(target, snapshot):",
-      "    for key in [k for k in target if k not in snapshot]:",
-      "        del target[key]",
-      "    for key, value in snapshot.items():",
-      "        if target.get(key, _ss_missing) is not value:",
-      "            target[key] = value",
-      "",
-      "def _ss_run(code, tests, inputs_json, output_limit):",
-      "    _ss_restore(builtins.__dict__, _ss_builtins)",
-      "    _ss_restore(spellcheck.__dict__, _ss_harness)",
-      "    for name, value in _ss_sys.items():",
-      "        setattr(sys, name, value)",
-      "    sys.settrace(None)",
-      "    sys.setprofile(None)",
-      "    sys.setrecursionlimit(_ss_limit)",
-      "    sys.path[:] = _ss_path",
-      "    warnings.filters[:] = _ss_filters",
-      "    gc.enable()",
-      "    if _ss_lru is not None:",
-      "        functools._lru_cache_wrapper = _ss_lru",
-      "    return _ss_harness['run_spell_json'](code, tests, inputs_json, output_limit)",
-      ""
-    ].join("\n");
-
-    var SELF_TEST_CODE = "x = 6 * 7\nprint('ready')\n";
-    var SELF_TEST_TRIALS = "@test('self-test')\ndef _():\n    expect_equal(spell['x'], 42)\n    expect_output('ready')\n";
 
     function send(message) {
       message.session = session;
@@ -167,9 +176,9 @@
           try { pyodide.FS.mkdirTree("/home/pyodide"); } catch (e) { /* already exists */ }
           pyodide.FS.writeFile("/home/pyodide/spellcheck.py", String(message.harness || ""), { encoding: "utf8" });
           var namespace = pyodide.globals.get("dict")();
-          pyodide.runPython(SETUP_PY, { globals: namespace });
+          pyodide.runPython(String(message.setup || ""), { globals: namespace });
           runSpell = namespace.get("_ss_run");
-          var check = JSON.parse(runSpell(SELF_TEST_CODE, SELF_TEST_TRIALS, "[]", 10000));
+          var check = JSON.parse(runSpell(String(message.selfTestCode), String(message.selfTestTrials), "[]", 10000));
           if (!check || check.status !== "passed") {
             throw new Error("the harness self-test did not pass: " + JSON.stringify(check).slice(0, 1500));
           }
@@ -631,7 +640,10 @@
         revoke(attempt);
         arm(BOOTSTRAP_TIMEOUT_MS, "pyodide.js did not load in time");
         try {
-          attempt.worker.postMessage({ type: "init", session: attempt.token, base: attempt.base, harness: SS.HARNESS_PY });
+          attempt.worker.postMessage({
+            type: "init", session: attempt.token, base: attempt.base, harness: SS.HARNESS_PY,
+            setup: SETUP_PY, selfTestCode: SELF_TEST_CODE, selfTestTrials: SELF_TEST_TRIALS
+          });
         } catch (e) {
           attempt.giveUp("could not send the harness: " + e);
         }
@@ -819,6 +831,7 @@
     onStatus: onStatus,
     run: run,
     restart: restart,
+    SETUP_PY: SETUP_PY,
     // Exposed for tests (pure helpers, no state).
     _normaliseResult: normaliseResult,
     _timeoutResult: timeoutResult

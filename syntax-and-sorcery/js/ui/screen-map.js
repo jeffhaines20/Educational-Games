@@ -84,7 +84,7 @@
         type: "button", class: "btn btn-primary btn-lg btn-continue map-continue",
         on: { click: function () { app().go("challenge", { id: target.id }); } }
       },
-        h("span", { class: "btn-label" }, u.emoji("▶"), " ", overall.completed ? "Continue: " : "Begin: ", h("strong", null, target.title)),
+        h("span", { class: "btn-label" }, h("span", { class: "cta-arrow", "aria-hidden": "true" }, "▶\uFE0E"), overall.completed ? "Continue: " : "Begin: ", h("strong", null, target.title)),
         tChapter ? h("span", { class: "btn-sub" }, (tChapter.icon || "") + " " + tChapter.title) : null);
     } else if (allDone) {
       cta = h("button", { type: "button", class: "btn btn-primary btn-lg btn-continue map-continue", on: { click: function () { app().go("certificate"); } } },
@@ -146,8 +146,10 @@
         ? (prev ? "Master every spell in " + prev.title + " to open this area." : "Locked.")
         : stats.completed + " of " + stats.total + " spells mastered";
       var label = "Chapter " + (i + 1) + ": " + chapter.title + ". " + stateText + ". " + detail +
-        (status !== "locked" ? " " + stats.stars + " of " + stats.maxStars + " stars." : "");
+        (status !== "locked" ? " " + stats.stars + " of " + stats.maxStars + " stars." : "") +
+        (isCurrent ? " You are here." : "");
       var medallion = h("span", { class: "medallion" },
+        isCurrent ? h("span", { class: "here-pin", "aria-hidden": "true" }, "You are here") : null,
         ringSvg(stats.total ? stats.completed / stats.total : 0, stats.complete),
         h("span", { class: "medallion-icon", "aria-hidden": "true" }, chapter.icon || "✦"),
         status === "locked" ? h("span", { class: "medallion-lock", "aria-hidden": "true" }, "🔒") : null,
@@ -181,9 +183,7 @@
               h("span", { class: "station-count" }, stats.completed + " / " + stats.total + " spells"),
               h("span", { class: "station-stars" }, h("span", { class: "star on", "aria-hidden": "true" }, "★"), " " + stats.stars + " / " + stats.maxStars)),
           status !== "locked" ? u.progressBar(stats.total ? stats.completed / stats.total : 0, chapter.title + " progress") : null));
-      var li = h("li", { class: "station station-" + status + (isCurrent ? " is-current" : ""), dataset: { chapter: chapter.id } },
-        isCurrent ? h("span", { class: "here-pin", "aria-hidden": "true" }, "You are here") : null,
-        btn);
+      var li = h("li", { class: "station station-" + status + (isCurrent ? " is-current" : ""), dataset: { chapter: chapter.id } }, btn);
       stations.push({ li: li, medallion: medallion, chapter: chapter, status: status });
       list.appendChild(li);
     });

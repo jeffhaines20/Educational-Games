@@ -650,6 +650,41 @@
     return keys;
   }
 
+  var ENTRY_RE = /^[0-9a-z]{8}(\.[0-9a-z]*){0,3}$/;
+
+  function decodeEntry(entry) {
+    var state = parseInt(entry.charAt(6), 36);
+    var fields = entry.length > 8 ? entry.slice(9).split(".") : [];
+    var rec = emptyRecord();
+    rec.completed = !!(state & 1);
+    rec.answerRevealed = !!(state & 2);
+    rec.stars = rec.completed ? Math.min(3, Math.max(1, state >> 2)) : 0;
+    rec.hintsUsed = Math.min(MAX_HINTS, parseInt(entry.charAt(7), 36) || 0);
+    rec.casts = fields[0] ? Math.min(MAX_COUNT, parseInt(fields[0], 36) || 0) : 0;
+    rec.failedCasts = fields[1] ? Math.min(MAX_COUNT, parseInt(fields[1], 36) || 0) : 0;
+    if (rec.completed && fields[2]) rec.completedAt = isoOr(parseInt(fields[2], 36) * 1000, null);
+    return rec;
+  }
+
+  /**
+   * LMS entries that matched no known challenge are kept aside. If content registers
+   * later (or ids appear), adopt the entries that now match, taking the best of each.
+   */
+  function adoptExtras() {
+    if (!scormMode || !active || !scormExtras.entries.length) return;
+    var idByHash = {};
+    contentIds().forEach(function (id) { var h = hash6(id); if (!hasOwn.call(idByHash, h)) idByHash[h] = id; });
+    var adopted = false;
+    scormExtras.entries = scormExtras.entries.filter(function (entry) {
+      var id = idByHash[entry.slice(0, 6)];
+      if (!id || !hasOwn.call(idByHash, entry.slice(0, 6))) return true;
+      active.profile.challenges[id] = mergeRecords(active.profile.challenges[id] || null, decodeEntry(entry));
+      adopted = true;
+      return false;
+    });
+    if (adopted) writeActive();
+  }
+
   /**
    * Decode suspend_data into a profile (without code). Hashes that match nothing known
    * are kept in scormExtras so they are written back unchanged. null if unreadable.
@@ -692,24 +727,13 @@
     }
 
     (parts[4] || "").split(",").forEach(function (entry) {
-      if (!/^[0-9a-z]{8}(\.[0-9a-z]*){0,3}$/.test(entry)) return;
+      if (!ENTRY_RE.test(entry)) return;
       var hashPart = entry.slice(0, 6);
-      var state = parseInt(entry.charAt(6), 36);
-      var fields = entry.slice(9).split(".");
-      if (entry.length <= 8) fields = [];
       if (!hasOwn.call(idByHash, hashPart)) {
         if (scormExtras.entries.length < 500) scormExtras.entries.push(entry);
         return;
       }
-      var rec = emptyRecord();
-      rec.completed = !!(state & 1);
-      rec.answerRevealed = !!(state & 2);
-      rec.stars = rec.completed ? Math.min(3, Math.max(1, state >> 2)) : 0;
-      rec.hintsUsed = Math.min(MAX_HINTS, parseInt(entry.charAt(7), 36) || 0);
-      rec.casts = fields[0] ? parseInt(fields[0], 36) || 0 : 0;
-      rec.failedCasts = fields[1] ? parseInt(fields[1], 36) || 0 : 0;
-      if (rec.completed && fields[2]) rec.completedAt = isoOr(parseInt(fields[2], 36) * 1000, null);
-      p.challenges[idByHash[hashPart]] = rec;
+      p.challenges[idByHash[hashPart]] = decodeEntry(entry);
     });
 
     var last = parts[5] || "";
@@ -719,6 +743,7 @@
 
   function pushScorm(commit) {
     if (!scormMode || !active || !SS.Scorm) return false;
+    adoptExtras();
     var limit = Math.min(SUSPEND_BUDGET, SS.Scorm.suspendDataLimit ? SS.Scorm.suspendDataLimit() : 4096);
     var ok = false;
     try {
@@ -968,6 +993,7 @@
 
   function getProfile() {
     ensureInit();
+    adoptExtras();
     return active ? active.profile : null;
   }
 
