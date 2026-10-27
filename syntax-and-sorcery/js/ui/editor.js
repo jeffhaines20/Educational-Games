@@ -64,7 +64,7 @@
       el.onerror = function () { if (!done) { done = true; reject(new Error("failed: " + href)); } };
       setTimeout(function () { if (!done) { done = true; reject(new Error("timeout: " + href)); } }, timeoutMs || 15000);
       // Put it before our own stylesheet so the arcane theme wins.
-      var ours = document.querySelector('link[href$="css/style.css"]');
+      var ours = document.querySelector('link[href$="css/style.css"], style[data-inlined$="style.css"]');
       if (ours && ours.parentNode) ours.parentNode.insertBefore(el, ours);
       else document.head.appendChild(el);
     });
@@ -135,6 +135,39 @@
       });
     }
 
+    var bindings = {
+      Tab: function (ed) {
+        if (ed.somethingSelected()) ed.indentSelection("add");
+        else ed.execCommand("insertSoftTab");
+      },
+      "Shift-Tab": function (ed) { ed.indentSelection("subtract"); },
+      Esc: function () { escaped = true; if (hooks.onEscape) hooks.onEscape(); },
+      "Ctrl-Enter": cast,
+      "Cmd-Enter": cast,
+      "Ctrl-/": toggleComment,
+      "Cmd-/": toggleComment,
+      Backspace: function (ed) {
+        if (ed.somethingSelected()) return CM.Pass;
+        var cur = ed.getCursor();
+        var before = ed.getLine(cur.line).slice(0, cur.ch);
+        if (before.length && /^ +$/.test(before)) {
+          var n = before.length % 4 || 4;
+          ed.replaceRange("", { line: cur.line, ch: cur.ch - n }, cur, "+delete");
+          return undefined;
+        }
+        return CM.Pass;
+      }
+    };
+    // A dynamic key map: right after Esc, Tab / Shift-Tab map to `false`, which tells
+    // CodeMirror "not handled" so the browser moves focus out of the editor. (Returning
+    // CodeMirror.Pass would fall through to the default key map, which inserts a tab.)
+    var extraKeys = {
+      call: function (key) {
+        if (escaped && (key === "Tab" || key === "Shift-Tab")) { escaped = false; return false; }
+        return Object.prototype.hasOwnProperty.call(bindings, key) ? bindings[key] : undefined;
+      }
+    };
+
     var cm = CM(surface, {
       value: opts.value || "",
       mode: hasPython ? { name: "python", version: 3, singleLineStringErrors: false } : "text/plain",
@@ -156,33 +189,7 @@
       autocorrect: false,
       autocapitalize: false,
       readOnly: !!opts.readOnly,
-      extraKeys: {
-        Tab: function (ed) {
-          if (escaped) { escaped = false; return CM.Pass; }
-          if (ed.somethingSelected()) ed.indentSelection("add");
-          else ed.execCommand("insertSoftTab");
-        },
-        "Shift-Tab": function (ed) {
-          if (escaped) { escaped = false; return CM.Pass; }
-          ed.indentSelection("subtract");
-        },
-        Esc: function () { escaped = true; if (hooks.onEscape) hooks.onEscape(); },
-        "Ctrl-Enter": cast,
-        "Cmd-Enter": cast,
-        "Ctrl-/": toggleComment,
-        "Cmd-/": toggleComment,
-        Backspace: function (ed) {
-          if (ed.somethingSelected()) return CM.Pass;
-          var cur = ed.getCursor();
-          var before = ed.getLine(cur.line).slice(0, cur.ch);
-          if (before.length && /^ +$/.test(before)) {
-            var n = before.length % 4 || 4;
-            ed.replaceRange("", { line: cur.line, ch: cur.ch - n }, cur, "+delete");
-            return undefined;
-          }
-          return CM.Pass;
-        }
-      }
+      extraKeys: extraKeys
     });
 
     cm.on("keydown", function (ed, e) {
@@ -556,10 +563,20 @@
     api.getValue = function () { return impl ? impl.getValue() : ""; };
     api.setValue = function (v) { if (impl) impl.setValue(v); };
     api.replaceAll = function (v) { if (impl) impl.replaceAll(v); };
-    api.focus = function () { if (impl) impl.focus(); };
+    /** Run fn (which focuses the editor) without the browser nudging the page if the editor is already on screen. */
+    function keepScroll(fn) {
+      var r = shell.getBoundingClientRect();
+      var vh = global.innerHeight || document.documentElement.clientHeight;
+      var onScreen = r.top >= 0 && r.top < vh - 60;
+      var sx = global.scrollX || 0, sy = global.scrollY || 0;
+      fn();
+      if (onScreen && ((global.scrollX || 0) !== sx || (global.scrollY || 0) !== sy)) global.scrollTo(sx, sy);
+    }
+
+    api.focus = function () { if (impl) keepScroll(function () { impl.focus(); }); };
     api.hasFocus = function () { return impl ? impl.hasFocus() : false; };
     api.refresh = function () { if (impl) impl.refresh(); };
-    api.goToLine = function (line) { if (impl) impl.goToLine(line); };
+    api.goToLine = function (line) { if (impl) keepScroll(function () { impl.goToLine(line); }); };
     api.markLine = function (line, kind) { return impl ? impl.markLine(line, kind || "error") : false; };
     api.clearMarks = function () { if (impl) impl.clearMarks(); };
     api.markedLines = function () { return impl ? impl.markedLines() : []; };

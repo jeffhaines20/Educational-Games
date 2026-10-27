@@ -159,6 +159,7 @@
     if (Array.isArray(rich)) return rich.map(plainText).filter(Boolean).join(" ");
     if (typeof rich === "object") {
       if (rich.code !== undefined) return String(rich.code);
+      if (rich.diagram !== undefined) return String(rich.diagram);
       if (rich.output !== undefined) return String(rich.output);
       if (Array.isArray(rich.list)) return rich.list.map(plainText).join(" ");
       if (Array.isArray(rich.steps)) return rich.steps.map(plainText).join(" ");
@@ -204,6 +205,13 @@
     return figure;
   }
 
+  /** A text picture or table (call trees, mazes, DP tables): exactly as written, never highlighted. */
+  function diagramBlock(text) {
+    var body = String(text == null ? "" : text).replace(/\n+$/, "");
+    return h("figure", { class: "rt-diagram" },
+      h("pre", { class: "diagram-text", tabindex: "0", "aria-label": "Diagram" }, body));
+  }
+
   function outputBlock(output, label) {
     return h("figure", { class: "rt-output rt-output-alone" },
       h("figcaption", { class: "rt-output-label" }, u.emoji("🔮"), " ", label || "Expected output"),
@@ -233,13 +241,17 @@
     if (Array.isArray(block)) return render(block);
     if (typeof block !== "object") return null;
     if (block.code !== undefined) return codeBlock(block.code, block.output);
+    if (block.diagram !== undefined) return diagramBlock(block.diagram);
     if (block.output !== undefined) return outputBlock(block.output, block.label);
     if (Array.isArray(block.list)) return h("ul", { class: "rt-list" }, listItems(block.list));
     if (Array.isArray(block.steps)) return h("ol", { class: "rt-steps" }, listItems(block.steps));
     if (block.tip !== undefined) return callout("tip", "💡", "Tip", block.tip);
     if (block.warning !== undefined) return callout("warning", "⚠️", "Careful", block.warning);
     if (block.text !== undefined) return h("p", null, inline(block.text));
-    return null;
+    // An unknown block type: show whatever text it carries rather than nothing (or an error).
+    var texts = Object.keys(block).map(function (k) { return block[k]; })
+      .filter(function (v) { return typeof v === "string" || typeof v === "number"; });
+    return texts.length ? h("p", null, inline(texts.join(" "))) : null;
   }
 
   /** RichText → DocumentFragment. */
@@ -267,6 +279,7 @@
     highlight: highlight,
     tokenize: tokenize,
     codeBlock: codeBlock,
+    diagramBlock: diagramBlock,
     outputBlock: outputBlock,
     copyButton: copyButton
   };

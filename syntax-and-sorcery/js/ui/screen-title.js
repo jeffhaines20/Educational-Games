@@ -2,7 +2,7 @@
  * Syntax & Sorcery — title, save slots and story screens.
  *
  *   SS.UI.screens.title()                 logo, Begin / Continue, engine status
- *   SS.UI.screens.slots()                 three save scrolls + Import Save Scroll
+ *   SS.UI.screens.slots()                 the save slots (shown as Slot 1–3) + Import Save Scroll
  *   SS.UI.screens.story({ kind })         prologue or epilogue, full screen
  */
 (function (global) {
@@ -179,7 +179,7 @@
       var fraction = d.total ? d.completed / d.total : 0;
       var headingId = u.uid("slot");
       return h("article", { class: "slot-card filled panel", "aria-labelledby": headingId },
-        h("p", { class: "slot-num" }, "Scroll " + u.roman(entry.index + 1)),
+        h("p", { class: "slot-num" }, "Slot " + (entry.index + 1)),
         h("div", { class: "slot-portrait", "aria-hidden": "true" }, d.rankIcon || rankIconFor(d.rankTitle)),
         h("h2", { class: "slot-name", id: headingId }, d.wizardName || "Apprentice"),
         h("p", { class: "slot-rank" }, d.rankTitle || ""),
@@ -196,7 +196,7 @@
             onClick: function () {
               UI.dialogs.confirm({
                 title: "Delete this save?", icon: "🗑️", danger: true, confirmLabel: "Delete forever",
-                message: h("p", null, "All of ", h("strong", null, d.wizardName || "this wizard"), "'s progress in Scroll " + u.roman(entry.index + 1) + " will vanish. If you might want it later, export a Save Scroll first.")
+                message: h("p", null, "All of ", h("strong", null, d.wizardName || "this wizard"), "'s progress in slot " + (entry.index + 1) + " will vanish. If you might want it later, export a Save Scroll first.")
               }).then(function (ok) {
                 if (!ok) return;
                 u.safe(function () { SS.Save.deleteSlot(entry.slot); });
@@ -213,12 +213,12 @@
 
     function emptyCard(entry) {
       return h("article", { class: "slot-card empty panel" },
-        h("p", { class: "slot-num" }, "Scroll " + u.roman(entry.index + 1)),
+        h("p", { class: "slot-num" }, "Slot " + (entry.index + 1)),
         h("div", { class: "slot-portrait empty", "aria-hidden": "true" }, "✧"),
-        h("h2", { class: "slot-name" }, "An empty scroll"),
+        h("h2", { class: "slot-name" }, "An empty slot"),
         h("p", { class: "slot-rank" }, "Room for a new apprentice"),
         h("div", { class: "slot-actions" },
-          u.button("New apprentice", { kind: "primary", icon: "✨", ariaLabel: "Start a new apprentice in scroll " + (entry.index + 1), onClick: function () { app().newGame(entry.slot); } })));
+          u.button("New apprentice", { kind: "primary", icon: "✨", ariaLabel: "Start a new apprentice in slot " + (entry.index + 1), onClick: function () { app().newGame(entry.slot); } })));
     }
 
     render();
@@ -226,8 +226,8 @@
     el = h("section", { class: "slots-screen" },
       h("div", { class: "screen-head" },
         u.button("Back", { kind: "ghost", size: "sm", icon: "◂", onClick: function () { app().go("title"); } })),
-      h("h1", { class: "screen-title" }, "Choose your save scroll"),
-      h("p", { class: "screen-lead" }, "Each scroll holds one wizard's journey. Sharing a computer? Everyone can have their own."),
+      h("h1", { class: "screen-title" }, "Choose your save slot"),
+      h("p", { class: "screen-lead" }, "Each slot holds one wizard's journey. Sharing a computer? Everyone can have their own."),
       warn,
       grid,
       h("div", { class: "slots-footer" },
@@ -235,7 +235,7 @@
           kind: "ghost", icon: "📥",
           onClick: function () { UI.panels.saveScroll({ chooseSlot: true, onImported: function () { app().enterGame(); } }); }
         })));
-    return { el: el, hideTopbar: true, title: "Save scrolls" };
+    return { el: el, hideTopbar: true, title: "Save slots" };
   };
 
   // --------------------------------------------------------------------------

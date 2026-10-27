@@ -84,8 +84,9 @@
   }
 
   function tracebackBlock(err, status) {
-    var text = err.traceback || "";
-    if (!text && err.type && status === "error") text = err.type + (err.message ? ": " + err.message : "");
+    // Only Python's real traceback goes here. Some problems have none (TooManySteps,
+    // TooMuchOutput, timeouts): then there is no box at all.
+    var text = String(err.traceback || "").replace(/\s+$/, "");
     if (!text) return null;
     if (status === "internal-error") {
       return h("details", { class: "traceback traceback-tech" },

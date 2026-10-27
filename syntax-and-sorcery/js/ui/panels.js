@@ -36,6 +36,7 @@
     var conf = u.config();
     var osReduced = u.safe(function () { return global.matchMedia("(prefers-reduced-motion: reduce)").matches; }, false);
     var body = h("div", { class: "settings" });
+    var needsRefresh = false;   // the screen behind is redrawn once Settings closes
 
     body.appendChild(h("h3", { class: "settings-heading" }, "Sound & motion"));
     body.appendChild(toggleRow({
@@ -77,8 +78,7 @@
       help: forced ? "Your instructor has opened every chapter for this class." : "Visit any chapter or challenge in any order. Stars and XP still count.",
       onChange: function (v) {
         app().updateSettings({ unlockAll: v });
-        var cur = app().current();
-        if (cur && cur.refresh) cur.refresh();
+        needsRefresh = true;
       }
     }));
 
@@ -96,8 +96,7 @@
         note.className = "field-status ok";
         note.textContent = "Done! The academy will call you " + name + ".";
         app().refreshTopbar();
-        var cur = app().current();
-        if (cur && cur.refresh) cur.refresh();
+        needsRefresh = true;
       }
       input.addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); rename(); } });
       body.appendChild(h("div", { class: "setting-row setting-rename" },
@@ -125,7 +124,15 @@
     UI.dialogs.open({
       title: "Settings", icon: "⚙️", size: "md", className: "modal-settings", body: body, focusInput: false,
       actions: [{ label: "Done", kind: "primary" }],
-      onClose: function () { unsub(); }
+      onClose: function () {
+        unsub();
+        if (!needsRefresh) return;
+        // Let the dialog finish closing (and return focus) before redrawing the screen.
+        setTimeout(function () {
+          var cur = app().current();
+          if (cur && cur.refresh && !UI.dialogs.isOpen()) cur.refresh();
+        }, 0);
+      }
     });
   }
 
@@ -206,7 +213,9 @@
             kind: "primary", icon: "📋", onClick: function () {
               u.copyText(code).then(function (ok) {
                 exportStatus.className = "field-status" + (ok ? " ok" : "");
-                exportStatus.textContent = ok ? "Copied! Paste it somewhere safe (an email to yourself works)." : "Your browser blocked copying: select the code above and copy it yourself.";
+                exportStatus.textContent = ok ? "Copied! Paste it somewhere safe (an email to yourself works)." :
+                  "Your browser blocked copying, so the code is now selected: press " + UI.Editor.modKey + "+C to copy it.";
+                if (!ok) u.safe(function () { codeBox.focus(); codeBox.select(); });
               });
             }
           }),
@@ -214,7 +223,9 @@
             kind: "ghost", icon: "⬇️", onClick: function () {
               var ok = u.safe(function () { return SS.Save.exportFile(); }, false);
               exportStatus.className = "field-status" + (ok !== false ? " ok" : "");
-              exportStatus.textContent = ok !== false ? "Your save file is downloading." : "Downloads are blocked here. Copy the save code instead.";
+              exportStatus.textContent = ok !== false
+                ? "Your save file should be downloading. If nothing arrives (some course pages block downloads), copy the save code above instead."
+                : "Downloads are blocked here. Copy the save code above instead.";
             }
           })),
         exportStatus));
@@ -235,7 +246,7 @@
           var input = h("input", { type: "radio", name: groupName, id: id, value: String(s.slot), checked: s.slot === picked });
           input.addEventListener("change", function () { if (input.checked) picked = s.slot; });
           return h("label", { class: "slot-option", for: id }, input,
-            h("span", null, "Scroll " + u.roman(s.index + 1) + ": ", s.data ? h("strong", null, s.data.wizardName || "Apprentice") : h("em", null, "empty")));
+            h("span", null, "Slot " + (s.index + 1) + ": ", s.data ? h("strong", null, s.data.wizardName || "Apprentice") : h("em", null, "empty")));
         }));
     }
     var fileId = u.uid("savefile");
@@ -298,8 +309,8 @@
         : p ? "Importing replaces the progress in this save slot." : "Choose where the wizard should go, then pick a file or paste a code."),
       slotPicker,
       h("div", { class: "button-row" },
-        h("label", { class: "btn btn-ghost file-label", for: fileId }, u.emoji("📂"), h("span", { class: "btn-label" }, "Choose a save file…")),
-        fileInput),
+        fileInput,
+        h("label", { class: "btn btn-ghost file-label", for: fileId }, u.emoji("📂"), h("span", { class: "btn-label" }, "Choose a save file…"))),
       h("label", { class: "field-label", for: pasteId }, "…or paste a save code"),
       paste,
       h("div", { class: "button-row" }, importBtn),

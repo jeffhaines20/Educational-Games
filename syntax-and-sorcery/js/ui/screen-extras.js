@@ -193,12 +193,20 @@
         h("span", { class: "crumb-current", "aria-current": "page" }, "Grimoire")),
       h("header", { class: "screen-head-block" },
         h("p", { class: "eyebrow" }, "📖 The Grimoire of"),
-        h("h1", { class: "screen-title" }, p.wizardName || "Apprentice"),
+        h("h1", { class: "screen-title grimoire-name" }, p.wizardName || "Apprentice"),
         h("p", { class: "screen-lead" }, "Every spell you have mastered, in your own words. Teachers: the Progress Report can be printed or saved as a PDF.")),
       tiles,
       actions,
       chaptersEl);
-    return { el: el, title: "Grimoire" };
+    return {
+      el: el,
+      title: "Grimoire",
+      refresh: function () {
+        var now = u.profile();
+        var name = el.querySelector(".grimoire-name");
+        if (now && name) name.textContent = now.wizardName || "Apprentice";
+      }
+    };
   };
 
   // --------------------------------------------------------------------------
@@ -428,7 +436,12 @@
     return {
       el: el,
       title: "Certificate",
-      onShow: function () { if (allDone) { UI.sound.play("rankup"); } }
+      onShow: function () { if (allDone) { UI.sound.play("rankup"); } },
+      refresh: function () {
+        var now = u.profile();
+        var name = el.querySelector(".cert-name");
+        if (now && name) name.textContent = now.wizardName || "Apprentice";
+      }
     };
   };
 

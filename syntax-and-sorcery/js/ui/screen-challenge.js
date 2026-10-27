@@ -193,7 +193,8 @@
         hintCost.textContent = "Pip has no hints for this one. Try the Spell Scroll!";
       } else if (used >= hints.length) {
         hintBtn.hidden = true;
-        hintCost.textContent = "You've heard all of Pip's hints." + (answerAvailable() || !e.answerRevealed ? "" : "");
+        hintCost.textContent = "You've heard all of Pip's hints." +
+          (answerAvailable() && !e.answerRevealed ? " Still stuck? The Answer Scroll is next to Cast Spell." : "");
       } else {
         hintBtn.hidden = false;
         var label = hintBtn.querySelector(".btn-label");
@@ -263,7 +264,10 @@
         h("div", { class: "banner-text" },
           h("p", { class: "banner-title" }, "Python couldn't be loaded"),
           h("p", null, st.message || "The Python engine isn't available."),
-          h("p", { class: "banner-sub" }, "You can still read the story, the task and the Spell Scroll.")),
+          h("p", { class: "banner-sub" }, "You can still read the story, the task and the Spell Scroll."),
+          st.detail ? h("details", { class: "banner-details" },
+            h("summary", null, "Technical details (for IT staff)"),
+            h("pre", { class: "traceback-text" }, String(st.detail))) : null),
         h("div", { class: "banner-actions" },
           u.button("Try again", { kind: "primary", size: "sm", icon: "↻", onClick: function () { app().retryEngine(); } }),
           u.button("Help", { kind: "ghost", size: "sm", onClick: function () { UI.panels.engineHelp(); } }))
@@ -428,9 +432,10 @@
       casting = false;
       stage.casting(false);
       var passed = !!result && result.status === "passed";
-      u.safe(function () { SS.Save.recordCast(ch.id, { passed: passed }); });
+      // A hiccup in the academy's machinery isn't an attempt at the spell, so it isn't counted.
+      if (!result || result.status !== "internal-error") u.safe(function () { SS.Save.recordCast(ch.id, { passed: passed }); });
       UI.results.render(results, result, { inputs: inputs, onGoToLine: goToLine, getLine: lineOf });
-      results.scrollTop = 0;
+      resultsPanel.scrollTop = 0;
       markLines(result);
       updateCast();
       u.announce(UI.results.announcement(result));

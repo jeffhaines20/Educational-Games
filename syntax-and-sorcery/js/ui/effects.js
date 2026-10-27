@@ -149,10 +149,10 @@
     },
 
     fire: function (layer) {
-      for (var i = 0; i < 28; i++) {
+      for (var i = 0; i < 34; i++) {
         particle(layer, "fx-flame", "", {
-          "--x": pct(rnd(18, 82)), "--delay": ms(rnd(0, 650)), "--size": px(rnd(16, 40)),
-          "--rise": px(rnd(60, 125)), "--sway": px(rnd(-22, 22))
+          "--x": pct(rnd(14, 86)), "--delay": ms(rnd(0, 700)), "--size": px(rnd(20, 46)),
+          "--rise": px(rnd(70, 135)), "--sway": px(rnd(-24, 24))
         });
       }
       for (var j = 0; j < 10; j++) {
@@ -183,11 +183,11 @@
     },
 
     shake: function (layer) {
-      for (var i = 0; i < 20; i++) {
-        var angle = rnd(Math.PI * 1.05, Math.PI * 1.95), dist = rnd(50, 130);
+      for (var i = 0; i < 24; i++) {
+        var angle = rnd(Math.PI * 1.02, Math.PI * 1.98), dist = rnd(70, 175);
         particle(layer, "fx-debris", pick(["◆", "▪", "⬥", "✦", "▴"]), {
-          "--dx": px(Math.cos(angle) * dist), "--dy": px(Math.sin(angle) * dist * 0.7),
-          "--rot": rnd(-260, 260).toFixed(0) + "deg", "--delay": ms(rnd(480, 600)), "--size": px(rnd(8, 16))
+          "--dx": px(Math.cos(angle) * dist), "--dy": px(Math.sin(angle) * dist * 0.75),
+          "--rot": rnd(-300, 300).toFixed(0) + "deg", "--delay": ms(rnd(460, 600)), "--size": px(rnd(10, 21))
         });
       }
       return { duration: 1700 };
@@ -268,7 +268,8 @@
     }
     var layer = h("div", { class: "fx-layer", "aria-hidden": "true" });
     stageEl.appendChild(layer);
-    stageEl.classList.add("fx-active", "fx-" + effect);
+    // Stage-level classes use the "fx-on-" prefix so they never collide with particle classes.
+    stageEl.classList.add("fx-active", "fx-on-" + effect);
     var result = u.safe(function () { return EFFECTS[effect](layer, stageEl, opts); }, { duration: 800 }) || { duration: 800 };
     if (result.keep) {
       stageEl.appendChild(result.keep);
@@ -276,7 +277,7 @@
     }
     return u.delay(result.duration).then(function () {
       u.remove(layer);
-      stageEl.classList.remove("fx-active", "fx-" + effect);
+      stageEl.classList.remove("fx-active", "fx-on-" + effect);
       return result.keep || null;
     });
   }
