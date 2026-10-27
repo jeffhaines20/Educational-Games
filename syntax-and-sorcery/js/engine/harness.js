@@ -969,16 +969,42 @@ class _Trials:
         return any(isinstance(node, kinds) for node in ast.walk(self._ast()))
 
     def is_recursive(self, name):
-        """True if the function (or method) called name calls itself."""
-        for node in ast.walk(self._ast()):
-            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == name:
-                for inner in ast.walk(node):
-                    if isinstance(inner, ast.Call):
-                        func = inner.func
-                        if isinstance(func, ast.Name) and func.id == name:
-                            return True
-                        if isinstance(func, ast.Attribute) and func.attr == name:
-                            return True
+        """True if the function (or method) called name calls itself.
+
+        A plain function counts only calls by its bare name (so math.factorial()
+        inside def factorial() is not recursion). A method also counts calls such as
+        self.name(...) or self.next.name(...), but not super().name(...) or a call on
+        an imported module.
+        """
+        tree = self._ast()
+        methods = set()
+        imported = set()
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ClassDef):
+                for item in node.body:
+                    if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                        methods.add(id(item))
+            elif isinstance(node, (ast.Import, ast.ImportFrom)):
+                for alias in node.names:
+                    imported.add((alias.asname or alias.name).split(".")[0])
+        for node in ast.walk(tree):
+            if not (isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == name):
+                continue
+            is_method = id(node) in methods
+            for inner in ast.walk(node):
+                if not isinstance(inner, ast.Call):
+                    continue
+                func = inner.func
+                if isinstance(func, ast.Name) and func.id == name:
+                    return True
+                if is_method and isinstance(func, ast.Attribute) and func.attr == name:
+                    target = func.value
+                    if isinstance(target, ast.Name) and target.id in imported:
+                        continue
+                    if (isinstance(target, ast.Call) and isinstance(target.func, ast.Name)
+                            and target.func.id == "super"):
+                        continue
+                    return True
         return False
 
     # -- running -----------------------------------------------------------
