@@ -11,8 +11,10 @@
  *      calls to EVERY function the spell defines — catches naive helpers nested
  *      inside the named function, which count_calls cannot see.
  * Correct memoized/bottom-up spells stay far below both limits. Big inputs keep
- * top-down recursion under ~120 levels deep: deep lru_cache recursion can overflow
- * the browser's JavaScript stack long before Python's recursion limit.
+ * top-down recursion within about 50-60 levels: in the game (recursion limit 350,
+ * pure-Python lru_cache) one level can cost 4-5 frames (count_calls' wrapper, the
+ * lru_cache wrapper, the function, a generator inside sum()/min()/max()), and every
+ * reasonable top-down variant should keep 60+ frames to spare.
  */
 (function () {
   "use strict";
@@ -128,8 +130,10 @@
 
 
     def call_spell(name, params, *args):
-        """Call the spell's function name(*args). If @lru_cache rejects a list argument before
-        the spell's own code even runs, explain that instead of letting the trial crash."""
+        """Call the spell's function name(*args), explaining two classic failures instead of
+        letting the trial crash: recursion that goes too deep (a missing base case on a small
+        input, or correct but deep top-down recursion on a big one), and @lru_cache rejecting
+        a list argument before the spell's own code even runs."""
         func = need_function(name, params)
         try:
             return func(*args)
@@ -285,10 +289,10 @@
           "That's 15 calls just for `fib(5)`, and each step up multiplies the work by about 1.6. `fib(30)` makes 2,692,537 calls; `fib(90)` would make about 9 quintillion — thousands of years of spellcasting.",
           "The cure is **memoization**: the first time you work out an answer, store it; when the same question comes up again, look the answer up instead. A dictionary makes a perfect memo. Here it tames a different beast, the *Tribonacci* numbers, where each number is the sum of the three before it:",
           { code: py`
-            memo = {}                       # answers found so far
+            memo = {}               # answers found so far
 
             def trib(n):
-                if n in memo:               # seen this head before? answer at once
+                if n in memo:       # seen this head before?
                     return memo[n]
                 if n < 2:
                     answer = 0
@@ -296,7 +300,7 @@
                     answer = 1
                 else:
                     answer = trib(n - 1) + trib(n - 2) + trib(n - 3)
-                memo[n] = answer            # remember it for next time
+                memo[n] = answer    # remember it for next time
                 return answer
 
             print(trib(30))
@@ -305,7 +309,7 @@
           { code: py`
             from functools import lru_cache
 
-            @lru_cache(maxsize=None)        # remember every result trib returns
+            @lru_cache(maxsize=None)    # remembers every result
             def trib(n):
                 if n < 2:
                     return 0
@@ -479,9 +483,10 @@
           "Write `count_ways(n, strides)` that **returns** how many different ways there are to climb exactly `n` steps, when each stride climbs one of the numbers of steps listed in `strides` (for example `[1, 2]`: one step or two at a time).",
           "Order matters: a stride of 1 then 2 is a different way from 2 then 1.",
           { code: py`
-            print(count_ways(4, [1, 2]))     # 1+1+1+1, 1+1+2, 1+2+1, 2+1+1, 2+2
-            print(count_ways(7, [2, 3]))     # 2+2+3, 2+3+2, 3+2+2
-            print(count_ways(5, [2, 4]))     # you can't land exactly on step 5
+            # The 5 ways: 1+1+1+1, 1+1+2, 1+2+1, 2+1+1, 2+2
+            print(count_ways(4, [1, 2]))
+            print(count_ways(7, [2, 3]))  # 2+2+3, 2+3+2, 3+2+2
+            print(count_ways(5, [2, 4]))  # can't land on step 5
           `, output: "5\n3\n0" },
           "Climbing 0 steps counts as exactly 1 way (you're already there). Strides are positive whole numbers, and `n` can be as large as 50."
         ],
@@ -501,9 +506,9 @@
           "Here is the Tribonacci spell from the last scroll, built bottom-up:",
           { code: py`
             def trib(n):
-                table = [0] * (n + 3)         # a slot for every answer (and spares for small n)
-                table[2] = 1                  # base cases: trib(0) = trib(1) = 0, trib(2) = 1
-                for k in range(3, n + 1):     # smallest first, so the answers k needs are ready
+                table = [0] * (n + 3)       # room for every answer
+                table[2] = 1                # base cases: 0, 0, 1
+                for k in range(3, n + 1):   # smallest first
                     table[k] = table[k - 1] + table[k - 2] + table[k - 3]
                 return table[n]
 
@@ -515,7 +520,7 @@
 
             def tower_total(levels, gift):
                 @lru_cache(maxsize=None)
-                def total(k):                 # can read gift, from tower_total
+                def total(k):            # it can read gift
                     return 0 if k == 0 else total(k - 1) + gift
                 return total(levels)
 
@@ -722,9 +727,9 @@
           "Write `min_coins(coins, amount)` that **returns** the smallest number of coins that add up to exactly `amount`. `coins` lists the coin values (positive whole numbers), and you may use each value as many times as you like.",
           "If the amount can't be made at all, return `-1`. An amount of 0 needs 0 coins.",
           { code: py`
-            print(min_coins([1, 5, 10], 27))   # 10 + 10 + 5 + 1 + 1
-            print(min_coins([1, 3, 4], 6))     # 3 + 3 (not 4 + 1 + 1!)
-            print(min_coins([5, 10], 3))       # impossible
+            print(min_coins([1, 5, 10], 27))  # 10 + 10 + 5 + 1 + 1
+            print(min_coins([1, 3, 4], 6))    # 3 + 3, not 4 + 1 + 1
+            print(min_coins([5, 10], 3))      # impossible
           `, output: "5\n2\n-1" },
           "Fares in the trials go up to 301."
         ],
@@ -734,13 +739,13 @@
           "Some subproblems have *no* answer at all. A handy trick is to mark them with `float(\"inf\")` (infinity): it's bigger than every number, so `min()` passes over it, and `inf + 1` is still `inf`. Here a stairway has broken steps (`None`) that you can't stand on, and you want the cheapest total toll to reach each step when you move 1 or 2 steps at a time:",
           { code: py`
             INF = float("inf")
-            tolls = [0, 3, None, 2, 4, 1]     # None marks a broken step
+            tolls = [0, 3, None, 2, 4, 1]   # None: a broken step
 
-            cost = [INF] * len(tolls)         # cheapest total toll to stand on each step
-            cost[0] = 0                       # you start on step 0, for free
+            cost = [INF] * len(tolls)       # cheapest total toll
+            cost[0] = 0                     # step 0 is free
             for k in range(1, len(tolls)):
                 if tolls[k] is None:
-                    continue                  # broken: it stays impossible
+                    continue                # stays impossible
                 one_back = cost[k - 1]
                 two_back = cost[k - 2] if k >= 2 else INF
                 cost[k] = min(one_back, two_back) + tolls[k]
@@ -949,7 +954,8 @@
             grid = ["...",
                     ".#.",
                     "..."]
-            print(count_paths(grid))   # around the knot: over the top, or down the side
+            # 2 routes: along the top edge, or down the left edge
+            print(count_paths(grid))
           `, output: "2" },
           "Grids in the trials can be up to 15 × 15 tiles."
         ],
@@ -957,8 +963,9 @@
           "Many DP problems need a **2-D table**, with one entry for every pair of values: here, every (row, column). Build one with a list comprehension, so that each row is its own list:",
           { code: py`
             rows, cols = 3, 4
-            table = [[0] * cols for _ in range(rows)]    # 3 separate rows of 4 zeros
-            table[1][2] = 7                              # row 1, column 2
+            # 3 separate rows of 4 zeros:
+            table = [[0] * cols for _ in range(rows)]
+            table[1][2] = 7    # row 1, column 2
             print(table)
           `, output: "[[0, 0, 0, 0], [0, 0, 7, 0], [0, 0, 0, 0]]" },
           { warning: "Don't write `[[0] * cols] * rows`. It makes `rows` references to the *same* list, so changing one row changes them all." },
@@ -968,20 +975,20 @@
                      [1, 5, 1],
                      [4, 2, 1]]
             rows, cols = len(tolls), len(tolls[0])
-            cheapest = [[0] * cols for _ in range(rows)]
+            best = [[0] * cols for _ in range(rows)]
             for r in range(rows):
                 for c in range(cols):
                     if r == 0 and c == 0:
-                        before = 0                              # the starting tile
-                    elif r == 0:
-                        before = cheapest[r][c - 1]             # top row: only from the left
-                    elif c == 0:
-                        before = cheapest[r - 1][c]             # left column: only from above
+                        before = 0                  # the start
+                    elif r == 0:                    # top row
+                        before = best[r][c - 1]     # from the left
+                    elif c == 0:                    # left column
+                        before = best[r - 1][c]     # from above
                     else:
-                        before = min(cheapest[r - 1][c], cheapest[r][c - 1])
-                    cheapest[r][c] = before + tolls[r][c]
+                        before = min(best[r - 1][c], best[r][c - 1])
+                    best[r][c] = before + tolls[r][c]
 
-            for row in cheapest:
+            for row in best:
                 print(row)
           `, output: "[1, 4, 5]\n[2, 7, 6]\n[6, 8, 7]" },
           { tip: "Top-down works too: memoize a helper `routes(r, c)` that asks about the tile above and the tile to the left. But recursion in the browser can only go a few hundred calls deep, and `@lru_cache` and generators inside `sum()`/`min()`/`max()` use extra room. For long inputs a table is safest." }
@@ -1234,9 +1241,9 @@
           "Write `lcs_length(a, b)` that **returns** the length of the *longest common subsequence* of the strings `a` and `b`.",
           "A **subsequence** keeps letters in their original order but may skip any of them: `\"ace\"` is a subsequence of `\"abcde\"`, but `\"aec\"` is not. The longest common subsequence is the longest string that is a subsequence of *both* `a` and `b`.",
           { code: py`
-            print(lcs_length("ABCBDAB", "BDCABA"))   # for example "BCBA"
-            print(lcs_length("dragon", "wagon"))     # "agon"
-            print(lcs_length("abc", "xyz"))          # nothing in common
+            print(lcs_length("ABCBDAB", "BDCABA"))  # e.g. "BCBA"
+            print(lcs_length("dragon", "wagon"))    # "agon"
+            print(lcs_length("abc", "xyz"))         # none in common
           `, output: "4\n4\n0" },
           "Scrolls in the trials can be about 30 letters long."
         ],
@@ -1244,14 +1251,14 @@
           "First, what exactly is a subsequence? This little spell walks along `big` and ticks off the letters of `small` in order:",
           { code: py`
             def hidden_in(small, big):
-                found = 0                           # letters of small found so far
+                found = 0                  # letters of small found
                 for letter in big:
                     if found < len(small) and letter == small[found]:
                         found += 1
                 return found == len(small)
 
-            print(hidden_in("ace", "abcde"))       # a_c_e: in order, with gaps
-            print(hidden_in("aec", "abcde"))       # e comes after c in "abcde"
+            print(hidden_in("ace", "abcde"))   # a_c_e: in order
+            print(hidden_in("aec", "abcde"))   # e comes after c
           `, output: "True\nFalse" },
           "Comparing *two* sequences calls for a 2-D table over their **prefixes** (beginnings). Let `table[i][j]` be the LCS length of the first `i` letters of `a` and the first `j` letters of `b`; the final answer is `table[len(a)][len(b)]`.",
           "Row 0 and column 0 stand for an *empty* prefix, which shares nothing with anything, so they are all zeros. That's why the table has one more row and column than the strings have letters, and why entry `[i][j]` looks at `a[i - 1]` and `b[j - 1]`: the *last* letters of its two prefixes.",
@@ -1452,8 +1459,9 @@
           "Each item can be taken **at most once**. Weights and values are positive whole numbers, `capacity` is a whole number (it may be 0), and `items` may be empty.",
           { code: py`
             hoard = [(1, 1), (3, 4), (4, 5), (5, 7)]
-            print(best_value(hoard, 7))    # take (3, 4) and (4, 5): weight 7, value 9
-            print(best_value(hoard, 0))    # nothing fits
+            # Best for room 7: (3, 4) and (4, 5), worth 9.
+            print(best_value(hoard, 7))
+            print(best_value(hoard, 0))   # nothing fits
           `, output: "9\n0" },
           "Hoards in the trials can hold 30 treasures, with a capacity of 300."
         ],
@@ -1467,13 +1475,13 @@
 
             @lru_cache(maxsize=None)
             def groups(i, target):
-                """How many groups of the gems from position i onwards weigh exactly target?"""
+                """Count the groups of gems[i:] weighing target."""
                 if target == 0:
-                    return 1                                  # the empty group
+                    return 1                       # the empty group
                 if i == len(gems) or target < 0:
                     return 0
-                leave = groups(i + 1, target)                 # skip gem i
-                take = groups(i + 1, target - gems[i])        # use gem i (once!)
+                leave = groups(i + 1, target)           # skip gem i
+                take = groups(i + 1, target - gems[i])  # use it once
                 return leave + take
 
             print(groups(0, 10))       # 3 + 7, and 3 + 5 + 2
@@ -1684,9 +1692,10 @@
         task: [
           "Write `edit_distance(a, b)` that **returns** the smallest number of single-letter changes that turn the string `a` into the string `b`. A change is one of: **insert** a letter, **delete** a letter, or **replace** one letter with another.",
           { code: py`
-            print(edit_distance("lead", "gold"))      # replace l with g, e with o, a with l
-            print(edit_distance("spell", "spells"))   # insert an s
-            print(edit_distance("", "abc"))           # insert a, b and c
+            # lead -> gold: replace l, e and a; d stays.
+            print(edit_distance("lead", "gold"))
+            print(edit_distance("spell", "spells"))  # insert an s
+            print(edit_distance("", "abc"))          # insert a, b, c
           `, output: "3\n1\n3" },
           "Words in the trials can be about 25 letters long."
         ],
@@ -1697,9 +1706,9 @@
             a, b = "rune", "ruin"
             table = [[0] * (len(b) + 1) for _ in range(len(a) + 1)]
             for i in range(len(a) + 1):
-                table[i][0] = i          # "rune"[:i] -> "": delete i letters
+                table[i][0] = i      # "rune"[:i] -> "": i deletes
             for j in range(len(b) + 1):
-                table[0][j] = j          # "" -> "ruin"[:j]: insert j letters
+                table[0][j] = j      # "" -> "ruin"[:j]: j inserts
             for row in table:
                 print(row)
           `, output: "[0, 1, 2, 3, 4]\n[1, 0, 0, 0, 0]\n[2, 0, 0, 0, 0]\n[3, 0, 0, 0, 0]\n[4, 0, 0, 0, 0]" },
@@ -1925,7 +1934,7 @@
             coins, fare = [1, 3, 4], 7
             INF = float("inf")
             fewest = [0] + [INF] * fare
-            last = [None] * (fare + 1)          # last[a] = final coin of a best way to pay a
+            last = [None] * (fare + 1)    # last coin of a best way
             for a in range(1, fare + 1):
                 for c in coins:
                     if c <= a and fewest[a - c] + 1 < fewest[a]:
@@ -1933,7 +1942,7 @@
                         last[a] = c
 
             paid, a = [], fare
-            while a > 0:                        # follow the stored choices back to 0
+            while a > 0:                  # follow the choices back
                 paid.append(last[a])
                 a -= last[a]
             print(paid)
