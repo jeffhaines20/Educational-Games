@@ -400,25 +400,42 @@
   // --------------------------------------------------------------------------
 
   var printCleanupBound = false;
+  /**
+   * Print `node` alone (Progress Report, certificate). Resolves true when the print
+   * dialog opened. A sandboxed frame without allow-modals ignores print() silently:
+   * no "beforeprint" event arrives, so this resolves false and the caller offers
+   * another way (download, open in its own tab).
+   */
   function printNode(node, kind) {
     var root = document.getElementById("print-root");
-    if (!root) return false;
+    if (!root) return Promise.resolve(false);
     u.clear(root);
     root.className = "print-" + (kind || "report");
     root.appendChild(node);
     var html = document.documentElement;
+    function exitPrintMode() { html.classList.remove("print-mode", "print-landscape"); }
     html.classList.add("print-mode");
     html.classList.toggle("print-landscape", kind === "certificate");
     if (!printCleanupBound) {
       printCleanupBound = true;
-      global.addEventListener("afterprint", function () { html.classList.remove("print-mode", "print-landscape"); });
+      global.addEventListener("afterprint", exitPrintMode);
     }
+    var fired = false;
+    function onBefore() { fired = true; }
+    global.addEventListener("beforeprint", onBefore);
     try {
       global.print();
-      return true;
     } catch (err) {
-      return false;
+      /* blocked: handled below */
     }
+    return new Promise(function (resolve) {
+      // Chrome and Firefox fire "beforeprint" during print(); give slower browsers a moment.
+      setTimeout(function () {
+        global.removeEventListener("beforeprint", onBefore);
+        if (!fired) exitPrintMode();
+        resolve(fired);
+      }, fired ? 0 : 400);
+    });
   }
 
   UI.dialogs = {

@@ -47,6 +47,11 @@
     return status === "error" || status === "timeout" || status === "internal-error";
   }
 
+  /** The harness's step limit (a runaway loop) is a "ran for too long" problem, not a Python error. */
+  function isStepLimit(result) {
+    return !!(result && result.status === "error" && result.error && result.error.type === "TooManySteps");
+  }
+
   function summary(result) {
     var err = result.error || {};
     var total = result.total || 0, passed = result.passed || 0;
@@ -57,6 +62,9 @@
       case "failed":
         return { tone: "failed", icon: "⚖️", headline: passed + " of " + u.plural(total, "trial") + " passed", detail: "Not quite yet. Here is the first trial that didn't pass:" };
       case "error":
+        if (isStepLimit(result)) {
+          return { tone: "timeout", icon: "⏳", headline: "Your spell ran for too long", detail: "Step limit reached" + where + "." };
+        }
         if (err.phase === "syntax") {
           return { tone: "error", icon: "📜", headline: "Python couldn't read your spell", detail: (err.type || "SyntaxError") + where + ". Nothing ran yet." };
         }
@@ -70,11 +78,6 @@
       default:
         return { tone: "internal", icon: "🌀", headline: "Something unexpected happened", detail: "Try casting again." };
     }
-  }
-
-  function formatDuration(ms) {
-    if (typeof ms !== "number" || !isFinite(ms)) return "";
-    return ms < 1000 ? Math.max(1, Math.round(ms)) + " ms" : (ms / 1000).toFixed(1) + " s";
   }
 
   function trialMeter(tests) {
@@ -120,7 +123,9 @@
     var s = summary(result);
     var err = result.error || {};
     var detail = h("p", { class: "verdict-detail" });
-    if (result.status === "error") {
+    if (isStepLimit(result)) {
+      u.append(detail, ["Step limit reached", err.line ? [" on ", lineButton(err.line, opts)] : null, "."]);
+    } else if (result.status === "error") {
       var type = err.type || (err.phase === "syntax" ? "SyntaxError" : "Error");
       u.append(detail, [h("strong", { class: "error-type" }, type),
         err.line ? [" on ", lineButton(err.line, opts)] : null,
@@ -139,9 +144,7 @@
     },
       h("span", { class: "verdict-icon", "aria-hidden": "true" }, s.icon),
       text,
-      h("div", { class: "verdict-side" },
-        result.total ? trialMeter(result.tests || []) : null,
-        typeof result.durationMs === "number" ? h("span", { class: "verdict-time", title: "How long the cast took" }, formatDuration(result.durationMs)) : null));
+      result.total ? h("div", { class: "verdict-side" }, trialMeter(result.tests || [])) : null);
     if (problem) {
       u.append(text, problemDetails(result, opts));
     } else if (result.status === "failed") {
@@ -183,6 +186,7 @@
     var tests = result.tests || [];
     var section = h("section", { class: "trials", "aria-label": "Trials" },
       h("h3", { class: "result-heading" }, u.emoji("⚖️"), " Trials",
+        h("span", { class: "result-sub" }, "automatic checks of your spell"),
         tests.length ? h("span", { class: "trial-count" }, result.passed + " / " + result.total + " passed") : null));
     if (!tests.length) {
       var why = "The trials will appear here after you cast.";
@@ -255,6 +259,7 @@
   }
 
   UI.results = {
+    isStepLimit: isStepLimit,
     render: render,
     casting: casting,
     idle: idle,

@@ -155,22 +155,60 @@
     return u.safe(function () { return SS.Save.getLastSlot(); }, null);
   }
 
+  // Sound: SS_CONFIG.sound or ?sound=on|off decide; otherwise it starts OFF inside a frame
+  // (an LMS page) or a SCORM package, and ON elsewhere. A player's own toggle always wins.
+  function soundPreference() {
+    var conf = u.config();
+    var q = u.safe(function () { return SS.parseQuery ? SS.parseQuery(global.location.search) : {}; }, {}) || {};
+    var flag = String(q.sound || "").toLowerCase();
+    if (flag === "off" || flag === "0" || flag === "false") return false;
+    if (flag === "on" || flag === "1" || flag === "true") return true;
+    if (conf.sound === false || conf.sound === true) return conf.sound;
+    return null;
+  }
+
+  function soundDefault() {
+    var pref = soundPreference();
+    if (pref !== null) return pref;
+    return !(u.isFramed() || isScorm());
+  }
+
+  var soundOverride = soundPreference() === false ? false : null;   // ?sound=off mutes this session
+
+  function soundOn() {
+    if (soundOverride === false) return false;
+    if (!u.profile()) return soundDefault();
+    return u.settings().sound !== false;
+  }
+
+  function toggleSound() {
+    var on = !soundOn();
+    soundOverride = null;
+    updateSettings({ sound: on });
+    if (!u.profile()) UI.sound.setEnabled(on);
+    if (on) UI.sound.play("click");
+    return on;
+  }
+
   function applySettings() {
     var s = u.settings();
-    UI.sound.setEnabled(s.sound !== false);
+    UI.sound.setEnabled(soundOn());
     var root = document.documentElement;
     root.classList.toggle("reduce-motion", !!s.reduceMotion);
     root.style.setProperty("--editor-font-size", (Number(s.editorFontSize) || 15) + "px");
     if (els.sound) {
-      els.sound.setAttribute("aria-pressed", s.sound !== false ? "true" : "false");
-      els.sound.textContent = s.sound !== false ? "🔊" : "🔇";
-      els.sound.title = s.sound !== false ? "Sound is on" : "Sound is off";
+      var on = soundOn();
+      els.sound.setAttribute("aria-pressed", on ? "true" : "false");
+      els.sound.textContent = on ? "🔊" : "🔇";
+      els.sound.title = on ? "Sound is on" : "Sound is off";
     }
+    renderWarning();
     if (current && current.onSettings) u.safe(function () { current.onSettings(s); });
   }
 
   function updateSettings(partial) {
     var p = u.profile();
+    if (partial && "sound" in partial) soundOverride = null;
     if (p) u.safe(function () { SS.Save.updateSettings(partial); });
     else if (partial && "sound" in partial) UI.sound.setEnabled(partial.sound);
     applySettings();
@@ -246,6 +284,7 @@
         UI.dialogs.toast("The academy couldn't create your save. Try again.", { icon: "⚠️", kind: "warn" });
         return false;
       }
+      if (!existing && !soundDefault()) u.safe(function () { SS.Save.updateSettings({ sound: false }); });
       UI.sound.play("unlock");
       enterGame();
       return true;
@@ -288,6 +327,14 @@
     { id: "settings", icon: "⚙️", label: "Settings", action: function () { UI.panels.settings(); } }
   ];
 
+  /** A storage / LMS-connection warning stays visible on every screen as a top-bar chip. */
+  function renderWarning() {
+    if (!els.warn) return;
+    var text = storageWarning();
+    els.warn.hidden = !text;
+    if (text) els.warn.setAttribute("aria-label", "Saving problem: " + text + " Select for details.");
+  }
+
   function closeMenu() {
     if (!els.menu) return;
     els.menu.classList.remove("open");
@@ -305,9 +352,9 @@
       u.focusEl(target);
     });
 
-    var brand = h("button", { type: "button", class: "brand", "aria-label": "Syntax & Sorcery: go to the academy map", on: { click: function () { closeMenu(); go(u.profile() ? "map" : "title"); } } },
-      h("span", { class: "brand-mark", "aria-hidden": "true" }, "🐍"),
-      h("span", { class: "brand-name", "aria-hidden": "true" }, "Syntax ", h("span", { class: "amp" }, "&"), " Sorcery"));
+    var brand = h("button", { type: "button", class: "brand", "aria-label": u.GAME_NAME + ": go to the academy map", on: { click: function () { closeMenu(); go(u.profile() ? "map" : "title"); } } },
+      h("span", { class: "brand-mark", "aria-hidden": "true" }, "🔥"),
+      h("span", { class: "brand-name", "aria-hidden": "true" }, u.GAME_NAME));
 
     var chip = engineChip("compact");
 
@@ -324,7 +371,7 @@
 
     els.tools = {};
     var toolButtons = TOOLS.map(function (tool) {
-      var btn = h("button", { type: "button", class: "tool-btn", dataset: { tool: tool.id }, on: { click: function () { closeMenu(); tool.action(); } } },
+      var btn = h("button", { type: "button", class: "tool-btn", title: tool.label, dataset: { tool: tool.id }, on: { click: function () { closeMenu(); tool.action(); } } },
         h("span", { class: "tool-icon", "aria-hidden": "true" }, tool.icon),
         h("span", { class: "tool-label" }, tool.label));
       els.tools[tool.id] = btn;
@@ -345,12 +392,30 @@
     }, "☰");
     els.sound = h("button", {
       type: "button", class: "icon-btn sound-toggle", "aria-label": "Sound", "aria-pressed": "true",
-      on: { click: function () { var s = u.settings(); updateSettings({ sound: !(s.sound !== false) }); UI.sound.play("click"); } }
+      on: { click: function () { toggleSound(); } }
     }, "🔊");
+    els.warn = h("button", {
+      type: "button", class: "warn-chip", hidden: true, title: "Your progress may not be saved",
+      on: {
+        click: function () {
+          closeMenu();
+          var text = storageWarning();
+          UI.dialogs.open({
+            title: "About saving", icon: "⚠️", size: "sm",
+            body: h("div", null, h("p", null, text || "Saving works normally.")),
+            actions: [
+              isScorm() ? null : { label: "Open the Save Scroll", kind: "primary", icon: "📜", onClick: function () { setTimeout(function () { UI.panels.saveScroll(); }, 0); } },
+              { label: "Close", kind: "ghost" }
+            ]
+          });
+        }
+      }
+    }, h("span", { class: "warn-chip-icon", "aria-hidden": "true" }, "⚠️"), h("span", { class: "warn-chip-text" }, "Not saving"));
 
     els.topbar = h("header", { class: "topbar", hidden: true },
       brand,
       h("div", { class: "topbar-spacer" }),
+      els.warn,
       chip.el,
       els.wizard,
       els.menu,
@@ -416,7 +481,7 @@
     els.main.appendChild(screen.el);
     els.topbar.hidden = !!screen.hideTopbar;
     document.body.classList.toggle("has-topbar", !screen.hideTopbar);
-    document.title = (screen.title ? screen.title + " · " : "") + ((SS.config && SS.config.title) || "Syntax & Sorcery");
+    document.title = (screen.title ? screen.title + " · " : "") + u.GAME_NAME;
     refreshTopbar();
     u.safe(function () { global.scrollTo(0, 0); });
     var target = screen.focus || screen.el.querySelector("h1");
@@ -449,7 +514,7 @@
       errors.length ? h("ul", { class: "fatal-list" }, errors.map(function (e) {
         return h("li", null, h("code", { class: "inline-code" }, e.file), e.kind === "missing" ? " is missing" : " has an error" + (e.message ? ": " + e.message : ""));
       })) : null,
-      h("p", null, "If you are a student, please tell your teacher. If you are the teacher, check that every file of the game was uploaded, or use the single-file version (", h("code", { class: "inline-code" }, "dist/syntax-and-sorcery.html"), ")."),
+      h("p", null, "If you are a student, please tell your teacher. If you are the teacher, check that every file of the game was uploaded, or use the single-file version of the game from the dist folder."),
       u.button("Try again", { kind: "primary", icon: "↻", onClick: function () { try { global.location.reload(); } catch (err) { /* ignore */ } } })));
     var heading = els.main.querySelector("h1");
     heading.setAttribute("tabindex", "-1");
@@ -460,13 +525,23 @@
   // Boot
   // --------------------------------------------------------------------------
 
+  /** Run fn once the page has fully loaded and the browser is idle (CodeMirror must never delay "load"). */
+  function afterLoad(fn) {
+    function idle() {
+      if (global.requestIdleCallback) global.requestIdleCallback(fn, { timeout: 2500 });
+      else setTimeout(fn, 150);
+    }
+    if (document.readyState === "complete") idle();
+    else global.addEventListener("load", idle, { once: true });
+  }
+
   function boot() {
     buildShell();
     var fonts = document.getElementById("ss-fonts");
     if (fonts && fonts.media !== "all") fonts.media = "all";
     UI.effects.initSky(document.getElementById("sky"));
     applySettings();
-    u.safe(function () { UI.Editor.loadCodeMirror(); });
+    afterLoad(function () { u.safe(function () { UI.Editor.loadCodeMirror(); }); });
     startEngine();
 
     var missing = [];
@@ -507,6 +582,9 @@
     applySettings: applySettings,
     updateSettings: updateSettings,
     refreshTopbar: refreshTopbar,
+    soundOn: soundOn,
+    toggleSound: toggleSound,
+    renderWarning: renderWarning,
     isScorm: isScorm,
     storageWarning: storageWarning,
     slotList: slotList,

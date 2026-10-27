@@ -425,6 +425,9 @@ const DEPTH_PROBES = {
   "f-string of self in __str__": "class C:\n    def __init__(self, nxt):\n        self.nxt = nxt\n    def __str__(self):\n        return f'[{self.nxt}]'\nc = None\nfor i in range(@N@):\n    c = C(c)\nstr(c)\n",
   "repr() in __repr__": "class C:\n    def __init__(self, nxt):\n        self.nxt = nxt\n    def __repr__(self):\n        return 'C(' + repr(self.nxt) + ')'\nc = None\nfor i in range(@N@):\n    c = C(c)\nrepr(c)\n",
   "== in __eq__": "class C:\n    def __init__(self, nxt):\n        self.nxt = nxt\n    def __eq__(self, other):\n        return isinstance(other, C) and self.nxt == other.nxt\na = b = None\nfor i in range(@N@):\n    a, b = C(a), C(b)\na == b\n",
+  "generator inside max()": "def f(n):\n    return 0 if n == 0 else 1 + max(f(k) for k in [n - 1])\nf(@N@)\n",
+  "generator inside sum()": "def f(n):\n    return 0 if n == 0 else 1 + sum(f(k) for k in [n - 1])\nf(@N@)\n",
+  "DP: wrapper + @lru_cache + generator in max()": "from functools import lru_cache\n@lru_cache(maxsize=None)\ndef f(n):\n    return 0 if n == 0 else 1 + max(f(k) for k in [n - 1])\n_inner = f\ndef f(n):\n    return _inner(n)\nf(@N@)\n",
   "len() in __len__": "class C:\n    def __init__(self, nxt):\n        self.nxt = nxt\n    def __len__(self):\n        return 1 + (len(self.nxt) if self.nxt is not None else 0)\nc = None\nfor i in range(@N@):\n    c = C(c)\nlen(c)\n",
 };
 
@@ -443,7 +446,7 @@ async function measure(browser, localBase, port) {
       const mid = Math.floor((lo + hi) / 2);
       if (await works(mid)) lo = mid; else hi = mid;
     }
-    console.log("  " + name.padEnd(34) + "~" + lo);
+    console.log("  " + name.padEnd(46) + "~" + lo);
   }
   await close();
 }

@@ -174,12 +174,14 @@
     },
 
     rise: function (layer) {
-      for (var i = 0; i < 16; i++) {
-        particle(layer, "fx-mote", pick(["✦", "·", "✧"]), {
-          "--x": pct(rnd(38, 62)), "--delay": ms(rnd(150, 1100)), "--size": px(rnd(8, 14)), "--fall": px(rnd(30, 60))
+      layer.appendChild(h("span", { class: "fx-aura", "aria-hidden": "true" }));
+      for (var i = 0; i < 26; i++) {
+        particle(layer, "fx-updraft " + pick(["gold", "white", "teal"]), pick(["✦", "✧", "·", "⋆"]), {
+          "--x": pct(rnd(30, 70)), "--delay": ms(rnd(0, 1100)), "--size": px(rnd(9, 17)),
+          "--rise": px(rnd(70, 130)), "--sway": px(rnd(-26, 26))
         });
       }
-      return { duration: 1900 };
+      return { duration: 2000 };
     },
 
     shake: function (layer) {
@@ -208,24 +210,27 @@
       layer.appendChild(h("span", { class: "fx-flash", "aria-hidden": "true" }));
       var bolts = u.svg("svg", { class: "fx-bolts", viewBox: "0 0 100 100", preserveAspectRatio: "none", "aria-hidden": "true" });
       for (var b = 0; b < 3; b++) {
-        var x = rnd(15, 85), y = 0, points = [x.toFixed(1) + "," + y];
-        var targetX = 50 + rnd(-8, 8), steps = 7;
-        for (var s = 1; s <= steps; s++) {
-          y = (58 * s) / steps;
-          x = x + (targetX - x) / (steps - s + 1) + rnd(-9, 9);
+        var x = [18, 50, 82][b] + rnd(-6, 6), y = 0, points = [x.toFixed(1) + "," + y];
+        var targetX = 50 + rnd(-6, 6), steps = 8;
+        for (var s2 = 1; s2 <= steps; s2++) {
+          y = (54 * s2) / steps;
+          x = x + (targetX - x) / (steps - s2 + 1) + rnd(-8, 8);
           points.push(x.toFixed(1) + "," + y.toFixed(1));
         }
-        bolts.appendChild(u.svg("polyline", { class: "fx-bolt", points: points.join(" "), style: { "--delay": ms(b * 170) } }));
+        var line = points.join(" ");
+        bolts.appendChild(u.svg("polyline", { class: "fx-bolt-glow", points: line, style: { "--delay": ms(b * 150) } }));
+        bolts.appendChild(u.svg("polyline", { class: "fx-bolt", points: line, style: { "--delay": ms(b * 150) } }));
       }
       layer.appendChild(bolts);
-      for (var i = 0; i < 12; i++) {
-        var angle = Math.random() * Math.PI * 2, dist = rnd(30, 90);
-        particle(layer, "fx-spark teal", "✦", {
+      layer.appendChild(h("span", { class: "fx-impact", "aria-hidden": "true" }));
+      for (var i = 0; i < 22; i++) {
+        var angle = Math.random() * Math.PI * 2, dist = rnd(40, 120);
+        particle(layer, "fx-spark " + pick(["teal", "white"]), pick(["✦", "⚡", "✧"]), {
           "--dx": px(Math.cos(angle) * dist), "--dy": px(Math.sin(angle) * dist * 0.6),
-          "--delay": ms(rnd(250, 600)), "--size": px(rnd(8, 15))
+          "--delay": ms(rnd(300, 650)), "--size": px(rnd(10, 18))
         });
       }
-      return { duration: 1500 };
+      return { duration: 1600 };
     },
 
     bloom: function (layer) {
@@ -290,10 +295,14 @@
     stageEl.classList.remove("fx-fizzle");
     void stageEl.offsetWidth; // restart the CSS animation
     stageEl.classList.add("fx-fizzle");
-    for (var i = 0; i < 8; i++) {
-      particle(layer, "fx-smoke", "", { "--dx": px(rnd(-34, 34)), "--delay": ms(rnd(0, 220)), "--size": px(rnd(14, 28)) });
+    for (var i = 0; i < 12; i++) {
+      particle(layer, "fx-smoke", "", { "--dx": px(rnd(-46, 46)), "--delay": ms(rnd(0, 260)), "--size": px(rnd(22, 40)) });
     }
-    setTimeout(function () { u.remove(layer); stageEl.classList.remove("fx-fizzle"); }, 1300);
+    for (var j = 0; j < 8; j++) {
+      var angle = rnd(Math.PI * 1.1, Math.PI * 1.9), dist = rnd(30, 70);
+      particle(layer, "fx-dud", "✦", { "--dx": px(Math.cos(angle) * dist), "--dy": px(Math.sin(angle) * dist), "--delay": ms(rnd(0, 150)), "--size": px(rnd(8, 13)) });
+    }
+    setTimeout(function () { u.remove(layer); stageEl.classList.remove("fx-fizzle"); }, 1400);
   }
 
   /** Sparkles bursting out of an element (e.g. the icon in the success dialog). */
@@ -315,7 +324,10 @@
   function celebrate() {
     if (u.reducedMotion()) return;
     var layer = h("div", { class: "fx-celebrate", "aria-hidden": "true" });
-    document.body.appendChild(layer);
+    // Inside the top dialog's overlay (behind the dialog box), so particles never cover text.
+    var overlays = document.querySelectorAll("#modal-root .modal-overlay:not(.is-closing)");
+    var host = overlays.length ? overlays[overlays.length - 1] : document.body;
+    host.insertBefore(layer, host.firstChild);
     for (var i = 0; i < 46; i++) {
       particle(layer, "fx-falling " + pick(["gold", "teal", "violet", "white"]), pick(["✦", "✧", "★", "⋆"]), {
         "--x": pct(rnd(0, 100)), "--delay": ms(rnd(0, 1300)), "--size": px(rnd(10, 22)),

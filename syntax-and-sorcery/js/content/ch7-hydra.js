@@ -476,19 +476,22 @@
             print(count_ways(7, [2, 3]))     # 2+2+3, 2+3+2, 3+2+2
             print(count_ways(5, [2, 4]))     # you can't land exactly on step 5
           `, output: "5\n3\n0" },
-          "Climbing 0 steps counts as exactly 1 way (you're already there). Strides are positive whole numbers, and `n` can be as large as 100."
+          "Climbing 0 steps counts as exactly 1 way (you're already there). Strides are positive whole numbers, and `n` can be as large as 50."
         ],
         lesson: [
-          "**Dynamic programming** (DP) is a recipe for problems made of smaller copies of themselves. Here it is, worked on the classic stairs where every stride is 1 or 2 steps:",
+          "**Dynamic programming** (DP) is a recipe for problems built from smaller copies of themselves. Here it is for the classic stairs, where every stride is 1 or 2 steps:",
           { steps: [
-            "**Name the subproblem** in words: *ways(k)* is the number of ways to climb exactly *k* steps.",
-            "**Find the recurrence** by looking at the *last* stride. A climb of 6 steps ends with a stride of 1 (after climbing 5 steps) or a stride of 2 (after climbing 4), so *ways(6) = ways(5) + ways(4)*.",
-            "**Settle the base cases**: *ways(0) = 1* (the empty climb), and you can't climb a negative number of steps.",
-            "**Choose an order**: each answer needs only smaller ones, so compute them from 0 upwards (*bottom-up*), or recurse from the top and memoize (*top-down*)."
+            "**Name the subproblem**: *ways(k)* is the number of ways to climb exactly *k* steps.",
+            "**Find the recurrence** from the *last* stride: a climb of 6 ends with a stride of 1 (after 5 steps) or of 2 (after 4), so *ways(6) = ways(5) + ways(4)*.",
+            "**Settle the base cases**: *ways(0) = 1*, the empty climb.",
+            "**Choose an order**: smaller answers first, either bottom-up in a table or top-down with a memo."
           ] },
-          "Written out as a table, every entry comes from entries already filled in to its left:",
-          { output: "k          0  1  2  3  4  5  6\nways(k)    1  1  2  3  5  8 13" },
-          "Bottom-up code fills a list from the base cases upward. Here is the Tribonacci spell from the last scroll, built as a table instead of a memo:",
+          "As a table, every entry comes from entries to its left:",
+          { diagram: py`
+            k          0  1  2  3  4  5  6
+            ways(k)    1  1  2  3  5  8 13
+          ` },
+          "Here is the Tribonacci spell from the last scroll, built bottom-up:",
           { code: py`
             def trib(n):
                 table = [0] * (n + 3)         # a slot for every answer (and spares for small n)
@@ -499,7 +502,20 @@
 
             print([trib(k) for k in range(8)])
           `, output: "[0, 0, 1, 1, 2, 4, 7, 13]" },
-          { warning: "`@lru_cache` can only remember calls whose arguments are hashable, and a list is not: decorating `count_ways(n, strides)` raises `TypeError: unhashable type: 'list'`. Memoize a helper that takes only the step number, or build a table. And a memo dictionary kept *outside* the function belongs to one particular list of strides!" }
+          "A function can be defined *inside* another. It can read the outer function's parameters, and each call of the outer function builds a fresh inner function with its own empty cache:",
+          { code: py`
+            from functools import lru_cache
+
+            def tower_total(levels, gift):
+                @lru_cache(maxsize=None)
+                def total(k):                 # can read gift, from tower_total
+                    return 0 if k == 0 else total(k - 1) + gift
+                return total(levels)
+
+            print(tower_total(3, 10), tower_total(3, 5))
+          `, output: "30 15" },
+          { warning: "`@lru_cache` needs hashable arguments, and a list is not: decorating `count_ways(n, strides)` itself raises `TypeError: unhashable type: 'list'`. Memoize an inner helper instead. And a memo kept *outside* the function belongs to one particular list of strides!" },
+          { tip: "A DP's running time is (number of subproblems) × (work per subproblem): here (n + 1) × len(strides), instead of exponential. Top-down works too, but recursion in the browser can only go a few hundred calls deep, and `@lru_cache` and generators inside `sum()`/`min()`/`max()` use extra room. For long inputs a table is safest." }
         ],
         starter: py`
           def count_ways(n, strides):
@@ -627,9 +643,13 @@
           `
         ],
         tests: LAIR_TRIALS + py`
+          def strides_note():
+              return shared_memo_note("count_ways", "the strides")
+
+
           def check_ways(n, strides, want, note="", when="wrong"):
               result = call_spell("count_ways", 2, n, list(strides))
-              memo_note = shared_memo_note()
+              memo_note = strides_note()
               expect_number(result, want, "count_ways(" + str(n) + ", " + str(strides) + ")",
                             memo_note or note_when(result, want, note, when))
 
@@ -663,21 +683,20 @@
               check_ways(3, [5], 0, careful, "higher")
 
 
-          @test("count_ways(80, [1, 2]) is 37889062373143906, without waking the Hydra")
+          @test("count_ways(50, [1, 2]) is 20365011074, without waking the Hydra")
           def _():
               need_function("count_ways", 2)
               with without_waking_the_hydra("count_ways", 2000, budget=20000):
-                  result = call_spell("count_ways", None, 80, [1, 2])
-              expect_number(result, 37889062373143906, "count_ways(80, [1, 2])", shared_memo_note())
+                  result = call_spell("count_ways", None, 50, [1, 2])
+              expect_number(result, 20365011074, "count_ways(50, [1, 2])", strides_note())
 
 
-          @test("count_ways(100, [1, 3, 5, 7]) is right, and still quick")
+          @test("count_ways(50, [1, 3, 5, 7]) is right, and still quick")
           def _():
               need_function("count_ways", 2)
               with without_waking_the_hydra("count_ways", 2000, budget=20000):
-                  result = call_spell("count_ways", None, 100, [1, 3, 5, 7])
-              expect_number(result, 134459148186402899175, "count_ways(100, [1, 3, 5, 7])",
-                            shared_memo_note())
+                  result = call_spell("count_ways", None, 50, [1, 3, 5, 7])
+              expect_number(result, 8022566101, "count_ways(50, [1, 3, 5, 7])", strides_note())
         `,
         scene: { icon: "👣", successIcon: "✨", successText: "Every step of the spiral stairway glows with its number of ways, all the way to the top.", effect: "rise" }
       },
@@ -721,7 +740,8 @@
 
             print(cost)
           `, output: "[0, 3, inf, 5, 9, 6]" },
-          { tip: "At the very end, turn `inf` into whatever the task wants for \"impossible\". Here, that's `-1`." }
+          { tip: "At the very end, turn `inf` into whatever the task wants for \"impossible\". Here, that's `-1`." },
+          { tip: "Top-down works too, but recursion in the browser can only go a few hundred calls deep, and `@lru_cache` and generators inside `sum()`/`min()`/`max()` use extra room. For long inputs a table is safest." }
         ],
         starter: py`
           def min_coins(coins, amount):
@@ -864,7 +884,7 @@
               if isinstance(result, float) and result == float("inf"):
                   fail(code(call) + " returned " + code("inf") + ". When a fare can't be made, turn "
                        "infinity into " + code("-1") + " before returning it.")
-              memo_note = shared_memo_note()
+              memo_note = shared_memo_note("min_coins", "the coins")
               expect_number(result, want, call, memo_note or note_when(result, want, note, when))
 
 
@@ -897,10 +917,10 @@
 
           @test("Heavy purses (fares up to 301), without waking the Hydra")
           def _():
-              check_coins([3, 7, 11, 13, 29], 300, 12, limit=10000)
+              check_coins([6, 7, 11, 13, 29], 300, 12, limit=10000)
               check_coins([6, 10, 15], 299, 23, limit=10000)
-              check_coins([4, 6, 10], 301, -1, limit=10000)
-              check_coins([4, 6, 8, 10, 12, 14, 16, 18, 20, 22], 301, -1, limit=10000)
+              check_coins([6, 10, 14], 301, -1, limit=10000)
+              check_coins([6, 8, 10, 12, 14, 16, 18, 20, 22, 24], 301, -1, limit=10000)
         `,
         scene: { icon: "🛶", successIcon: "💰", successText: "The Ferryman counts your coins, grunts in approval, and poles you across the black river.", effect: "sparkle" }
       },
@@ -957,7 +977,7 @@
             for row in cheapest:
                 print(row)
           `, output: "[1, 4, 5]\n[2, 7, 6]\n[6, 8, 7]" },
-          { tip: "Top-down works too: memoize a helper `routes(r, c)` that asks about the tile above and the tile to the left. But for big inputs a table is safest, because recursion in the browser can only go a few hundred calls deep." }
+          { tip: "Top-down works too: memoize a helper `routes(r, c)` that asks about the tile above and the tile to the left. But recursion in the browser can only go a few hundred calls deep, and `@lru_cache` and generators inside `sum()`/`min()`/`max()` use extra room. For long inputs a table is safest." }
         ],
         starter: py`
           def count_paths(grid):
@@ -1106,14 +1126,28 @@
           import re as _re
 
 
-          def check_grid(grid, want, note="", when="wrong"):
+          def grid_advice(grid, result, want):
+              """Point at the likely mistake when count_paths(grid) returns the wrong number."""
+              if _re.search(r"\[\s*\[[^\[\]]*\]\s*\*[^\]\n]*\]\s*\*", source):   # [[0] * cols] * rows
+                  return (" Check how you built your table: " + code("[[0] * cols] * rows")
+                          + " makes every row the same list, so changing one row changes them all. "
+                          "Use " + code("[[0] * cols for _ in range(rows)]") + " instead.")
+              if isinstance(result, bool) or not isinstance(result, int) or result <= want:
+                  return ""
+              if grid[0][0] == "#" or grid[-1][-1] == "#":
+                  return " When the start or the end tile is knotted, there are no routes at all."
+              if "#" in grid[0] or any(row[0] == "#" for row in grid):
+                  return (" Along the top row and the left column there is only one way in, so a "
+                          "knot there blocks every tile after it.")
+              if any("#" in row for row in grid):
+                  return (" A knotted tile can't be part of a route: it has 0 routes itself, and no "
+                          "route may pass through it.")
+              return ""
+
+
+          def check_grid(grid, want):
               result = call_spell("count_paths", 1, list(grid))
-              advice = shared_memo_note() or note_when(result, want, note, when)
-              # [[0] * cols] * rows makes every row the same list.
-              if not advice and _re.search(r"\[\s*\[[^\[\]]*\]\s*\*[^\]\n]*\]\s*\*", source):
-                  advice = (" Check how you built your table: " + code("[[0] * cols] * rows")
-                            + " makes every row the same list, so changing one row changes them all. "
-                            "Use " + code("[[0] * cols for _ in range(rows)]") + " instead.")
+              advice = shared_memo_note("count_paths", "the grid") or grid_advice(grid, result, want)
               expect_number(result, want, "count_paths(" + short(grid) + ")", advice)
 
 
@@ -1134,10 +1168,8 @@
 
           @test("A knot on the top row or left column cuts off the tiles beyond it")
           def _():
-              edge = (" Along the top row and the left column there is only one way in, so a knot "
-                      "there blocks every tile after it.")
-              check_grid([".#..", "....", "...."], 4, edge, "higher")
-              check_grid(["....", "#...", "...."], 6, edge, "higher")
+              check_grid([".#..", "....", "...."], 4)
+              check_grid(["....", "#...", "...."], 6)
 
 
           @test("Rectangular caverns work both ways round")
@@ -1199,7 +1231,7 @@
             print(lcs_length("dragon", "wagon"))     # "agon"
             print(lcs_length("abc", "xyz"))          # nothing in common
           `, output: "4\n4\n0" },
-          "Scrolls in the trials can be over 50 letters long."
+          "Scrolls in the trials can be about 30 letters long."
         ],
         lesson: [
           "First, what exactly is a subsequence? This little spell walks along `big` and ticks off the letters of `small` in order:",
@@ -1217,15 +1249,16 @@
           "Comparing *two* sequences calls for a 2-D table over their **prefixes** (beginnings). Let `table[i][j]` be the LCS length of the first `i` letters of `a` and the first `j` letters of `b`; the final answer is `table[len(a)][len(b)]`.",
           "Row 0 and column 0 stand for an *empty* prefix, which shares nothing with anything, so they are all zeros. That's why the table has one more row and column than the strings have letters, and why entry `[i][j]` looks at `a[i - 1]` and `b[j - 1]`: the *last* letters of its two prefixes.",
           "Here is the finished table for `\"ABCB\"` (down the side) and `\"BDCAB\"` (across the top). Each entry depends only on its neighbours above, to the left and diagonally up-left, and on whether its two last letters match. Can you spot the rule?",
-          { output: [
-            "      \"\"  B  D  C  A  B",
-            "  \"\"   0  0  0  0  0  0",
-            "   A   0  0  0  0  1  1",
-            "   B   0  1  1  1  1  2",
-            "   C   0  1  1  2  2  2",
-            "   B   0  1  1  2  2  3"
-          ].join("\n") },
-          "The bottom-right entry says the longest common subsequence has length 3 (it's `\"BCB\"`)."
+          { diagram: py`
+                  ""  B  D  C  A  B
+              ""   0  0  0  0  0  0
+               A   0  0  0  0  1  1
+               B   0  1  1  1  1  2
+               C   0  1  1  2  2  2
+               B   0  1  1  2  2  3
+          ` },
+          "The bottom-right entry says the longest common subsequence has length 3 (it's `\"BCB\"`). The table has (len(a) + 1) × (len(b) + 1) entries, each filled in a moment, so the spell runs in O(len(a) · len(b)) time.",
+          { tip: "Top-down works too, but recursion in the browser can only go a few hundred calls deep, and `@lru_cache` and generators inside `sum()`/`min()`/`max()` use extra room. For long inputs a table is safest." }
         ],
         starter: py`
           def lcs_length(a, b):
@@ -1346,9 +1379,10 @@
         ],
         tests: LAIR_TRIALS + py`
           def check_lcs(a, b, want, note=""):
-              result = need_function("lcs_length", 2)(a, b)
+              result = call_spell("lcs_length", 2, a, b)
               expect_number(result, want, "lcs_length(" + repr(a) + ", " + repr(b) + ")",
-                            shared_memo_note() or note_when(result, want, note, "lower"))
+                            shared_memo_note("lcs_length", "both scrolls")
+                            or note_when(result, want, note, "lower"))
 
 
           gaps = (" Remember that a common subsequence may skip letters in both scrolls: its letters "
@@ -1383,14 +1417,15 @@
               check_lcs("hydra", "hydra", 5)
 
 
-          @test("Two scrolls of over 50 letters, without waking the Hydra")
+          @test("Two scrolls of about 30 letters, without waking the Hydra")
           def _():
               need_function("lcs_length", 2)
-              a = "THEHYDRAOFOVERLAPPINGSUBPROBLEMSSLEEPSBENEATHTHELABYRINTH"
-              b = "APPRENTICESWHOREMEMBEREVERYHEADNEVERFIGHTTHESAMEONETWICE"
+              a = "THEHYDRASLEEPSBENEATHTHELABYRINTH"
+              b = "APPRENTICESREMEMBEREVERYHEAD"
               with without_waking_the_hydra("lcs_length", 40000, budget=40000):
-                  result = need_function("lcs_length")(a, b)
-              expect_number(result, 20, "lcs_length(" + repr(a) + ", " + repr(b) + ")")
+                  result = call_spell("lcs_length", None, a, b)
+              expect_number(result, 11, "lcs_length(" + repr(a) + ", " + repr(b) + ")",
+                            shared_memo_note("lcs_length", "both scrolls"))
         `,
         scene: { icon: "📜", successIcon: "🔗", successText: "The shared letters lift off both scrolls and braid themselves into one true riddle.", effect: "manifest" }
       },
@@ -1407,7 +1442,7 @@
         ],
         task: [
           "Write `best_value(items, capacity)` that **returns** the largest total value you can carry. `items` is a list of `(weight, value)` tuples, and the total weight of the items you take must not be more than `capacity`.",
-          "Each item can be taken **at most once**. Weights and values are positive whole numbers, and `capacity` is a whole number (it may be 0).",
+          "Each item can be taken **at most once**. Weights and values are positive whole numbers, `capacity` is a whole number (it may be 0), and `items` may be empty.",
           { code: py`
             hoard = [(1, 1), (3, 4), (4, 5), (5, 7)]
             print(best_value(hoard, 7))    # take (3, 4) and (4, 5): weight 7, value 9
@@ -1437,13 +1472,14 @@
             print(groups(0, 10))       # 3 + 7, and 3 + 5 + 2
           `, output: "2" },
           "A table works too: let `table[i][room]` be the best value you can get from the first `i` items with that much room. Row 0 (no items yet) is all zeros, and each row is worked out from the row above it. That is what makes sure no item is used twice. For the items `(2, 3)`, `(3, 4)` and `(4, 5)`:",
-          { output: [
-            "room          0  1  2  3  4  5  6",
-            "no items      0  0  0  0  0  0  0",
-            "+ (2, 3)      0  0  3  3  3  3  3",
-            "+ (3, 4)      0  0  3  4  4  7  7",
-            "+ (4, 5)      0  0  3  4  5  7  8"
-          ].join("\n") },
+          { diagram: py`
+            room          0  1  2  3  4  5  6
+            no items      0  0  0  0  0  0  0
+            + (2, 3)      0  0  3  3  3  3  3
+            + (3, 4)      0  0  3  4  4  7  7
+            + (4, 5)      0  0  3  4  5  7  8
+          ` },
+          "Either way there are about len(items) × capacity subproblems, each settled in a moment: O(len(items) · capacity) time, instead of trying all 2³⁰ (over a billion) groups of 30 treasures.",
           { tip: "Is \"best value per weight first\" good enough? No: with room 8 and the items `(5, 10)`, `(4, 7)` and `(4, 7)`, it grabs `(5, 10)` and then nothing else fits, but the two `(4, 7)` items together are worth 14." }
         ],
         starter: py`
@@ -1582,7 +1618,7 @@
           def check_bag(items, capacity, want, note="", when="wrong"):
               result = call_spell("best_value", 2, list(items), capacity)
               expect_number(result, want, "best_value(" + short(items) + ", " + str(capacity) + ")",
-                            shared_memo_note() or note_when(result, want, note, when))
+                            shared_memo_note("best_value", "the items") or note_when(result, want, note, when))
 
 
           @test("The example hoard: room 7 gives 9")
