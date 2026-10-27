@@ -455,6 +455,17 @@ _FUNCTION_NOT_METHOD = {
 }
 
 
+def _innermost_spell_frame(exc):
+    """The innermost frame of the spell's own code in exc's traceback (or None)."""
+    found = None
+    tb = getattr(exc, "__traceback__", None)
+    while tb is not None:
+        if tb.tb_frame.f_code.co_filename == SPELL_FILE:
+            found = tb.tb_frame
+        tb = tb.tb_next
+    return found
+
+
 def explain(exc, line=None, namespace=None):
     """Return a short, beginner-friendly explanation of an exception."""
     where = (" on line " + str(line)) if line else ""
@@ -501,8 +512,26 @@ def explain(exc, line=None, namespace=None):
             kind, example = _METHOD_NAMES[name]
             return (code(name) + " is a " + kind + " method, so it goes after a dot" + where + ": write "
                     + code(example) + " rather than " + code(name + "(...)") + ".")
+        if name == "self":
+            return ("Python doesn't know " + code("self") + where + ". " + code("self") + " only exists inside a "
+                    "method that lists it as its first parameter: write " + code("def __init__(self, name):")
+                    + " (and " + code("def method(self):") + "), and use " + code("self") + " only inside methods.")
         if name:
-            pool = list((namespace or {}).keys()) + dir(builtins) + keyword.kwlist
+            frame = _innermost_spell_frame(exc)
+            obj = None
+            if frame is not None:
+                try:
+                    obj = frame.f_locals.get("self")
+                except Exception:
+                    obj = None
+            try:
+                has_it = obj is not None and hasattr(obj, name)
+            except Exception:
+                has_it = False
+            if has_it:
+                return ("Inside a method, reach the object's attributes and methods through " + code("self") + where
+                        + ": write " + code("self." + name) + " instead of " + code(name) + ".")
+            pool = list((namespace or {}).keys()) + dir(builtins) + ["True", "False", "None"]
             near = _close_name(name, pool)
             if near and near != name:
                 return ("Python doesn't know the name " + code(name) + where + ". Did you mean "
@@ -626,6 +655,9 @@ def _explain_type_error(msg, where):
         text = "The " + code(op) + " operator can't combine " + _a_type(left) + " and " + _a_type(right) + where + "."
         if "NoneType" in (left, right):
             text += " One side is None: did a function forget to " + code("return") + " its result?"
+        elif any(t in ("method", "function", "builtin_function_or_method") for t in (left, right)):
+            text += (" One side is a method or function itself: did you forget the " + code("()") + " that calls it? "
+                     + code("golem.describe") + " is the method; " + code("golem.describe()") + " is its result.")
         elif "str" in (left, right) and ("int" in (left, right) or "float" in (left, right)):
             text += (" Text and numbers don't mix: convert with " + code("int(...)") + " / "
                      + code("float(...)") + " or " + code("str(...)") + " first.")
@@ -647,6 +679,11 @@ def _explain_type_error(msg, where):
     if m:
         return (code(m.group(1) + "()") + " received " + code(m.group(2)) + " twice" + where + ". If "
                 + code(m.group(1)) + " is a method inside a class, make sure its first parameter is " + code("self") + ".")
+    m = re.search(r"(\w+)\(\) takes no arguments", msg)
+    if m:
+        return (code(m.group(1) + "()") + " was given values, but the class has no " + code("__init__")
+                + " to receive them" + where + ". Check the spelling: " + code("def __init__(self, …):")
+                + " has two underscores on each side.")
     m = re.search(r"(\w+)\(\) takes (\d+) positional arguments? but (\d+) (?:were|was) given", msg)
     if m:
         func, takes, given = m.group(1), int(m.group(2)), int(m.group(3))
