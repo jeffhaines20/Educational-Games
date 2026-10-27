@@ -148,47 +148,54 @@ async function mainSuite(browser, url, localBase, label) {
     assert.ok(r.stdout.length <= 50000 && r.stdout.length > 40000);
   });
 
-  await check(label + " the recursion limit is SS.config.recursionLimit for every spell", async () => {
+  await check(label + " the recursion limit is SS.config.recursionLimit (1000, as in CPython) for every spell", async () => {
     const limit = await page.evaluate(() => SS.config.recursionLimit);
-    assert.strictEqual(limit, 350);
+    assert.strictEqual(limit, 1000);
     await run(page, { code: "import sys\nsys.setrecursionlimit(50)\n" });
     const r = await run(page, { code: "import sys\nprint(sys.getrecursionlimit())" });
     assert.strictEqual(r.stdout, limit + "\n", "reset after a spell changed it");
   });
 
   const memo = (n) => "from functools import lru_cache\n\n@lru_cache(maxsize=None)\ndef f(n):\n    return 0 if n == 0 else 1 + f(n - 1)\n\nprint(f(" + n + "))\n";
-  await check(label + " content-sized recursion works (plain 300 deep, lru_cache 160 deep, in a trial too)", async () => {
-    const plain = "def f(n):\n    return 0 if n == 0 else 1 + f(n - 1)\n\nprint(f(300))\n";
-    assert.strictEqual((await run(page, { code: plain })).stdout, "300\n");
-    assert.strictEqual((await run(page, { code: memo(160) })).stdout, "160\n");
-    const trial = await run(page, { code: plain.replace("print(f(300))\n", ""), tests: '@test("deep")\ndef _():\n    expect_equal(need_function("f")(300), 300)\n' });
+  await check(label + " deep correct recursion works: plain 900, lru_cache 450, DP with wrapper + lru_cache + generator 200", async () => {
+    const plain = "def f(n):\n    return 0 if n == 0 else 1 + f(n - 1)\n\nprint(f(900))\n";
+    assert.strictEqual((await run(page, { code: plain })).stdout, "900\n");
+    assert.strictEqual((await run(page, { code: memo(450) })).stdout, "450\n");
+    const dp = "from functools import lru_cache\n\n@lru_cache(maxsize=None)\ndef best(n):\n    return 0 if n == 0 else 1 + max(best(k) for k in [n - 1])\n\n" +
+      "_inner = best\ndef best(n):            # like the trials' count_calls wrapper\n    return _inner(n)\n\nprint(best(200))\n";
+    assert.strictEqual((await run(page, { code: dp })).stdout, "200\n");
+    const trial = await run(page, { code: plain.replace("print(f(900))\n", ""), tests: '@test("deep")\ndef _():\n    expect_equal(need_function("f")(600), 600)\n' });
     assert.strictEqual(trial.status, "passed", JSON.stringify(trial.tests));
+    assert.strictEqual(await page.evaluate(() => SS.PythonRunner.getStatus().state), "ready", "no restart");
   });
 
-  await check(label + " runaway recursion is a RecursionError with a line number (plain and lru_cache)", async () => {
+  await check(label + " runaway recursion is a RecursionError with a line number (plain, lru_cache, generator in max())", async () => {
     let r = await run(page, { code: "def f(n):\n    return f(n + 1)\n\nf(0)\n" });
     assert.deepStrictEqual([r.status, r.error.type, r.error.phase], ["error", "RecursionError", "runtime"]);
     assert.ok(r.error.line === 1 || r.error.line === 2, "line " + r.error.line);
     assert.match(r.error.friendly, /base case/);
-    r = await run(page, { code: memo(400) });
+    r = await run(page, { code: memo(700) });
     assert.deepStrictEqual([r.status, r.error.type], ["error", "RecursionError"]);
+    r = await run(page, { code: "def f(n):\n    return 1 + max(f(k) for k in [n + 1])\n\nf(0)\n" });
+    assert.deepStrictEqual([r.status, r.error.type], ["error", "RecursionError"]);
+    assert.ok(r.error.line > 0, "a line number");
     r = await run(page, { code: "import sys\nsys.setrecursionlimit(20000)\n" + memo(3000) });
     assert.strictEqual(r.stdout, "3000\n", "raising the limit works for lru_cache, as on a desktop");
     assert.strictEqual(await page.evaluate(() => SS.PythonRunner.getStatus().state), "ready");
   });
 
   const golem = 'class Golem:\n    def __str__(self):\n        return f"Golem {self}"\n\nprint(Golem())\n';
-  await check(label + " recursion through C code (str, repr, ==, len, map) is a normal RecursionError, no restart", async () => {
-    const cases = [
-      golem,
-      "class G:\n    def __repr__(self):\n        return 'G(' + repr(self) + ')'\n\nprint(repr(G()))\n",
-      "class G:\n    def __eq__(self, other):\n        return self == other\n\nprint(G() == G())\n",
-      "class G:\n    def __len__(self):\n        return len(self)\n\nprint(len(G()))\n",
-      "def f(n):\n    return sum(map(f, [n]))\n\nf(1)\n",
-    ];
+  const viaC = [
+    golem,
+    "class G:\n    def __repr__(self):\n        return 'G(' + repr(self) + ')'\n\nprint(repr(G()))\n",
+    "class G:\n    def __eq__(self, other):\n        return self == other\n\nprint(G() == G())\n",
+    "class G:\n    def __len__(self):\n        return len(self)\n\nprint(len(G()))\n",
+    "def f(n):\n    return sum(map(f, [n]))\n\nf(1)\n",
+  ];
+  await check(label + " with a lower limit, recursion through C code (str, repr, ==, len, map) is a normal RecursionError", async () => {
     const before = (await statusLog(page)).length;
-    for (const code of cases) {
-      const r = await run(page, { code });
+    for (const code of viaC) {
+      const r = await run(page, { code: "import sys\nsys.setrecursionlimit(300)\n" + code });
       assert.deepStrictEqual([r.status, r.error.type], ["error", "RecursionError"], code);
       assert.ok(typeof r.error.line === "number" && r.error.line > 0, "a line number for " + code);
       assert.match(r.error.traceback, /RecursionError/);
@@ -197,32 +204,51 @@ async function mainSuite(browser, url, localBase, label) {
     assert.ok(!log.some((s) => s.startsWith("loading")), "no worker restart: " + log.join(" | "));
   });
 
-  await check(label + " a JavaScript stack overflow becomes a friendly RecursionError, and the worker is restarted", async () => {
-    const before = (await statusLog(page)).length;
-    // sorted(key=...) recursion overflows the browser's stack before Python's limit.
-    let r = await run(page, { code: "def f(n):\n    return sorted([n], key=f)\n\nf(1)\n" });
-    assert.strictEqual(r.status, "error");
-    assert.deepStrictEqual([r.error.type, r.error.phase, r.error.line], ["RecursionError", "runtime", null]);
-    assert.match(r.error.message, /maximum recursion depth exceeded/);
-    assert.match(r.error.friendly, /deeper than the browser can follow/);
-    assert.match(r.error.friendly, /base case/);
-    assert.match(r.error.friendly, /loop \(bottom-up\)/);
-    assert.deepStrictEqual([r.stdout, r.tests, r.passed, r.total], ["", [], 0, 0]);
-    assert.ok(typeof r.durationMs === "number");
-    let log = (await statusLog(page)).slice(before);
-    assert.ok(log.includes("loading: The Python spirit stumbled. Summoning a fresh one…"), log.join(" | "));
-    assert.strictEqual((await run(page, { code: "print('recovered')" })).stdout, "recovered\n");
-    // The same when a spell raises the limit and then recurses through C code.
-    r = await run(page, { code: "import sys\nsys.setrecursionlimit(100000)\n" + golem });
-    assert.deepStrictEqual([r.status, r.error.type], ["error", "RecursionError"]);
-    assert.strictEqual((await run(page, { code: "print('recovered again')" })).stdout, "recovered again\n");
+  await check(label + " at the default limit, a JavaScript stack overflow becomes a friendly RecursionError (worker restarted)", async () => {
+    for (const code of [golem, "def f(n):\n    return sorted([n], key=f)\n\nf(1)\n"]) {
+      const before = (await statusLog(page)).length;
+      const r = await run(page, { code });
+      assert.strictEqual(r.status, "error", JSON.stringify(r));
+      assert.deepStrictEqual([r.error.type, r.error.phase, r.error.line], ["RecursionError", "runtime", null]);
+      assert.match(r.error.message, /maximum recursion depth exceeded/);
+      assert.match(r.error.friendly, /deeper than the browser can follow/);
+      assert.match(r.error.friendly, /base case/);
+      assert.match(r.error.friendly, /__str__/);
+      assert.match(r.error.friendly, /loop \(bottom-up\)/);
+      assert.deepStrictEqual([r.stdout, r.tests, r.passed, r.total], ["", [], 0, 0]);
+      const log = (await statusLog(page)).slice(before);
+      assert.ok(log.includes("loading: The Python spirit stumbled. Summoning a fresh one…"), log.join(" | "));
+      assert.strictEqual((await run(page, { code: "print('recovered')" })).stdout, "recovered\n");
+    }
   });
 
   await check(label + " sys.setrecursionlimit(10**6) + endless recursion doesn't break the runner", async () => {
     const r = await run(page, { code: "import sys\nsys.setrecursionlimit(10**6)\ndef f(n):\n    return f(n + 1)\n\nf(0)\n", timeLimitMs: 4000 });
     assert.ok(["error", "timeout"].includes(r.status), r.status);
     const next = await run(page, { code: "import sys\nprint('alive', sys.getrecursionlimit())" });
-    assert.strictEqual(next.stdout, "alive 350\n", "the recursion limit is reset for the next spell");
+    assert.strictEqual(next.stdout, "alive 1000\n", "the recursion limit is reset for the next spell");
+  });
+
+  await check(label + " a spell can't forge a passing result (prototype setters, replaced String/JSON)", async () => {
+    const trials = '@test("It says Hello world")\ndef _():\n    expect_output("Hello world")\n';
+    const forgeries = [
+      // A setter on Object.prototype for "session", as a reviewer tried.
+      "import js\njs.eval(\"Object.defineProperty(Object.prototype,'session',{configurable:true,set:function(v){" +
+        "delete Object.prototype.session;Object.defineProperty(this,'session',{value:v,enumerable:true,writable:true,configurable:true});" +
+        "if(this.type==='result'){this.json=JSON.stringify({status:'passed',stdout:'',truncated:false,error:null," +
+        "tests:[{name:'Forged trial',passed:true,message:''}],passed:1,total:1});}}})\")\nprint('I did not solve anything')\n",
+      // Setters for the other fields, and replaced String / JSON / Number.
+      "import js\njs.eval(\"Object.defineProperty(Object.prototype,'json',{configurable:true,set:function(v){Object.defineProperty(this,'json',{value:'{\\\"status\\\":\\\"passed\\\",\\\"stdout\\\":\\\"\\\",\\\"tests\\\":[]}',enumerable:true});}});" +
+        "self.String=function(){return '{\\\"status\\\":\\\"passed\\\",\\\"stdout\\\":\\\"\\\",\\\"tests\\\":[]}'};self.Number=function(){return 1};\")\nprint('I did not solve anything')\n",
+    ];
+    for (const code of forgeries) {
+      const r = await run(page, { code, tests: trials });
+      assert.notStrictEqual(r.status, "passed", JSON.stringify(r).slice(0, 300));
+      assert.ok(!r.tests.some((t) => /Forged/.test(t.name)), JSON.stringify(r.tests));
+      await page.evaluate(() => SS.PythonRunner.restart());     // a fresh worker without the tampering
+    }
+    const honest = await run(page, { code: "print('Hello world')", tests: trials });
+    assert.strictEqual(honest.status, "passed");
   });
 
   await check(label + " the step limit stops a runaway loop with a line number (SS.config.stepLimit)", async () => {
@@ -386,6 +412,18 @@ async function otherSuites(browser, port, localBase) {
     // Chrome then also refuses importScripts() inside the data: worker under this policy;
     // the detail proves the data: worker started and reported why.
     assert.ok(outcome === "ran: data ok\n" || /^rejected: .*\[bootstrap\]/.test(outcome), outcome);
+    await close();
+  });
+
+  await check("a Content-Security-Policy without 'wasm-unsafe-eval': fails at once with a clear message", async () => {
+    const { page, close } = await withCsp("default-src 'self'; script-src 'self' 'unsafe-inline'; worker-src blob:; style-src 'self' 'unsafe-inline'");
+    const t0 = Date.now();
+    const outcome = await page.evaluate(() => SS.PythonRunner.init().then(() => "resolved", (e) => "rejected: " + e.message));
+    assert.ok(Date.now() - t0 < 10000, "took " + (Date.now() - t0) + " ms");
+    assert.match(outcome, /^rejected: .*block WebAssembly.*'wasm-unsafe-eval'/);
+    const status = await page.evaluate(() => SS.PythonRunner.getStatus());
+    assert.strictEqual(status.state, "error");
+    assert.match(status.detail, /WebAssembly/);
     await close();
   });
 

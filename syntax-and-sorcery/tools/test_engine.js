@@ -35,14 +35,17 @@ function makeTimers() {
   return {
     setTimeout(fn, ms) { const id = nextId++; queue.set(id, { fn, at: now + (Number(ms) || 0) }); return id; },
     clearTimeout(id) { queue.delete(id); },
+    /** Move the clock forward, running timers in time order (including ones they schedule). */
     advance(ms) {
-      now += ms;
-      let ran = true;
-      while (ran) {
-        ran = false;
-        const due = [...queue.entries()].filter(([, t]) => t.at <= now).sort((a, b) => a[1].at - b[1].at);
-        for (const [id, t] of due) { queue.delete(id); t.fn(); ran = true; }
+      const target = now + ms;
+      for (;;) {
+        const next = [...queue.entries()].filter(([, t]) => t.at <= target).sort((a, b) => a[1].at - b[1].at || a[0] - b[0])[0];
+        if (!next) break;
+        queue.delete(next[0]);
+        now = Math.max(now, next[1].at);
+        next[1].fn();
       }
+      now = target;
     },
     get pending() { return queue.size; },
   };
@@ -54,8 +57,11 @@ function makeLocalStorage() {
     failWrites: false,
     writes: 0,
     getItem(k) { k = String(k); return data.has(k) ? data.get(k) : null; },
+    failWritesLongerThan: 0,      // like a nearly full storage: only big writes fail
     setItem(k, v) {
-      if (ls.failWrites) { const e = new Error("The quota has been exceeded."); e.name = "QuotaExceededError"; throw e; }
+      if (ls.failWrites || (ls.failWritesLongerThan && String(v).length > ls.failWritesLongerThan)) {
+        const e = new Error("The quota has been exceeded."); e.name = "QuotaExceededError"; throw e;
+      }
       ls.writes++;
       data.set(String(k), String(v));
     },
@@ -68,8 +74,9 @@ function makeLocalStorage() {
   return ls;
 }
 
-function makeScorm12(initial) {
-  const data = Object.assign({
+/** A fake SCORM 1.2 LMS. Pass `shared` (another fake's .data) for a second launch of the same attempt. */
+function makeScorm12(initial, shared) {
+  const data = shared || Object.assign({
     "cmi.core.student_id": "learner-42",
     "cmi.core.student_name": "Doe, Jane",
     "cmi.core.lesson_status": "not attempted",
@@ -1164,6 +1171,247 @@ test("save+scorm: import merges into the LMS profile; blocked storage still save
   assert.strictEqual(merged.wizardName, "LMS Jane");
   assert.deepStrictEqual(Object.keys(merged.challenges).filter((id) => merged.challenges[id].completed).sort(), ["alpha-one", "alpha-two", "beta-one"]);
   assert.strictEqual(api.data["cmi.core.score.raw"], "50");
+});
+
+// ---------------------------------------------------------------------------
+// Two tabs, full storage, LMS connection problems, resets, commits
+// ---------------------------------------------------------------------------
+
+const slot0 = (storage) => JSON.parse(storage.getItem("pyromancer:slot:0"));
+
+test("save: two tabs on one slot merge instead of erasing each other (and stay in step)", async () => {
+  const storage = makeLocalStorage();
+  const A = makeEngine({ storage });
+  await initSave(A);
+  A.SS.Save.createProfile(0, "Tester");
+  const B = makeEngine({ storage });
+  await initSave(B);
+  B.SS.Save.loadProfile(0);                                         // the game opened twice
+  A.SS.Save.recordCompletion("alpha-one", { code: "print('hi')" }); // tab A masters a spell
+  B.SS.Save.loadProfile(0);                                         // tab B: title → Continue
+  assert.strictEqual(B.SS.Save.getRecord("alpha-one").completed, true, "Continue re-reads the slot");
+  B.SS.Save.recordCast("alpha-two", { passed: false });
+  assert.strictEqual(slot0(storage).challenges["alpha-one"].completed, true, "tab B's write kept tab A's completion");
+  assert.strictEqual(slot0(storage).challenges["alpha-two"].casts, 1);
+
+  // A stale tab's next write merges what is stored first.
+  A.SS.Save.revealHint("beta-one");
+  assert.strictEqual(slot0(storage).challenges["alpha-two"].casts, 1);
+  assert.strictEqual(slot0(storage).challenges["beta-one"].hintsUsed, 1);
+
+  // A storage event brings the other tab's changes in at once.
+  const seen = [];
+  B.SS.Save.onChange((p, info) => seen.push(info.type));
+  B.fire("storage", { key: "pyromancer:slot:0", newValue: storage.getItem("pyromancer:slot:0") });
+  assert.deepStrictEqual(seen, ["sync"]);
+  assert.strictEqual(B.SS.Save.getRecord("beta-one").hintsUsed, 1);
+  B.fire("storage", { key: "pyromancer:slot:1", newValue: "{}" });
+  assert.deepStrictEqual(seen, ["sync"], "other keys are ignored");
+
+  // Names, settings and drafts follow the tab that changed them.
+  B.SS.Save.renameWizard("Renamed in B");
+  B.SS.Save.saveDraft("gamma-one", "draft from B");
+  B.SS.Save.flush();
+  A.SS.Save.updateSettings({ sound: false });
+  const merged = slot0(storage);
+  assert.deepStrictEqual([merged.wizardName, merged.settings.sound, merged.challenges["gamma-one"].draft],
+    ["Renamed in B", false, "draft from B"]);
+  assert.strictEqual(A.SS.Save.getProfile().wizardName, "Renamed in B");
+  assert.strictEqual(slot0(storage).challenges["alpha-one"].bestCode, "print('hi')");
+
+  // Another tab starts a new game in the slot: this tab follows it.
+  B.SS.Save.createProfile(0, "New Wizard");
+  A.fire("storage", { key: "pyromancer:slot:0", newValue: storage.getItem("pyromancer:slot:0") });
+  assert.strictEqual(A.SS.Save.getProfile().wizardName, "New Wizard");
+  assert.strictEqual(A.SS.Save.getRecord("alpha-one").completed, false);
+  const identity = A.SS.Save.getProfile();
+  B.SS.Save.recordCast("gamma-two", { passed: true });
+  A.fire("storage", { key: "pyromancer:slot:0", newValue: storage.getItem("pyromancer:slot:0") });
+  assert.strictEqual(A.SS.Save.getProfile(), identity, "the live profile object is updated in place");
+});
+
+test("save+scorm: a stale second tab can't lower the score or drop progress", async () => {
+  const storage = makeLocalStorage();
+  const apiA = makeScorm12();
+  const A = makeEngine({ parent: topWindow({ API: apiA }), storage });
+  await initSave(A);
+  A.SS.Save.createProfile(0, "Jane");
+  const apiB = makeScorm12(null, apiA.data);                        // a second launch of the same attempt
+  const B = makeEngine({ parent: topWindow({ API: apiB }), storage });
+  await initSave(B);
+  for (const id of ["alpha-one", "alpha-two", "beta-one"]) A.SS.Save.recordCompletion(id, { code: "x" });
+  assert.strictEqual(apiA.data["cmi.core.score.raw"], "50");
+  B.SS.Save.flush();                                                // tab B changes screen…
+  B.hide();                                                         // …and is hidden: commits
+  assert.strictEqual(apiA.data["cmi.core.score.raw"], "50", "the score stayed");
+  const back = A.SS.Save._decodeSuspend(apiA.data["cmi.suspend_data"], null);
+  assert.deepStrictEqual(["alpha-one", "alpha-two", "beta-one"].map((id) => back.challenges[id] && back.challenges[id].completed), [true, true, true]);
+  assert.strictEqual(B.SS.Save.getRecord("beta-one").completed, true, "tab B now knows tab A's progress");
+});
+
+test("save: a failed write keeps the 'storage full' warning until it is really saved", async () => {
+  const storage = makeLocalStorage();
+  const e = makeEngine({ storage });
+  await initSave(e);
+  const S = e.SS.Save;
+  S.createProfile(0, "Tester");
+  S.createProfile(1, "Other");
+  S.loadProfile(0);
+  storage.failWritesLongerThan = 8;                // nearly full: tiny writes (lastSlot) still fit
+  S.recordCompletion("alpha-one", { code: "print('hi')" });
+  assert.match(S.storageWarning(), /storage is full/);
+  S.loadProfile(1);                                // writes the tiny lastSlot key successfully
+  S.loadProfile(0);
+  assert.match(S.storageWarning(), /storage is full/, "a tiny successful write doesn't clear the warning");
+  assert.strictEqual(slot0(storage).challenges["alpha-one"], undefined, "the completion is not stored yet");
+  assert.strictEqual(S.getRecord("alpha-one").completed, true, "…but it is kept in memory");
+  storage.failWritesLongerThan = 0;                // space freed
+  S.loadProfile(1);                                // any write retries the failed ones
+  assert.strictEqual(S.storageWarning(), null);
+  assert.strictEqual(slot0(storage).challenges["alpha-one"].completed, true);
+  // Storage already full when the game starts.
+  const full = makeLocalStorage();
+  full.failWrites = true;
+  const e2 = makeEngine({ storage: full });
+  assert.strictEqual((await initSave(e2)).storage, "memory");
+  assert.match(e2.SS.Save.storageWarning(), /storage is full/);
+});
+
+test("save+scorm: a SCORM package without an LMS retries, then warns (and logs why)", async () => {
+  // No LMS at all.
+  let e = makeEngine({ config: { scormRequired: true } });
+  let result = null;
+  e.SS.Save.init().then((r) => { result = r; });
+  await new Promise((r) => setImmediate(r));
+  assert.strictEqual(result, null, "still trying");
+  e.timers.advance(5000);
+  await new Promise((r) => setImmediate(r));
+  assert.deepStrictEqual([result.scorm, result.scormMissing], [false, true]);
+  assert.match(e.SS.Save.storageWarning(), /couldn't connect to your course, so your progress and score aren't being recorded/);
+  assert.ok(e.logs.some((l) => /no SCORM API/.test(l)), e.logs.join("\n"));
+  assert.strictEqual(e.SS.Save.createProfile(0, "Local").wizardName, "Local", "the game still works");
+
+  // The LMS refuses to initialise: its own error code, text and diagnostic are logged.
+  const refusing = makeScorm12();
+  refusing.LMSInitialize = () => "false";
+  refusing.LMSGetValue = () => "";
+  refusing.LMSGetLastError = () => "101";
+  refusing.LMSGetErrorString = (c) => (c === "101" ? "General exception" : "");
+  refusing.LMSGetDiagnostic = () => "the session has already been finished";
+  e = makeEngine({ parent: topWindow({ API: refusing }), config: { scormRequired: true } });
+  const p = e.SS.Save.init();
+  e.timers.advance(5000);
+  result = await p;
+  assert.strictEqual(result.scormMissing, true);
+  assert.ok(e.logs.some((l) => /LMSInitialize failed: error 101 \(General exception\) — the session has already been finished/.test(l)), e.logs.join("\n"));
+
+  // The LMS's API appears a moment later: the retry connects.
+  const lms = topWindow({});
+  e = makeEngine({ parent: lms, config: { scormRequired: true } });
+  const late = e.SS.Save.init();
+  lms.API = makeScorm12();
+  e.timers.advance(300);
+  result = await late;
+  assert.deepStrictEqual([result.scorm, result.scormMissing, result.learnerName], [true, false, "Jane Doe"]);
+  assert.strictEqual(e.SS.Save.storageWarning(), null);
+
+  // Not a SCORM package: no retries, no warning.
+  e = makeEngine();
+  result = await e.SS.Save.init();
+  assert.deepStrictEqual([result.scorm, result.scormMissing], [false, false]);
+  assert.strictEqual(e.SS.Save.storageWarning(), null);
+});
+
+test("save+scorm: a fresh attempt (or an instructor reset) keeps only name, settings and code", async () => {
+  const storage = makeLocalStorage();
+  let api = makeScorm12();
+  let e = makeEngine({ parent: topWindow({ API: api }), storage });
+  await initSave(e);
+  e.SS.Save.createProfile(0, "Jane");
+  e.SS.Save.revealHint("alpha-one");
+  e.SS.Save.recordCompletion("alpha-one", { code: "my solution" });
+  e.SS.Save.saveDraft("alpha-two", "my draft");
+  e.SS.Save.updateSettings({ editorFontSize: 20 });
+  e.SS.Save.markSeen("prologue");
+  e.fire("pagehide", { persisted: false });
+
+  // A normal relaunch resumes everything.
+  let again = makeEngine({ parent: topWindow({ API: makeScorm12({ "cmi.suspend_data": api.data["cmi.suspend_data"], "cmi.core.lesson_status": "incomplete" }) }), storage });
+  await initSave(again);
+  assert.strictEqual(again.SS.Save.getRecord("alpha-one").completed, true);
+
+  // The LMS lost its suspend_data but the attempt goes on: the local copy is kept in full.
+  again = makeEngine({ parent: topWindow({ API: makeScorm12({ "cmi.core.lesson_status": "incomplete" }) }), storage });
+  await initSave(again);
+  assert.strictEqual(again.SS.Save.getRecord("alpha-one").completed, true);
+
+  // The instructor resets the attempt: the LMS forgets everything.
+  api = makeScorm12();
+  e = makeEngine({ parent: topWindow({ API: api }), storage });
+  await initSave(e);
+  const p = e.SS.Save.getProfile();
+  assert.deepStrictEqual([p.wizardName, p.settings.editorFontSize], ["Jane", 20]);
+  assert.deepStrictEqual(plain(p.challenges["alpha-one"]), Object.assign(plain(e.SS.Save.getRecord("nothing-here")), { bestCode: "my solution" }));
+  assert.strictEqual(p.challenges["alpha-two"].draft, "my draft");
+  assert.strictEqual(e.SS.Save.hasSeen("prologue"), false);
+  assert.strictEqual(api.data["cmi.core.score.raw"], undefined, "no score is sent for the new attempt");
+  assert.strictEqual(e.SS.Progress.overallStats(p).completed, 0);
+  assert.strictEqual(JSON.parse(storage.getItem("pyromancer:scorm:learner-42")).challenges["alpha-one"].completed, false,
+    "the old progress can't come back on a later launch");
+
+  // SCORM 2004: entry "ab-initio" means a new attempt.
+  const api04 = makeScorm2004({ "cmi.entry": "ab-initio", "cmi.learner_id": "learner-42" });
+  e = makeEngine({ parent: topWindow({ API_1484_11: api04 }), storage });
+  await initSave(e);
+  assert.strictEqual(e.SS.Scorm.isFreshAttempt(), true);
+  assert.strictEqual(e.SS.Save.getRecord("alpha-one").completed, false);
+});
+
+test("save+scorm: commits only when something changed, at most once a minute (but at once when it matters)", async () => {
+  const api = makeScorm12();
+  const e = makeEngine({ parent: topWindow({ API: api }) });
+  await initSave(e);
+  const S = e.SS.Save;
+  S.createProfile(0, "Jane");
+  assert.strictEqual(api.data["cmi.core.score.raw"], undefined, "no score before there is progress");
+  const commits = () => api.count("commit");
+  const sets = () => api.calls.filter((c) => c.startsWith("set ")).length;
+  let c0 = commits();
+  for (let i = 0; i < 10; i++) { S.recordCast("alpha-one", { passed: false }); S.flush(); }
+  assert.ok(commits() - c0 <= 1, "10 casts and screen changes: " + (commits() - c0) + " commits");
+  e.timers.advance(60000);
+  assert.ok(commits() - c0 >= 1 && commits() - c0 <= 2, "the minute's changes were committed");
+  c0 = commits();
+  let s0 = sets();
+  S.flush();
+  S.flush();
+  e.timers.advance(120000);
+  assert.deepStrictEqual([commits(), sets()], [c0, s0], "nothing changed: nothing sent, nothing committed");
+  S.recordCompletion("alpha-one", {});
+  assert.strictEqual(commits(), c0 + 1, "a completion commits at once");
+  assert.strictEqual(api.data["cmi.core.score.raw"], "17");
+  S.revealHint("alpha-two");
+  e.hide();
+  assert.strictEqual(commits(), c0 + 2, "hiding the page commits at once");
+  s0 = sets();
+  e.hide();
+  assert.deepStrictEqual([commits(), sets()], [c0 + 2, s0]);
+  e.fire("pagehide", { persisted: false });
+  assert.strictEqual(api.count("finish"), 1);
+  assert.match(api.data["cmi.core.session_time"], /^\d{2}:\d{2}:\d{2}\.\d{2}$/);
+  assert.strictEqual(api.data["cmi.core.exit"], "suspend");
+});
+
+test("scorm: 2004 success_status is 'passed' at the completion threshold, not before", () => {
+  const api = makeScorm2004();
+  const { SS } = makeEngine({ parent: topWindow({ API_1484_11: api }) });
+  SS.Scorm.connect();
+  SS.Scorm.reportProgress({ completed: 0, total: 4 });
+  assert.strictEqual(api.data["cmi.score.raw"], undefined, "nothing to report yet");
+  SS.Scorm.reportProgress({ completed: 3, total: 4 });
+  assert.deepStrictEqual([api.data["cmi.completion_status"], api.data["cmi.success_status"], api.data["cmi.score.raw"]], ["incomplete", undefined, "75"]);
+  SS.Scorm.reportProgress({ completed: 4, total: 4 });
+  assert.deepStrictEqual([api.data["cmi.completion_status"], api.data["cmi.success_status"], api.data["cmi.score.scaled"]], ["completed", "passed", "1"]);
 });
 
 // ---------------------------------------------------------------------------

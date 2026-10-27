@@ -100,7 +100,7 @@
     var heading = h("h1", { class: "title-h1" }, u.GAME_NAME);
     var el = h("section", { class: "title-screen" },
       warn ? h("div", { class: "title-warning" }, warn) : null,
-      h("div", { class: "title-canvas" },
+      h("div", { class: "title-stage" }, h("div", { class: "title-canvas" },
         h("img", {
           class: "title-img",
           src: "assets/pyromancer-title.webp",
@@ -122,7 +122,7 @@
           h("footer", { class: "title-footer" },
             h("span", { class: "title-version" }, u.GAME_NAME + (conf.version ? " " + conf.version : "")),
             h("button", { type: "button", class: "link-btn", on: { click: aboutDialog } }, "About"),
-            soundToggle()))));
+            soundToggle())))));
 
     return {
       el: el,

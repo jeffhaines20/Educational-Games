@@ -1,5 +1,5 @@
 /*
- * Syntax & Sorcery — SS.PythonRunner: real Python (Pyodide) in a Web Worker.
+ * Pyromancer — SS.PythonRunner: real Python (Pyodide) in a Web Worker.
  *
  *   SS.PythonRunner.init()        → Promise<void>  start loading (idempotent; retries after "error")
  *   SS.PythonRunner.isReady()     → boolean        Python is loaded (state "ready" or "busy")
@@ -27,6 +27,11 @@
  *   * Messages from the worker are untrusted (a spell can `import js` and post
  *     messages): only messages carrying this worker's secret session token are
  *     considered, and results are validated and normalised before use.
+ *   * Trial results are advisory, not proof: the spell runs in the same Python (and the
+ *     same worker) as its trials, so a determined player could make them pass. The
+ *     checks above stop accidents and junk; the game itself runs on the player's machine.
+ *   * A Content-Security-Policy that forbids WebAssembly ('wasm-unsafe-eval') is detected
+ *     at once and reported as status "error".
  */
 (function (global) {
   "use strict";
@@ -137,8 +142,14 @@
   function workerMain(session) {
     "use strict";
     var scope = self;
-    // Captured now, so a spell that replaces js.postMessage cannot intercept results.
+    // Captured now, before any spell runs: a spell can `import js` and replace globals
+    // (postMessage, String, JSON...) or define setters on Object.prototype. Every message
+    // is an object literal with the session inside, which never calls such setters.
     var post = scope.postMessage.bind(scope);
+    var toStr = String;
+    var toNum = Number;
+    var parseJSON = JSON.parse.bind(JSON);
+    var stringify = JSON.stringify.bind(JSON);
     var clock = scope.performance && typeof scope.performance.now === "function"
       ? scope.performance.now.bind(scope.performance)
       : Date.now;
@@ -146,34 +157,46 @@
     var initialised = false;
 
     function send(message) {
-      message.session = session;
       try { post(message); } catch (e) { /* never let a send failure escape */ }
     }
 
     function describe(error) {
-      if (!error) return "unknown error";
       try {
-        return String(error.message || error).slice(0, 2000);
+        var text = toStr(error && error.message ? error.message : error);
+        return text.length > 2000 ? text.substring(0, 2000) : text;
       } catch (e) {
         return "unknown error";
       }
     }
 
+    function failed(stage, text) {
+      send({ type: "init-failed", session: session, stage: stage, message: text });
+    }
+
     function init(message) {
       if (initialised) return;
       initialised = true;
-      var base = String(message.base || "");
+      var base = toStr(message.base || "");
+      // A Content-Security-Policy without 'wasm-unsafe-eval' forbids compiling WebAssembly:
+      // find out at once (an 8-byte empty module) instead of waiting for Pyodide to give up.
+      try {
+        if (typeof WebAssembly !== "object" || !WebAssembly) throw new Error("WebAssembly is not available in this browser");
+        new WebAssembly.Module(new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0]));
+      } catch (e) {
+        failed("wasm", describe(e));
+        return;
+      }
       try {
         scope.importScripts(base + "pyodide.js");
       } catch (e) {
-        send({ type: "init-failed", stage: "bootstrap", message: describe(e) });
+        failed("bootstrap", describe(e));
         return;
       }
       if (typeof scope.loadPyodide !== "function") {
-        send({ type: "init-failed", stage: "bootstrap", message: "pyodide.js did not define loadPyodide()" });
+        failed("bootstrap", "pyodide.js did not define loadPyodide()");
         return;
       }
-      send({ type: "bootstrapped" });
+      send({ type: "bootstrapped", session: session });
       var loading;
       try {
         loading = scope.loadPyodide({
@@ -183,55 +206,55 @@
           stdin: function () { return null; }
         });
       } catch (e) {
-        send({ type: "init-failed", stage: "load", message: describe(e) });
+        failed("load", describe(e));
         return;
       }
       Promise.resolve(loading).then(function (pyodide) {
         var version = "";
         try {
-          version = String(pyodide.version || "");
+          version = toStr(pyodide.version || "");
           try { pyodide.FS.mkdirTree("/home/pyodide"); } catch (e) { /* already exists */ }
-          pyodide.FS.writeFile("/home/pyodide/spellcheck.py", String(message.harness || ""), { encoding: "utf8" });
+          pyodide.FS.writeFile("/home/pyodide/spellcheck.py", toStr(message.harness || ""), { encoding: "utf8" });
           var namespace = pyodide.globals.get("dict")();
-          pyodide.runPython(String(message.setup || ""), { globals: namespace });
+          pyodide.runPython(toStr(message.setup || ""), { globals: namespace });
           runSpell = namespace.get("_ss_run");
-          var check = JSON.parse(runSpell(String(message.selfTestCode), String(message.selfTestTrials), "[]", 10000));
+          var check = parseJSON(runSpell(toStr(message.selfTestCode), toStr(message.selfTestTrials), "[]", 10000));
           if (!check || check.status !== "passed") {
-            throw new Error("the harness self-test did not pass: " + JSON.stringify(check).slice(0, 1500));
+            throw new Error("the harness self-test did not pass: " + stringify(check).substring(0, 1500));
           }
         } catch (e) {
           runSpell = null;
-          send({ type: "init-failed", stage: "setup", message: describe(e) });
+          failed("setup", describe(e));
           return;
         }
-        send({ type: "ready", version: version });
+        send({ type: "ready", session: session, version: version });
       }, function (e) {
-        send({ type: "init-failed", stage: "load", message: describe(e) });
+        failed("load", describe(e));
       });
     }
 
     function run(message) {
       var id = message.id;
       if (!runSpell) {
-        send({ type: "fatal", id: id, message: "Python is not loaded in this worker" });
+        send({ type: "fatal", session: session, id: id, message: "Python is not loaded in this worker" });
         return;
       }
-      send({ type: "started", id: id });
+      send({ type: "started", session: session, id: id });
       var t0 = clock();
       var json;
       try {
-        json = runSpell(String(message.code), String(message.tests), String(message.inputsJson),
-          Number(message.outputLimit) || 50000,
+        json = runSpell(toStr(message.code), toStr(message.tests), toStr(message.inputsJson),
+          toNum(message.outputLimit) || 50000,
           typeof message.stepLimit === "number" ? message.stepLimit : null,
           typeof message.recursionLimit === "number" ? message.recursionLimit : null);
       } catch (e) {
         // The harness catches every Python exception, so anything that lands here means
         // the interpreter itself is broken (e.g. a fatal stack overflow).
         runSpell = null;
-        send({ type: "fatal", id: id, message: describe(e) });
+        send({ type: "fatal", session: session, id: id, message: describe(e) });
         return;
       }
-      send({ type: "result", id: id, json: String(json), durationMs: clock() - t0 });
+      send({ type: "result", session: session, id: id, json: toStr(json), durationMs: clock() - t0 });
     }
 
     scope.addEventListener("message", function (event) {
@@ -240,7 +263,7 @@
       if (message.type === "init") init(message);
       else if (message.type === "run") run(message);
     });
-    send({ type: "hello" });
+    send({ type: "hello", session: session });
   }
   /* eslint-enable no-undef */
 
@@ -263,7 +286,10 @@
     noHarness: "The spell checker is missing (js/engine/harness.js did not load), so spells can't be cast. " +
       "Please tell your instructor.",
     badHarness: "The spell checker failed to start, so spells can't be cast. This is a bug in the game, " +
-      "not in your spell. Please tell your instructor."
+      "not in your spell. Please tell your instructor.",
+    noWasm: "This page's security settings block WebAssembly, which Python needs, so spells can't be cast " +
+      "here. Ask the site's administrator to allow 'wasm-unsafe-eval' in the Content-Security-Policy, or open " +
+      "the game somewhere else."
   };
 
   function unreachableMessage(urls) {
@@ -424,7 +450,7 @@
   // ---------------------------------------------------------------------------
 
   var DEFAULT_STEP_LIMIT = 2000000;
-  var DEFAULT_RECURSION_LIMIT = 350;
+  var DEFAULT_RECURSION_LIMIT = 1000;
   var HELLO_TIMEOUT_MS = 15000;      // the worker script must start within this
   var BOOTSTRAP_TIMEOUT_MS = 30000;  // pyodide.js (18 KB) must arrive within this
   var START_TIMEOUT_MS = 15000;      // a posted run must report "started" within this
@@ -699,6 +725,10 @@
         return;
       case "init-failed":
         if (attempt.ready) return;
+        if (data.stage === "wasm") {           // the page's policy: no other base URL can help
+          failAll(MSG.noWasm, "WebAssembly can't be compiled here: " + (str(data.message, 2000) || "blocked"));
+          return;
+        }
         if (data.stage === "setup") attempt.phase = "setup";
         attempt.giveUp(str(data.message, 2000) || "loading failed");
         return;

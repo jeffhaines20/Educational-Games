@@ -1,7 +1,7 @@
 /*
  * Chapter 6 — The Labyrinth of Echoes (medium → hard)
  * Concepts: recursion on nested data, stacks, queues (collections.deque), hash maps,
- * linked lists, binary search, merge sort, DFS / flood fill, BFS, Big-O intuition.
+ * binary search, linked lists, merge sort, DFS / flood fill, BFS, Big-O intuition.
  *
  * Trial notes for maintainers:
  *  - Trials use the harness's step_limit() with challenge-specific advice (most of them
@@ -39,14 +39,14 @@
     title: "The Labyrinth of Echoes",
     subtitle: "Find the way — and find it fast",
     icon: "🌀",
-    concepts: ["recursion", "stacks", "queues", "hash maps", "linked lists", "binary search", "merge sort", "DFS & BFS", "Big-O"],
+    concepts: ["recursion", "stacks", "queues", "hash maps", "binary search", "linked lists", "merge sort", "DFS & BFS", "Big-O"],
     intro: [
       "The spiral stairs beneath the Golem Workshop wind down and down, until your lantern lights a maze of tunnels that seems to go on forever. This is the **Labyrinth of Echoes**: every footstep comes back to you twice, and somewhere ahead, Glitch's giggle bounces from wall to wall.",
       "Archmage Ada raises her staff. \"Down here, brute force gets you lost. The Labyrinth rewards wizards who *organise* their magic: stacks, queues, chains and maps — and algorithms that find the way without trying every path.\"",
       "\"So count your steps, apprentice. In the Labyrinth, *how fast* a spell's work grows as the maze grows — its **Big-O** — matters as much as whether it works at all.\""
     ],
     outro: [
-      "The last corridor opens and the echoes fall silent. You have flattened nested echoes, checked seals with a stack, kept a fair queue, spotted twins with a dictionary, forged and reversed a chain, halved a hall of doors, mended a mirror with merge sort, and searched the caverns depth-first and the maze breadth-first.",
+      "The last corridor opens and the echoes fall silent. Stacks, queues, chains, searches and sorts: the Labyrinth has taught you to organise your magic.",
       "At the Labyrinth's deepest exit you finally corner Glitch — who squeaks, spins, and dives straight through a great door carved with seven serpent heads. A rumble. A roar. Then two more roars…",
       "Glitch tumbles back out, ears flat. \"I only poked it a *little*!\" Behind the door, the **Hydra of Overlapping Subproblems** is waking. Ada grips her staff. \"Cut off one head and two grow back — unless you *remember* every head you have already faced. Come, apprentice. To the Hydra's Lair.\""
     ],
@@ -558,7 +558,7 @@
               return rested
         `,
         hints: [
-          "Copy the spirits into a deque first: `line = deque(spirits)`. The original list stays untouched, and taking from the front of a deque is cheap.",
+          "Each turn: take the front spirit, give it one blessing, then record its name or send it to the back. Repeat while anyone is in line.",
           "Loop `while line:`. Take the front spirit with `popleft()` and unpack it into `name, needed`. If it only needed 1 blessing, add `name` to your result list; otherwise `append` the spirit to the back, needing one blessing fewer.",
           "Inside the loop: `name, needed = line.popleft()`, then `if needed == 1: rested.append(name)`, else `line.append((name, needed - 1))`. After the loop, `return rested`."
         ],
@@ -686,7 +686,9 @@
               return order
 
           def _why(spirits, result, expected):
-              """Point at the likely mistake behind a wrong order ('' if there is no clear pattern)."""
+              """Point at the likely mistake behind a wrong answer ('' if there is no clear pattern)."""
+              if any(isinstance(item, (tuple, list)) for item in result):
+                  return " Return just each spirit's name, not its (name, needed) pair."
               if result == [name for name, needed in spirits]:
                   return (" Your spirits went to rest in the order they queued, as if each one got all its blessings at once. "
                           + "Give the spirit at the front just ONE blessing, then send it to the BACK of the line ("
@@ -714,8 +716,8 @@
                   return result
               extra = _why(spirits, result, expected) or ((" " + note) if note else "")
               if len(result) != len(expected):
-                  fail(call + " should return " + str(len(expected)) + " names, but your list has " + str(len(result)) + "."
-                       + extra)
+                  fail(call + " should return " + str(len(expected)) + (" name" if len(expected) == 1 else " names")
+                       + ", but your list has " + str(len(result)) + "." + extra)
               if len(expected) <= 10:
                   fail(call + " should return " + short(expected) + ", but it returned " + short(result) + "." + extra)
               k = 0
@@ -755,7 +757,7 @@
 
 
           @test("A line of 3,000 spirits, and the list you were given is unchanged")
-          @_budget(600000, _ADVICE)
+          @_budget(250000, _ADVICE)
           def _():
               _check([("spirit" + str(k), 1 + (k * 7) % 5) for k in range(3000)], label=code("rest_order(line_of_3000_spirits)"))
 
@@ -1053,7 +1055,7 @@
 
 
           @test("One pass: a row of 3,000 runes is read only a few thousand times")
-          @_budget(300000, _ADVICE)
+          @_budget(150000, _ADVICE)
           def _():
               find_twins = need_function("find_twins", 2)
               size = 3000
@@ -1068,7 +1070,290 @@
       },
 
       // ------------------------------------------------------------------
-      // 5. Linked list
+      // 5. Binary search
+      // ------------------------------------------------------------------
+      {
+        id: "labyrinth-hall-of-doors",
+        title: "The Hall of Endless Doors",
+        difficulty: "medium",
+        concepts: ["binary search", "O(log n)", "sorted data"],
+        story: [
+          "The next hall is lined with a hundred thousand doors, each carved with a rune number, in perfect increasing order. Glitch is hiding behind one of them.",
+          "\"Every door we open wakes an echo,\" Ada whispers, \"and a hundred thousand echoes would wake the whole Labyrinth. So open the *middle* door: then you'll know which half he's in. Then do it again.\""
+        ],
+        task: [
+          "Write `find_door(doors, rune)`. `doors` is a list of whole numbers sorted from smallest to largest, with no repeats. **Return** the position of `rune` in `doors`, or `-1` if it isn't there.",
+          { code: py`
+            doors = [2, 5, 8, 12, 16, 23, 38, 56, 72, 91]
+            find_door(doors, 23)   # → 5
+            find_door(doors, 2)    # → 0
+            find_door(doors, 40)   # → -1
+          ` },
+          "Use **binary search**, and write the halving yourself (no `bisect` module). One trial hands your spell an enchanted corridor of 100,000 doors that counts every door you read: `len(doors)` and `doors[i]` work as usual, but each search may read at most **72** doors."
+        ],
+        lesson: [
+          "Checking items one by one — a *linear search* — can take as many looks as there are items: O(n). But when the items are **sorted**, you can do far better. Look at the middle item. If it's too small, everything to its left is too small as well, so throw that whole half away; if it's too big, throw away the right half. Every look halves what is left:",
+          { diagram: py`
+            doors left: 100,000 → 50,000 → 25,000
+                     → 12,500 → 6,250 → … → 2 → 1
+            about 17 looks, because 2 ** 17 = 131,072
+          ` },
+          "Halving n down to 1 takes about log₂ n steps, so binary search is **O(log n)**: a million doors need about 20 looks, and a billion only 30. The same idea wins the number-guessing game:",
+          { code: py`
+            secret = 73
+            low, high = 1, 100    # it's in low..high
+            guesses = 0
+            while True:
+                guess = (low + high) // 2    # the middle
+                guesses += 1
+                if guess == secret:
+                    break
+                elif guess < secret:
+                    low = guess + 1    # too small: go higher
+                else:
+                    high = guess - 1   # too big: go lower
+            print("Found", secret, "in", guesses, "guesses")
+          `, output: "Found 73 in 6 guesses" },
+          "In a list, `low` and `high` are *positions*, and the middle door is `doors[mid]`. Two details trip up every wizard: use `//` so that `mid` is a whole number, and always move `low` or `high` *past* `mid` (`mid + 1` or `mid - 1`), or the search can get stuck forever.",
+          { warning: "Don't slice (`doors[mid:]`): a slice copies — and so reads — every door in it. Keep the two positions instead." }
+        ],
+        starter: py`
+          def find_door(doors, rune):
+              """Return the position of rune in the sorted list doors, or -1."""
+              low = 0
+              high = len(doors) - 1
+              # While part of the hall is still left to search, open the middle
+              # door and throw away the half that can't hold the rune.
+
+              return -1
+        `,
+        hints: [
+          "Keep two positions, `low = 0` and `high = len(doors) - 1`. If the rune is anywhere, it's between them. Each step, open the door in the middle and move one of the two positions.",
+          "Loop `while low <= high:` and pick `mid = (low + high) // 2`. If `doors[mid] == rune`, return `mid`. If that door is too small, the rune must be to the right; if too big, to the left. If the loop ends, nothing is left to search: return `-1`.",
+          "Too small: `low = mid + 1`. Too big: `high = mid - 1`. Moving past `mid` guarantees the search shrinks every time, so the loop always ends."
+        ],
+        solution: py`
+          def find_door(doors, rune):
+              """Return the position of rune in the sorted list doors, or -1."""
+              low, high = 0, len(doors) - 1      # the rune can only be between low and high
+              while low <= high:
+                  mid = (low + high) // 2
+                  door = doors[mid]              # open the middle door (one read)
+                  if door == rune:
+                      return mid
+                  if door < rune:
+                      low = mid + 1              # too small: the rune is to the right
+                  else:
+                      high = mid - 1             # too big: the rune is to the left
+              return -1                          # low passed high: nowhere left to look
+        `,
+        altSolutions: [
+          py`
+            def find_door(doors, rune, low=0, high=None):
+                # Recursive: search doors[low..high].
+                if high is None:
+                    high = len(doors) - 1
+                if low > high:
+                    return -1
+                mid = (low + high) // 2
+                if doors[mid] == rune:
+                    return mid
+                if doors[mid] < rune:
+                    return find_door(doors, rune, mid + 1, high)
+                return find_door(doors, rune, low, mid - 1)
+          `,
+          py`
+            def find_door(doors, rune):
+                # Half-open range [low, high): find the first door >= rune.
+                low, high = 0, len(doors)
+                while low < high:
+                    mid = (low + high) // 2
+                    if doors[mid] < rune:
+                        low = mid + 1
+                    else:
+                        high = mid
+                if low < len(doors) and doors[low] == rune:
+                    return low
+                return -1
+          `
+        ],
+        wrongSolutions: [
+          py`
+            def find_door(doors, rune):
+                # Linear search: right answers, but it opens door after door.
+                for position, door in enumerate(doors):
+                    if door == rune:
+                        return position
+                return -1
+          `,
+          py`
+            def find_door(doors, rune):
+                if rune in doors:
+                    return doors.index(rune)
+                return -1
+          `,
+          py`
+            def find_door(doors, rune):
+                low, high = 0, len(doors) - 1
+                while low < high:            # stops one door too early
+                    mid = (low + high) // 2
+                    if doors[mid] == rune:
+                        return mid
+                    elif doors[mid] < rune:
+                        low = mid + 1
+                    else:
+                        high = mid - 1
+                return -1
+          `
+        ],
+        tests: STEP_BUDGET + py`
+          import ast as _ast
+
+          _ADVICE = ("Every step must shrink the search: move " + code("low") + " past " + code("mid") + " or " + code("high")
+                     + " below it, and stop once " + code("low > high") + ".")
+          _SLICE_NOTE = (" Slicing, like " + code("doors[mid:]") + ", copies (and so opens) every door in the slice: keep "
+                         + code("low") + " and " + code("high") + " positions instead.")
+
+          class _Corridor(list):
+              """Sorted doors that count every door the spell reads (opens)."""
+
+              def __init__(self, runes, limit, message):
+                  list.__init__(self, runes)
+                  self.opened = 0
+                  self.limit = limit
+                  self.message = message
+                  self.sliced = False
+
+              def _open(self, amount):
+                  self.opened += amount
+                  if self.opened > self.limit:
+                      fail(self.message + (_SLICE_NOTE if self.sliced else ""))
+
+              def __getitem__(self, index):
+                  size = list.__len__(self)
+                  if isinstance(index, slice):
+                      part = list.__getitem__(self, index)
+                      self.sliced = True
+                      self._open(len(part))
+                      return part
+                  if not isinstance(index, int):
+                      fail("Door positions must be whole numbers, but your spell asked for door " + short(index) + ". Use "
+                           + code("//") + " to find the middle, like " + code("(low + high) // 2") + ".")
+                  if not -size <= index < size:
+                      if size == 0:
+                          fail("Your spell tried to open door " + str(index) + ", but this hall has no doors at all.")
+                      fail("Your spell tried to open door " + str(index) + ", but the doors are numbered 0 to " + str(size - 1)
+                           + ". Check where " + code("low") + " and " + code("high") + " start, and your loop condition.")
+                  self._open(1)
+                  return list.__getitem__(self, index)
+
+              def __iter__(self):
+                  for position in range(list.__len__(self)):
+                      self._open(1)
+                      yield list.__getitem__(self, position)
+
+              def __reversed__(self):
+                  for position in range(list.__len__(self) - 1, -1, -1):
+                      self._open(1)
+                      yield list.__getitem__(self, position)
+
+              def __contains__(self, rune):
+                  self._open(list.__len__(self))
+                  return list.__contains__(self, rune)
+
+              def index(self, *args):
+                  self._open(list.__len__(self))
+                  return list.index(self, *args)
+
+              def count(self, rune):
+                  self._open(list.__len__(self))
+                  return list.count(self, rune)
+
+              def copy(self):
+                  self._open(list.__len__(self))
+                  return list(list.__iter__(self))
+
+
+          def _check(doors, rune, expected, strict=False):
+              find_door = need_function("find_door", 2)
+              size = len(doors)
+              if strict:
+                  limit = 4 * (size.bit_length() + 1)
+                  message = ("To look for " + str(rune) + " among " + format(size, ",") + " doors, your spell opened more than "
+                             + str(limit) + " of them. Binary search needs only about " + str(size.bit_length()) + ": open the "
+                             + "middle door, then throw away the half that can't hold the rune. (Loops over the doors, " + code("in")
+                             + ", " + code(".index()") + " and " + code("list(doors)") + " all open the doors one by one.)")
+                  call = code("find_door(hall_of_" + str(size) + "_doors, " + str(rune) + ")")
+              else:
+                  limit = 4 * size + 100
+                  message = ("Your spell opened more than " + str(limit) + " doors in a hall of only " + str(size) + ": it seems "
+                             + "to be going round in circles. " + _ADVICE)
+                  call = code("find_door(" + short(doors, 70) + ", " + str(rune) + ")")
+              hall = _Corridor(doors, limit, message)
+              result = find_door(hall, rune)
+              expect(hall.opened <= hall.limit, message)
+              if result is None:
+                  fail(call + " returned None. Return the door's position, or -1 if the rune isn't there.")
+              if result != expected:
+                  why = (" (" + str(rune) + " isn't behind any door.)") if expected == -1 else ""
+                  fail(call + " should return " + str(expected) + ", but it returned " + short(result) + "." + why)
+
+
+          @test("find_door([2, 5, 8, 12, 16, 23, 38, 56, 72, 91], 23) is 5")
+          @_budget(20000, _ADVICE)
+          def _():
+              doors = [2, 5, 8, 12, 16, 23, 38, 56, 72, 91]
+              for rune, expected in ((23, 5), (2, 0), (91, 9), (38, 6)):
+                  _check(doors, rune, expected)
+
+
+          @test("Every door can be found, in halls of 1 to 12 doors")
+          @_budget(20000, _ADVICE)
+          def _():
+              for size in range(1, 13):
+                  doors = [3 * k + 1 for k in range(size)]
+                  for position, rune in enumerate(doors):
+                      _check(doors, rune, position)
+
+
+          @test("Missing runes give -1, even in an empty hall")
+          @_budget(20000, _ADVICE)
+          def _():
+              _check([], 5, -1)
+              _check([7], 3, -1)
+              _check([7], 9, -1)
+              for rune in (5, 15, 35, 45, 55):
+                  _check([10, 20, 30, 40, 50], rune, -1)
+
+
+          @test("A hall of 100,000 doors: each search opens at most 72 of them")
+          @_budget(20000, _ADVICE)
+          def _():
+              doors = [7 * k + 3 for k in range(100000)]
+              for position in (0, 99999, 50000, 12345, 99998, 1, 77777):
+                  _check(doors, doors[position], position, strict=True)
+              for rune in (2, doors[-1] + 4, doors[777] + 1, doors[66666] - 3):
+                  _check(doors, rune, -1, strict=True)
+
+
+          @test("You wrote the halving yourself (no bisect module)")
+          def _():
+              for node in _ast.walk(_ast.parse(source)):
+                  names = []
+                  if isinstance(node, _ast.Import):
+                      names = [alias.name for alias in node.names]
+                  elif isinstance(node, _ast.ImportFrom):
+                      names = [node.module or ""]
+                  if any(name.split(".")[0] == "bisect" for name in names):
+                      fail("Well spotted: Python's " + code("bisect") + " module does binary search for you! But this trial "
+                           + "wants to see you halve the hall yourself, with " + code("low") + ", " + code("high") + " and "
+                           + code("mid") + ".")
+        `,
+        scene: { icon: "🚪", successIcon: "🎯", successText: "Just a handful of doors creak open — and behind the last one, a very surprised Glitch scampers off into the dark!", effect: "portal" }
+      },
+
+      // ------------------------------------------------------------------
+      // 6. Linked list
       // ------------------------------------------------------------------
       {
         id: "labyrinth-echo-chain",
@@ -1558,7 +1843,7 @@
 
 
           @test("A chain of 300 echoes counts, reverses, and reverses back")
-          @_budget(1000000, _ADVICE)
+          @_budget(500000, _ADVICE)
           def _():
               values = list(range(300))
               chain = _built(values)
@@ -1570,289 +1855,6 @@
               expect(_values(chain) == values, "After reversing twice, the chain should be back in its original order (0 to 299).")
         `,
         scene: { icon: "⛓️", successIcon: "🔗", successText: "Link by link, the chain of echoes turns around — and now it points the way out.", effect: "fire" }
-      },
-
-      // ------------------------------------------------------------------
-      // 6. Binary search
-      // ------------------------------------------------------------------
-      {
-        id: "labyrinth-hall-of-doors",
-        title: "The Hall of Endless Doors",
-        difficulty: "hard",
-        concepts: ["binary search", "O(log n)", "sorted data"],
-        story: [
-          "The next hall is lined with a hundred thousand doors, each carved with a rune number, in perfect increasing order. Glitch is hiding behind one of them.",
-          "\"Every door we open wakes an echo,\" Ada whispers, \"and a hundred thousand echoes would wake the whole Labyrinth. So open the *middle* door: then you'll know which half he's in. Then do it again.\""
-        ],
-        task: [
-          "Write `find_door(doors, rune)`. `doors` is a list of whole numbers sorted from smallest to largest, with no repeats. **Return** the position of `rune` in `doors`, or `-1` if it isn't there.",
-          { code: py`
-            doors = [2, 5, 8, 12, 16, 23, 38, 56, 72, 91]
-            find_door(doors, 23)   # → 5
-            find_door(doors, 2)    # → 0
-            find_door(doors, 40)   # → -1
-          ` },
-          "Use **binary search**, and write the halving yourself (no `bisect` module). One trial hands your spell an enchanted corridor of 100,000 doors that counts every door you read: `len(doors)` and `doors[i]` work as usual, but each search may read at most **72** doors."
-        ],
-        lesson: [
-          "Checking items one by one — a *linear search* — can take as many looks as there are items: O(n). But when the items are **sorted**, you can do far better. Look at the middle item. If it's too small, everything to its left is too small as well, so throw that whole half away; if it's too big, throw away the right half. Every look halves what is left:",
-          { diagram: py`
-            doors left: 100,000 → 50,000 → 25,000
-                     → 12,500 → 6,250 → … → 2 → 1
-            about 17 looks, because 2 ** 17 = 131,072
-          ` },
-          "Halving n down to 1 takes about log₂ n steps, so binary search is **O(log n)**: a million doors need about 20 looks, and a billion only 30. The same idea wins the number-guessing game:",
-          { code: py`
-            secret = 73
-            low, high = 1, 100    # it's in low..high
-            guesses = 0
-            while True:
-                guess = (low + high) // 2    # the middle
-                guesses += 1
-                if guess == secret:
-                    break
-                elif guess < secret:
-                    low = guess + 1    # too small: go higher
-                else:
-                    high = guess - 1   # too big: go lower
-            print("Found", secret, "in", guesses, "guesses")
-          `, output: "Found 73 in 6 guesses" },
-          "In a list, `low` and `high` are *positions*, and the middle door is `doors[mid]`. Two details trip up every wizard: use `//` so that `mid` is a whole number, and always move `low` or `high` *past* `mid` (`mid + 1` or `mid - 1`), or the search can get stuck forever.",
-          { warning: "Don't slice (`doors[mid:]`): a slice copies — and so reads — every door in it. Keep the two positions instead." }
-        ],
-        starter: py`
-          def find_door(doors, rune):
-              """Return the position of rune in the sorted list doors, or -1."""
-              low = 0
-              high = len(doors) - 1
-              # While part of the hall is still left to search, open the middle
-              # door and throw away the half that can't hold the rune.
-
-              return -1
-        `,
-        hints: [
-          "Keep two positions, `low = 0` and `high = len(doors) - 1`. If the rune is anywhere, it's between them. Each step, open the door in the middle and move one of the two positions.",
-          "Loop `while low <= high:` and pick `mid = (low + high) // 2`. If `doors[mid] == rune`, return `mid`. If that door is too small, the rune must be to the right; if too big, to the left. If the loop ends, nothing is left to search: return `-1`.",
-          "Too small: `low = mid + 1`. Too big: `high = mid - 1`. Moving past `mid` guarantees the search shrinks every time, so the loop always ends."
-        ],
-        solution: py`
-          def find_door(doors, rune):
-              """Return the position of rune in the sorted list doors, or -1."""
-              low, high = 0, len(doors) - 1      # the rune can only be between low and high
-              while low <= high:
-                  mid = (low + high) // 2
-                  door = doors[mid]              # open the middle door (one read)
-                  if door == rune:
-                      return mid
-                  if door < rune:
-                      low = mid + 1              # too small: the rune is to the right
-                  else:
-                      high = mid - 1             # too big: the rune is to the left
-              return -1                          # low passed high: nowhere left to look
-        `,
-        altSolutions: [
-          py`
-            def find_door(doors, rune, low=0, high=None):
-                # Recursive: search doors[low..high].
-                if high is None:
-                    high = len(doors) - 1
-                if low > high:
-                    return -1
-                mid = (low + high) // 2
-                if doors[mid] == rune:
-                    return mid
-                if doors[mid] < rune:
-                    return find_door(doors, rune, mid + 1, high)
-                return find_door(doors, rune, low, mid - 1)
-          `,
-          py`
-            def find_door(doors, rune):
-                # Half-open range [low, high): find the first door >= rune.
-                low, high = 0, len(doors)
-                while low < high:
-                    mid = (low + high) // 2
-                    if doors[mid] < rune:
-                        low = mid + 1
-                    else:
-                        high = mid
-                if low < len(doors) and doors[low] == rune:
-                    return low
-                return -1
-          `
-        ],
-        wrongSolutions: [
-          py`
-            def find_door(doors, rune):
-                # Linear search: right answers, but it opens door after door.
-                for position, door in enumerate(doors):
-                    if door == rune:
-                        return position
-                return -1
-          `,
-          py`
-            def find_door(doors, rune):
-                if rune in doors:
-                    return doors.index(rune)
-                return -1
-          `,
-          py`
-            def find_door(doors, rune):
-                low, high = 0, len(doors) - 1
-                while low < high:            # stops one door too early
-                    mid = (low + high) // 2
-                    if doors[mid] == rune:
-                        return mid
-                    elif doors[mid] < rune:
-                        low = mid + 1
-                    else:
-                        high = mid - 1
-                return -1
-          `
-        ],
-        tests: STEP_BUDGET + py`
-          import ast as _ast
-
-          _ADVICE = ("Every step must shrink the search: move " + code("low") + " past " + code("mid") + " or " + code("high")
-                     + " below it, and stop once " + code("low > high") + ".")
-          _SLICE_NOTE = (" Slicing, like " + code("doors[mid:]") + ", copies (and so opens) every door in the slice: keep "
-                         + code("low") + " and " + code("high") + " positions instead.")
-
-          class _Corridor(list):
-              """Sorted doors that count every door the spell reads (opens)."""
-
-              def __init__(self, runes, limit, message):
-                  list.__init__(self, runes)
-                  self.opened = 0
-                  self.limit = limit
-                  self.message = message
-                  self.sliced = False
-
-              def _open(self, amount):
-                  self.opened += amount
-                  if self.opened > self.limit:
-                      fail(self.message + (_SLICE_NOTE if self.sliced else ""))
-
-              def __getitem__(self, index):
-                  size = list.__len__(self)
-                  if isinstance(index, slice):
-                      part = list.__getitem__(self, index)
-                      self.sliced = True
-                      self._open(len(part))
-                      return part
-                  if not isinstance(index, int):
-                      fail("Door positions must be whole numbers, but your spell asked for door " + short(index) + ". Use "
-                           + code("//") + " to find the middle, like " + code("(low + high) // 2") + ".")
-                  if not -size <= index < size:
-                      if size == 0:
-                          fail("Your spell tried to open door " + str(index) + ", but this hall has no doors at all.")
-                      fail("Your spell tried to open door " + str(index) + ", but the doors are numbered 0 to " + str(size - 1)
-                           + ". Check where " + code("low") + " and " + code("high") + " start, and your loop condition.")
-                  self._open(1)
-                  return list.__getitem__(self, index)
-
-              def __iter__(self):
-                  for position in range(list.__len__(self)):
-                      self._open(1)
-                      yield list.__getitem__(self, position)
-
-              def __reversed__(self):
-                  for position in range(list.__len__(self) - 1, -1, -1):
-                      self._open(1)
-                      yield list.__getitem__(self, position)
-
-              def __contains__(self, rune):
-                  self._open(list.__len__(self))
-                  return list.__contains__(self, rune)
-
-              def index(self, *args):
-                  self._open(list.__len__(self))
-                  return list.index(self, *args)
-
-              def count(self, rune):
-                  self._open(list.__len__(self))
-                  return list.count(self, rune)
-
-              def copy(self):
-                  self._open(list.__len__(self))
-                  return list(list.__iter__(self))
-
-
-          def _check(doors, rune, expected, strict=False):
-              find_door = need_function("find_door", 2)
-              size = len(doors)
-              if strict:
-                  limit = 4 * (size.bit_length() + 1)
-                  message = ("To look for " + str(rune) + " among " + format(size, ",") + " doors, your spell opened more than "
-                             + str(limit) + " of them. Binary search needs only about " + str(size.bit_length()) + ": open the "
-                             + "middle door, then throw away the half that can't hold the rune. (Loops over the doors, " + code("in")
-                             + ", " + code(".index()") + " and " + code("list(doors)") + " all open the doors one by one.)")
-                  call = code("find_door(hall_of_" + str(size) + "_doors, " + str(rune) + ")")
-              else:
-                  limit = 4 * size + 100
-                  message = ("Your spell opened more than " + str(limit) + " doors in a hall of only " + str(size) + ": it seems "
-                             + "to be going round in circles. " + _ADVICE)
-                  call = code("find_door(" + short(doors, 70) + ", " + str(rune) + ")")
-              hall = _Corridor(doors, limit, message)
-              result = find_door(hall, rune)
-              expect(hall.opened <= hall.limit, message)
-              if result is None:
-                  fail(call + " returned None. Return the door's position, or -1 if the rune isn't there.")
-              if result != expected:
-                  why = (" (" + str(rune) + " isn't behind any door.)") if expected == -1 else ""
-                  fail(call + " should return " + str(expected) + ", but it returned " + short(result) + "." + why)
-
-
-          @test("find_door([2, 5, 8, 12, 16, 23, 38, 56, 72, 91], 23) is 5")
-          @_budget(100000, _ADVICE)
-          def _():
-              doors = [2, 5, 8, 12, 16, 23, 38, 56, 72, 91]
-              for rune, expected in ((23, 5), (2, 0), (91, 9), (38, 6)):
-                  _check(doors, rune, expected)
-
-
-          @test("Every door can be found, in halls of 1 to 12 doors")
-          @_budget(200000, _ADVICE)
-          def _():
-              for size in range(1, 13):
-                  doors = [3 * k + 1 for k in range(size)]
-                  for position, rune in enumerate(doors):
-                      _check(doors, rune, position)
-
-
-          @test("Missing runes give -1, even in an empty hall")
-          @_budget(100000, _ADVICE)
-          def _():
-              _check([], 5, -1)
-              _check([7], 3, -1)
-              _check([7], 9, -1)
-              for rune in (5, 15, 35, 45, 55):
-                  _check([10, 20, 30, 40, 50], rune, -1)
-
-
-          @test("A hall of 100,000 doors: each search opens at most 72 of them")
-          @_budget(100000, _ADVICE)
-          def _():
-              doors = [7 * k + 3 for k in range(100000)]
-              for position in (0, 99999, 50000, 12345, 99998, 1, 77777):
-                  _check(doors, doors[position], position, strict=True)
-              for rune in (2, doors[-1] + 4, doors[777] + 1, doors[66666] - 3):
-                  _check(doors, rune, -1, strict=True)
-
-
-          @test("You wrote the halving yourself (no bisect module)")
-          def _():
-              for node in _ast.walk(_ast.parse(source)):
-                  names = []
-                  if isinstance(node, _ast.Import):
-                      names = [alias.name for alias in node.names]
-                  elif isinstance(node, _ast.ImportFrom):
-                      names = [node.module or ""]
-                  if any(name.split(".")[0] == "bisect" for name in names):
-                      fail("Well spotted: Python's " + code("bisect") + " module does binary search for you! But this trial "
-                           + "wants to see you halve the hall yourself, with " + code("low") + ", " + code("high") + " and "
-                           + code("mid") + ".")
-        `,
-        scene: { icon: "🚪", successIcon: "🎯", successText: "Just a handful of doors creak open — and behind the last one, a very surprised Glitch scampers off into the dark!", effect: "portal" }
       },
 
       // ------------------------------------------------------------------
@@ -1868,7 +1870,7 @@
           "\"The mirror mends only if the shards are laid out from quietest to loudest,\" says Ada. \"And no shortcuts: `sorted()` is the very spell Glitch broke. Split the pile, sort each half, then merge them.\""
         ],
         task: [
-          "Write `merge_sort(items)` that **returns a new list** of the same items in ascending order, using merge sort. Don't use `sorted()` or `.sort()`, and don't change the list you were given.",
+          "Write `merge_sort(items)` that **returns a new list** of the same items in ascending order, using merge sort. Don't use `sorted()`, `.sort()`, or the `heapq`/`bisect` modules, and don't change the list you were given.",
           { code: py`
             merge_sort([38, 27, 43, 3, 9, 82, 10])
             # → [3, 9, 10, 27, 38, 43, 82]
@@ -1885,7 +1887,19 @@
           ] }
         ],
         lesson: [
-          "**Divide and conquer**: split a big problem into smaller versions of itself, solve those (recursion!), and combine their answers.",
+          "**Divide and conquer**: split a big problem into smaller versions of itself, solve those (recursion!), and combine their answers. Here is the pattern on a simpler job, finding the biggest number:",
+          { code: py`
+            def biggest(items):
+                """Largest item, by divide and conquer."""
+                if len(items) == 1:
+                    return items[0]            # base case
+                mid = len(items) // 2
+                left = biggest(items[:mid])    # solve each
+                right = biggest(items[mid:])   # half...
+                return max(left, right)        # ...combine!
+
+            print(biggest([38, 27, 43, 3, 9, 82, 10]))
+          `, output: "82" },
           "**Merge sort** splits the list in half, sorts each half by calling itself, then *merges* the two sorted halves into one. A list of 0 or 1 items is already sorted: that's the base case.",
           { diagram: py`
             split:  [38, 27, 43, 3, 9, 82, 10]
@@ -2126,13 +2140,13 @@
 
 
           @test("merge_sort([38, 27, 43, 3, 9, 82, 10]) returns [3, 9, 10, 27, 38, 43, 82]")
-          @_budget(100000, _ADVICE)
+          @_budget(20000, _ADVICE)
           def _():
               _check([38, 27, 43, 3, 9, 82, 10])
 
 
           @test("Tricky lists: empty, one item, sorted, reverse sorted, duplicates, words")
-          @_budget(100000, _ADVICE)
+          @_budget(20000, _ADVICE)
           def _():
               for items in ([], [7], [2, 1], list(range(10)), list(range(10, 0, -1)), [3, -1, 3, 0, -1, 3],
                             [5, 5, 5, 5], ["mist", "ash", "gloom", "echo"]):
@@ -2140,7 +2154,7 @@
 
 
           @test("Returns a new list and leaves the original untouched")
-          @_budget(100000, _ADVICE)
+          @_budget(20000, _ADVICE)
           def _():
               items = [5, 2, 4, 1, 3]
               result = _sort(items)
@@ -2151,7 +2165,7 @@
 
 
           @test("Stable: equally loud echoes keep the order they arrived in")
-          @_budget(100000, _ADVICE)
+          @_budget(20000, _ADVICE)
           def _():
               echoes = [Echo("ash", 2), Echo("bell", 1), Echo("cinder", 2), Echo("dusk", 1), Echo("ember", 2), Echo("fog", 0)]
               result = _sort(list(echoes))
@@ -2159,7 +2173,7 @@
 
 
           @test("2,000 echoes are sorted with at most 88,000 comparisons")
-          @_budget(2000000, _ADVICE)
+          @_budget(600000, _ADVICE)
           def _():
               echoes = [Echo("echo" + str(k), (k * 7919) % 2003 % 500) for k in range(2000)]
               in_order = sorted(echoes, key=lambda e: e.loudness)      # stable, and compares numbers, not echoes
@@ -2426,7 +2440,7 @@
               count_islands = need_function("count_islands", 1)
               given = list(cavern)
               squares = sum(len(row) for row in cavern)
-              limit = 400 * squares + 5000
+              limit = 80 * squares + 2000
               call = label or code("count_islands(" + short(given, 80) + ")")
               try:
                   with step_limit(limit, "Your spell took more than " + format(limit, ",") + " steps on a map of only "
@@ -2747,7 +2761,7 @@
               shortest_path = need_function("shortest_path", 1)
               given = list(maze)
               squares = sum(len(row) for row in maze)
-              limit = 300 * squares + 5000
+              limit = 150 * squares + 2000
               call = label or code("shortest_path(" + short(given, 80) + ")")
               try:
                   with step_limit(limit, "Your spell took more than " + format(limit, ",") + " steps on a maze of only "
