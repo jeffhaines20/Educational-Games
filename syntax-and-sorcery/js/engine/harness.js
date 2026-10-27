@@ -474,7 +474,9 @@ def explain(exc, line=None, namespace=None):
             return ("This challenge doesn't send any input, so " + code("input()") + " has nothing to read. "
                     "Use the values described in the task instead.")
         return ("Your spell called " + code("input()") + " more times than the challenge provides ("
-                + _plural(exc.provided, "value") + ").")
+                + _plural(exc.provided, "value") + "). If a loop should have stopped by now, check its condition: "
+                "text from " + code("input()") + " such as " + code(DQ + "0" + DQ) + " never equals the number "
+                + code("0") + ", so convert it with " + code("int()") + " first.")
     if isinstance(exc, RecursionError):
         return ("Your function called itself too many times in a row (this realm allows about "
                 + format(sys.getrecursionlimit(), ",") + " nested calls). "
@@ -546,7 +548,9 @@ def explain(exc, line=None, namespace=None):
             return ("You tried to " + code("pop()") + " from an empty collection" + where + ". Check that it "
                     "has items first, for example with " + code("if stack:") + ".")
         return ("You asked for a position that doesn't exist" + where + ". Positions start at 0, so the last "
-                "item is at " + code("len(items) - 1") + " (and an empty list has no positions at all).")
+                "item is at " + code("len(items) - 1") + " (and an empty list has no positions at all). Check both "
+                "ends, like " + code("0 <= i < len(items)") + ": a negative position doesn't fail, it quietly counts "
+                "from the end, so a missing lower-bound check can hide until later.")
     if isinstance(exc, KeyError):
         key = exc.args[0] if exc.args else None
         return ("The dictionary has no key " + short(key) + where + ". Check the spelling, add the key first, "
@@ -717,7 +721,15 @@ def _blame_spell(exc):
 
 def _spell_line(exc):
     spell_frames = [f for f in _frames(exc) if f.filename == SPELL_FILE]
-    return spell_frames[-1].lineno if spell_frames else None
+    if not spell_frames:
+        return None
+    last = spell_frames[-1]
+    # A RecursionError (or a step limit hit as a call starts) is raised in the frame that
+    # was just entered, which still points at its "def" line. The useful line is the call.
+    text = (last.line or "").lstrip()
+    if len(spell_frames) > 1 and (text.startswith("def ") or text.startswith("async def ")):
+        return spell_frames[-2].lineno
+    return last.lineno
 
 
 def _exception_only(exc):
