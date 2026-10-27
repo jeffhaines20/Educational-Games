@@ -35,7 +35,7 @@
           "\"One warning: a spirit that only *shouts* its answer brings nothing back. Make sure yours **returns**.\""
         ],
         task: [
-          "Define a function `greet(name)` that **returns** the greeting `Welcome to the circle, <name>!` as a string. Don't print inside the function: return the text, and let the caller decide what to do with it.",
+          "Define a function `greet(name)` that **returns** the greeting `Welcome to the circle, <name>!` as a string. Printing the greeting isn't enough: the function must hand the text back with `return`, so the caller can decide what to do with it.",
           { code: py`
             print(greet("Pip"))
             print(greet("Morgana"))
@@ -65,7 +65,7 @@
         starter: py`
           # Bind the greeting spell to the name greet.
           def greet(name):
-              # Build the greeting and RETURN it (don't print it).
+              # Build the greeting and RETURN it (printing it isn't enough).
               pass
 
 
@@ -493,7 +493,7 @@
               elif not title_given and not result.startswith("Spirit "):
                   hint = (" When no title is given it should be " + code('"Spirit"') + " (with a capital S): write "
                           + code('title="Spirit"') + " in the def line.")
-              elif not hour_given and " at 12 o'clock" not in result:
+              elif not hour_given and "12" not in result:
                   hint = " When no hour is given it should be 12: write " + code("hour=12") + " in the def line."
               elif result.lower() == expected.lower():
                   hint = " Check the capital letters."
@@ -501,6 +501,8 @@
                   hint = " Check the spaces."
               elif not result.endswith("o'clock."):
                   hint = " The invitation should end with " + code("o'clock.") + " (including the full stop)."
+              elif " at " not in result:
+                  hint = " Don't forget the word " + code("at") + " just before the hour."
               fail(label + " should return " + short(expected) + ", but it returned " + short(result) + "." + hint)
 
           @test('invitation("Wisp") uses both defaults')
@@ -1118,7 +1120,12 @@
           def mirror(n):
               factorial = need_function("factorial", 1)
               label = code("factorial(" + str(n) + ")")
-              result, printed = capture(factorial, n)
+              try:
+                  result, printed = capture(factorial, n)
+              except RecursionError:
+                  fail(label + " never stopped calling itself: the mirrors went on forever. Make sure the base case "
+                       "catches " + code("n == 0") + " (the smallest mirror) and returns 1 without calling "
+                       + code("factorial") + ", and that every other call uses " + code("factorial(n - 1)") + ".")
               if result is None:
                   if printed.strip():
                       fail(label + " printed " + short(printed.strip()) + " but returned " + code("None")
@@ -1158,13 +1165,12 @@
           @test("factorial calls itself: a mirror inside a mirror")
           def _():
               need_function("factorial", 1)
+              uses_math = "math" in source
+              extra = (" Python's own " + code("math.factorial") + " doesn't count: build your own mirror!") if uses_math else ""
               expect(is_recursive("factorial"), code("factorial") + " should call itself with a smaller number, such as "
-                     + code("factorial(n - 1)") + ", instead of using a loop.")
+                     + code("factorial(n - 1)") + ("." if uses_math else ", instead of using a loop.") + extra)
               with count_calls("factorial") as calls:
                   mirror(5)
-              extra = ""
-              if "math" in source:
-                  extra = " (Python's own " + code("math.factorial") + " doesn't count: build your own mirror!)"
               expect(calls.count > 1, code("factorial(5)") + " found its answer without calling " + code("factorial")
                      + " again. Make the recursive case call " + code("factorial(n - 1)") + " and use its answer." + extra)
 

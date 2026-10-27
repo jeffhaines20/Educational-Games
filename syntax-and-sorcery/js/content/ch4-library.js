@@ -20,7 +20,7 @@
     ],
     outro: [
       "Every book is back on its shelf, every ledger balances and every anagram is unscrambled. The library sighs with relief as a thousand reading lamps flicker back on.",
-      "Glitch, cornered at last, squeaks an apology that doesn't sound very sorry and scurries off through a side door marked **Golem Workshop**, leaving a trail of tiny clay footprints behind…"
+      "Glitch, caught red-handed, squeaks an apology that doesn't sound very sorry and scurries off through a side door marked **Golem Workshop**, leaving a trail of tiny clay footprints behind…"
     ],
     challenges: [
       // ------------------------------------------------------------------
@@ -36,10 +36,10 @@
         task: [
           "Define `restore_shelf(books)`. `books` is a list of titles whose **first** book really belongs at the **end**. Return a **new** list with that first book moved to the end and the other books in the same order.",
           { code: py`
-            shelf = ["Zoology of Dragons", "Alchemy", "Botany", "Charms"]
+            shelf = ["Moon Maps", "Owl Post", "Alchemy", "Charms"]
             print(restore_shelf(shelf))
             print(shelf)   # the original list must not change
-          `, output: "['Alchemy', 'Botany', 'Charms', 'Zoology of Dragons']\n['Zoology of Dragons', 'Alchemy', 'Botany', 'Charms']" },
+          `, output: "['Owl Post', 'Alchemy', 'Charms', 'Moon Maps']\n['Moon Maps', 'Owl Post', 'Alchemy', 'Charms']" },
           "An empty shelf gives an empty list, and a shelf with only one book stays as it is."
         ],
         lesson: [
@@ -53,6 +53,7 @@
             print(potions[:1] + ["honey"])    # + joins two lists into a new list
           `, output: "mint thyme 4\n['rose', 'sage']\n['mint', 'rose']\n['sage', 'thyme']\n['mint', 'honey']" },
           "Slices are forgiving: if `potions` were empty, `potions[1:]` would simply be `[]`, while `potions[0]` would crash with an `IndexError`.",
+          "You can also make a list from a string: `\"mint rose sage\".split()` cuts the text at its spaces and gives the list `['mint', 'rose', 'sage']`.",
           "Lists can also be changed **in place** with methods such as `.append(item)` (add to the end), `.insert(position, item)` and `.pop(position)` (remove the item at that position and give it back).",
           { warning: "Methods like `.pop()` and `.append()` change the original list, and whoever handed it to you will see the damage. To leave it untouched, build a new list with slices and `+` (or work on a copy made with `list(books)`)." }
         ],
@@ -62,7 +63,7 @@
               pass
 
 
-          shelf = ["Zoology of Dragons", "Alchemy", "Botany", "Charms"]
+          shelf = ["Moon Maps", "Owl Post", "Alchemy", "Charms"]
           print(restore_shelf(shelf))
           print(shelf)
         `,
@@ -77,7 +78,7 @@
               return books[1:] + books[:1]
 
 
-          shelf = ["Zoology of Dragons", "Alchemy", "Botany", "Charms"]
+          shelf = ["Moon Maps", "Owl Post", "Alchemy", "Charms"]
           print(restore_shelf(shelf))
           print(shelf)
         `,
@@ -156,7 +157,13 @@
               if result == expected:
                   return
               hint = ""
-              if len(books) > 2 and result == books[-1:] + books[:-1]:
+              if len(books) > 2 and result == sorted(books):
+                  hint = (" That sorted the shelf alphabetically. Don't sort: keep the other books in the order they "
+                          "were in, and move only the first book to the end.")
+              elif len(books) > 2 and result == [b for b in books if b != max(books)] + [max(books)]:
+                  hint = (" That moved the alphabetically last book to the end. Move the first book instead, "
+                          "whatever its title is.")
+              elif len(books) > 2 and result == books[-1:] + books[:-1]:
                   hint = " That moved the last book to the front. We need the opposite: the first book goes to the end."
               elif len(books) > 2 and result == books[-1:] + books[1:-1] + books[:1]:
                   hint = (" That swapped the first and last books. Instead, every other book should move up one place, "
@@ -170,12 +177,14 @@
 
           @test("restore_shelf moves the first book to the end")
           def _():
-              check(["Zoology of Dragons", "Alchemy", "Botany", "Charms"])
+              check(["Moon Maps", "Owl Post", "Alchemy", "Charms"])
 
           @test("It works for shelves of any length")
           def _():
               check(["Zeta", "Alpha", "Beta"])
               check(["Quills", "Ink"])
+              check(["Zoology of Dragons", "Alchemy", "Botany", "Charms"])
+              check(["Charms", "Zoology of Dragons", "Alchemy", "Botany"])
               check(["Yarrow", "Astronomy", "Bestiary", "Cauldrons", "Divination", "Elixirs", "Familiars", "Glyphs"])
 
           @test("A shelf with one book stays the same")
@@ -188,7 +197,7 @@
 
           @test("The list you were given is left unchanged")
           def _():
-              books = ["Zoology of Dragons", "Alchemy", "Botany", "Charms"]
+              books = ["Moon Maps", "Owl Post", "Alchemy", "Charms"]
               result, label, given = restore(books)
               if given != books:
                   fail(label + " changed the original list into " + short(given) + ". Leave the shelf you were given "
@@ -238,7 +247,7 @@
 
             print(lowest_score([7, 3, 9, 3]))
           `, output: "3" },
-          "Python also has built-ins for common jobs: `len(items)`, `sum(items)`, `min(items)`, `max(items)`, and `items.index(value)`, which gives the position of the **first** item equal to `value`. `min()` and `max()` crash on an empty list, so check `if not items:` first."
+          "Python also has built-ins for common jobs: `len(items)`, `sum(items)`, `min(items)`, `max(items)`, and `items.index(value)`, which gives the position of the **first** item equal to `value`. `min()` and `max()` crash on an empty list, so check for that first: an empty list counts as `False`, so `if not items:` means \"if the list is empty\" (`if len(items) == 0:` works too)."
         ],
         starter: py`
           def most_overdue(days_late):
@@ -341,6 +350,13 @@
                   fail(label + " returned " + code("None") + ". Did you forget to " + code("return") + " the position?")
               return result, label
 
+          def confuses_position():
+              """most_overdue([9, 3, 3]) is 0; comparing days with the position best gives 2."""
+              try:
+                  return capture(need_function("most_overdue", 1), [9, 3, 3])[0] == 2
+              except Exception:
+                  return False
+
           def check(days):
               result, label = overdue(days)
               expected = first_max(days)
@@ -357,7 +373,11 @@
               biggest = max(days)
               last = len(days) - 1 - days[::-1].index(biggest)
               hint = ""
-              if result == biggest:
+              if confuses_position():
+                  hint = (" It looks like you compared a number of days with a position. If " + code("best")
+                          + " holds a position, compare each book with the best book's days: "
+                          + code("if days > days_late[best]:") + ".")
+              elif result == biggest:
                   hint = " That's how many days late the book is. Return its position (index) in the list instead."
               elif result == last:
                   hint = (" That's the last of the tied books. On a tie, return the first one: only replace your best "
@@ -431,17 +451,19 @@
             print("ink" in stock, "wax" in stock, stock.get("wax", 0))
           `, output: "{'ink': 5, 'quills': 10, 'glue': 2}\nTrue False 0" },
           "Reading a key that isn't there, like `stock[\"wax\"]`, crashes with a `KeyError`. Check with `in` first, or use `.get(key, default)`, which gives you the default instead of crashing.",
-          "A **tuple** is a small, fixed group of values in round brackets, such as `(\"ink\", 4)`. You can **unpack** it into separate names, even right in a `for` loop:",
+          "A **tuple** is a small, fixed group of values in round brackets, such as `(\"ink\", 4)`. You can **unpack** it into separate names, even right in a `for` loop. A dictionary's `.items()` gives you its *(key, value)* pairs, ready to unpack in just the same way:",
           { code: py`
-            words = ["owl", "cat", "owl"]
-            counts = {}
-            for word in words:
-                counts[word] = counts.get(word, 0) + 1
-            print(counts)
+            delivery = ("ink", 4)
+            name, amount = delivery          # unpacking
+            print(name, amount)
 
-            for name, amount in [("ink", 4), ("glue", 2)]:
+            for name, amount in [("glue", 2), ("wax", 5)]:
                 print(name, "->", amount)
-          `, output: "{'owl': 2, 'cat': 1}\nink -> 4\nglue -> 2" }
+
+            prices = {"ink": 3, "quills": 1}
+            for name, price in prices.items():
+                print(name, "costs", price)
+          `, output: "ink 4\nglue -> 2\nwax -> 5\nink costs 3\nquills costs 1" }
         ],
         starter: py`
           def stock_ledger(deliveries):
@@ -528,7 +550,14 @@
               stock_ledger = need_function("stock_ledger", 1)
               given = list(deliveries)
               label = code("stock_ledger(" + short(deliveries, 90) + ")")
-              result, printed = capture(stock_ledger, given)
+              try:
+                  result, printed = capture(stock_ledger, given)
+              except TypeError as problem:
+                  if "NoneType" in str(problem) and ".get(" in source:
+                      fail(label + " crashed: " + str(problem) + ". " + code(".get(key)") + " gives " + code("None")
+                           + " for an ingredient that isn't in the ledger yet. Give it a default: "
+                           + code("totals.get(ingredient, 0)") + ".")
+                  raise
               if given != deliveries:
                   fail(label + " changed the list of deliveries it was given. Read the list, but don't change it.")
               if result is None:
@@ -544,11 +573,25 @@
                        + type(result).__name__ + ")." + extra)
               return result, label
 
+          def remembers(deliveries, first):
+              """A ledger kept outside the function gives a different answer when called again."""
+              try:
+                  again, _ = capture(need_function("stock_ledger", 1), list(deliveries))
+              except Exception:
+                  return False
+              return again != first
+
           def check(deliveries):
               result, label = ledger(deliveries)
               expected = reference(deliveries)
               if result == expected:
                   return
+              snapshot = dict(result)
+              if remembers(deliveries, snapshot):
+                  fail(label + " should return " + short(expected, 200) + ", but it returned " + short(snapshot, 200)
+                       + ". Called again with the same deliveries, it gives a different answer, so it seems to remember "
+                       "earlier calls. Is your dictionary created outside the function? Create " + code("totals = {}")
+                       + " inside the function so every call starts empty.")
               last, count = {}, {}
               for name, jars in deliveries:
                   last[name] = jars
@@ -573,7 +616,10 @@
                       if expected[missing[0]] == 0:
                           hint += " Keep every ingredient that appears in the list, even when its total is 0."
                   elif extra:
-                      hint = " The ledger has a key " + short(extra[0]) + ", but the keys should be the ingredient names."
+                      hint = " The ledger has a key " + short(extra[0]) + ", which isn't in these deliveries."
+                      if isinstance(extra[0], str):
+                          hint += (" Is your dictionary created outside the function? Then it remembers earlier calls: "
+                                   "create " + code("totals = {}") + " inside the function so every call starts empty.")
                   else:
                       for name in expected:
                           if result[name] != expected[name]:
@@ -934,6 +980,7 @@
         ],
         tests: py`
           import ast
+          import inspect
 
           SHORT = (["Charms", "Potions", "Runes"], [1650, 1820, 1203])
           LONG = (["Herbology", "Star Charts", "Old Hexes", "Mirror Lore", "Dragon Diets", "Tea Leaves"],
@@ -957,8 +1004,20 @@
           OUTSIDE = (" Your function seems to use the example lists from outside the function. Work with its parameters, "
                      + code("titles") + " and " + code("years") + ", instead.")
 
+          def param_order(func, name, wanted):
+              """Fail clearly if the parameter names are right but in another order."""
+              try:
+                  names = list(inspect.signature(func).parameters)
+              except (TypeError, ValueError):
+                  return
+              if names != wanted and sorted(names) == sorted(wanted):
+                  fail("The parameters of " + code(name) + " are " + code("(" + ", ".join(names) + ")") + ", but they must "
+                       "be in the order " + code("(" + ", ".join(wanted) + ")") + ": arguments are matched to parameters "
+                       "by position, so the order in the " + code("def") + " line matters.")
+
           def check_catalogue(titles, years):
               catalogue = need_function("catalogue", 2)
+              param_order(catalogue, "catalogue", ["titles", "years"])
               label = code("catalogue(titles, years)") + described(titles, years)
               result = answer(catalogue, (titles, years), label, "dictionary")
               if not isinstance(result, dict):
@@ -976,6 +1035,7 @@
 
           def check_ancient(titles, years, before):
               ancient_tomes = need_function("ancient_tomes", 3)
+              param_order(ancient_tomes, "ancient_tomes", ["titles", "years", "before"])
               label = code("ancient_tomes(titles, years, " + str(before) + ")") + described(titles, years)
               result = answer(ancient_tomes, (titles, years, before), label, "list")
               if not isinstance(result, list):
@@ -1030,10 +1090,10 @@
               need_function("ancient_tomes", 3)
               kinds = (ast.ListComp, ast.DictComp, ast.SetComp, ast.GeneratorExp)
               for node in ast.walk(ast.parse(source)):
-                  if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name in ("catalogue", "ancient_tomes"):
+                  if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                       if any(isinstance(inner, kinds) for inner in ast.walk(node)):
                           return
-              fail("This chamber is all about comprehensions: write at least one of your two functions with one, in the "
+              fail("This chamber is all about comprehensions: write at least one of your functions with one, in the "
                    "shape " + code("[n * 2 for n in pages if n > 4]") + " or " + code("{key: value for ... in ...}") + ".")
         `,
         scene: { icon: "🗂️", successIcon: "🌳", successText: "Fresh catalogue cards sprout like leaves on a great paper tree, each one neatly labelled.", effect: "bloom" }
@@ -1177,12 +1237,13 @@
                        + short(books, 300) + " it returned " + short(result, 300) + ".")
               authors = [b[1] for b in result]
               if authors != [b[1] for b in expected]:
-                  if authors == sorted(authors, reverse=True):
+                  if authors == sorted(authors, reverse=True) and ("reverse" in source or "[::-1]" in source):
                       hint = (" The authors go from Z to A. Reversing (for example with " + code("reverse=True")
                               + ") flips the whole ordering: instead, make just the year negative in your key ("
                               + code("-book[2]") + ") and let the authors go A to Z.")
                   else:
-                      hint = " Sort by the author first (" + code("book[1]") + "), from A to Z."
+                      hint = (" Sort by the author first (" + code("book[1]") + "), from A to Z. In a key tuple, the first "
+                              "item decides first, so the author must come before the year.")
               elif result == sorted(books, key=lambda b: (b[1], b[2])):
                   hint = " Each author's books are oldest first, but the newest (biggest year) should come first."
               else:
@@ -1259,6 +1320,7 @@
             print(by_length)
             print(list(by_length.values()))
           `, output: "{3: ['hex'], 5: ['charm', 'curse'], 4: ['jinx', 'ward']}\n[['hex'], ['charm', 'curse'], ['jinx', 'ward']]" },
+          "`.values()` gives just a dictionary's values (here, the lists), without their keys. Likewise `.keys()` gives just the keys, and `.items()` the *(key, value)* pairs.",
           "The whole trick is choosing a key that is **the same for every member of a group** and different for everything else. Keys must be values that can't change, such as strings, numbers or tuples: a list can't be a key. Strings come with handy tools for building keys:",
           { code: py`
             print(sorted("stone"))             # a string's letters, sorted, as a list
@@ -1406,6 +1468,12 @@
                   return (" No groups yet. Start by putting each word into a dictionary of lists, under a key that all of "
                           "its anagrams share.")
               try:
+                  seen = []
+                  for group in result:
+                      if sorted(group) in seen:
+                          return (" Each group should appear only once, but " + short(group) + " appears more than once. "
+                                  "Add each group to the result a single time, not once for every word in it.")
+                      seen.append(sorted(group))
                   if len(result) == len(expected) and all(sorted(g) in expected for g in result):
                       if any(g != sorted(g) for g in result):
                           return " The words inside each group should be in alphabetical order."
