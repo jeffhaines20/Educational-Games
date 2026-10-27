@@ -314,6 +314,33 @@ def _explain_syntax(exc):
     return "Python couldn't read your spell" + where + ": " + msg + "."
 
 
+_METHOD_NAMES = {
+    "upper": ("string", "name.upper()"), "lower": ("string", "name.lower()"),
+    "title": ("string", "name.title()"), "capitalize": ("string", "name.capitalize()"),
+    "strip": ("string", "text.strip()"), "split": ("string", "text.split()"),
+    "replace": ("string", "text.replace(\"old\", \"new\")"), "startswith": ("string", "text.startswith(\"a\")"),
+    "endswith": ("string", "text.endswith(\"a\")"), "isdigit": ("string", "text.isdigit()"),
+    "isalpha": ("string", "text.isalpha()"), "join": ("string", "\", \".join(words)"),
+    "append": ("list", "items.append(x)"), "extend": ("list", "items.extend(more)"),
+    "insert": ("list", "items.insert(0, x)"), "remove": ("list", "items.remove(x)"),
+    "pop": ("list", "items.pop()"), "keys": ("dictionary", "book.keys()"),
+    "values": ("dictionary", "book.values()"), "items": ("dictionary", "book.items()"),
+}
+
+_FUNCTION_NOT_METHOD = {
+    "len": "Use the " + code("len()") + " function instead: " + code("len(things)") + ".",
+    "length": "Use the " + code("len()") + " function instead: " + code("len(things)") + ".",
+    "size": "Use the " + code("len()") + " function instead: " + code("len(things)") + ".",
+    "sum": "Use the " + code("sum()") + " function instead: " + code("sum(numbers)") + ".",
+    "max": "Use the " + code("max()") + " function instead: " + code("max(numbers)") + ".",
+    "min": "Use the " + code("min()") + " function instead: " + code("min(numbers)") + ".",
+    "sorted": "Use the " + code("sorted()") + " function (" + code("sorted(items)") + ") or the list method " + code("items.sort()") + ".",
+    "print": "Use the " + code("print()") + " function instead: " + code("print(value)") + ".",
+    "str": "Use the " + code("str()") + " function instead: " + code("str(value)") + ".",
+    "int": "Use the " + code("int()") + " function instead: " + code("int(text)") + ".",
+}
+
+
 def explain(exc, line=None, namespace=None):
     """Return a short, beginner-friendly explanation of an exception."""
     where = (" on line " + str(line)) if line else ""
@@ -347,6 +374,10 @@ def explain(exc, line=None, namespace=None):
         if not name:
             m = re.search(r"name '(\w+)' is not defined", msg)
             name = m.group(1) if m else None
+        if name and name in _METHOD_NAMES and name not in (namespace or {}):
+            kind, example = _METHOD_NAMES[name]
+            return (code(name) + " is a " + kind + " method, so it goes after a dot" + where + ": write "
+                    + code(example) + " rather than " + code(name + "(...)") + ".")
         if name:
             pool = list((namespace or {}).keys()) + dir(builtins) + keyword.kwlist
             near = _close_name(name, pool)
@@ -365,6 +396,10 @@ def explain(exc, line=None, namespace=None):
                 return ("You tried to use " + code("." + attr) + " on " + code("None") + where + ". A function "
                         "probably forgot to " + code("return") + " its result (or you stored the result of a "
                         "method like " + code(".sort()") + ", which returns None).")
+            fn_name = attr if attr in _FUNCTION_NOT_METHOD else _close_name(attr, list(_FUNCTION_NOT_METHOD), cutoff=0.8)
+            if fn_name:
+                return (code(attr) + " isn't a method of " + _a_type(owner) + where + ". "
+                        + _FUNCTION_NOT_METHOD[fn_name])
             near = None
             obj = getattr(exc, "obj", None)
             if obj is not None:
@@ -434,7 +469,27 @@ def explain(exc, line=None, namespace=None):
     return "Your spell raised a " + code(type(exc).__name__) + where + ". The message below has the details."
 
 
+def _magic_hint(type_name, method, usage):
+    """For the player's own classes: which magic method makes an operation work."""
+    if type_name in _TYPE_WORDS or type_name in dir(builtins):
+        return ""
+    return (" To make " + code(usage) + " work for your " + code(type_name) + " class, give it a "
+            + code(method) + " method.")
+
+
 def _explain_type_error(msg, where):
+    m = re.search(r"__(str|repr)__ returned non-string \(type (\w+)\)", msg)
+    if m:
+        return ("Your " + code("__" + m.group(1) + "__") + " method must " + code("return") + " a string, but it "
+                "returned " + _a_type(m.group(2)) + ". Build the text and " + code("return") + " it — don't "
+                + code("print()") + " it inside the method.")
+    if "__init__() should return None" in msg:
+        return (code("__init__") + " must not return a value" + where + ". It only sets up the new object's "
+                "attributes; remove the " + code("return") + " line.")
+    if "object cannot be interpreted as an integer" in msg and "'float'" in msg:
+        return ("A whole number was needed here" + where + " (for example in " + code("range()") + "), but you gave "
+                "a decimal number. Use " + code("//") + " for division that gives a whole number, or wrap the value in "
+                + code("int(...)") + ".")
     m = re.search(r'can only concatenate str \(not "(\w+)"\) to str', msg)
     if m:
         return ("You tried to join a string and " + _a_type(m.group(1)) + " with " + code("+") + where + ". Turn the value "
@@ -459,7 +514,14 @@ def _explain_type_error(msg, where):
         text = code(func + "()") + " was called without all the values it needs" + where + " (missing " + m.group(3) + ")."
         if func == "__init__":
             text += " When you create an object, pass every value that " + code("__init__") + " expects (except " + code("self") + ")."
+        elif "'self'" in m.group(3):
+            text += (" A method needs an object to work on: call it on an object, like "
+                     + code("golem." + func + "()") + ", not on the class itself.")
         return text
+    m = re.search(r"(\w+)\(\) got multiple values for argument '(\w+)'", msg)
+    if m:
+        return (code(m.group(1) + "()") + " received " + code(m.group(2)) + " twice" + where + ". If "
+                + code(m.group(1)) + " is a method inside a class, make sure its first parameter is " + code("self") + ".")
     m = re.search(r"(\w+)\(\) takes (\d+) positional arguments? but (\d+) (?:were|was) given", msg)
     if m:
         func, takes, given = m.group(1), int(m.group(2)), int(m.group(3))
@@ -478,14 +540,17 @@ def _explain_type_error(msg, where):
                 + "), or a variable that reuses a function's name.")
     m = re.search(r"'(\w+)' object is not subscriptable", msg)
     if m:
-        return _a_type(m.group(1)).capitalize() + " can't be indexed with square brackets" + where + "."
+        return (_a_type(m.group(1)).capitalize() + " can't be indexed with square brackets" + where + "."
+                + _magic_hint(m.group(1), "__getitem__", "obj[i]"))
     m = re.search(r"'(\w+)' object is not iterable", msg)
     if m:
         return ("You tried to loop over " + _a_type(m.group(1)) + where + ", but only collections such as lists, "
-                "strings, dictionaries and ranges can be looped over. To repeat n times, use " + code("range(n)") + ".")
+                "strings, dictionaries and ranges can be looped over. To repeat n times, use " + code("range(n)") + "."
+                + _magic_hint(m.group(1), "__iter__", "for item in obj"))
     m = re.search(r"object of type '(\w+)' has no len\(\)", msg)
     if m:
-        return code("len()") + " only works on collections (strings, lists, dictionaries...), not on " + _a_type(m.group(1)) + where + "."
+        return (code("len()") + " only works on collections (strings, lists, dictionaries...), not on "
+                + _a_type(m.group(1)) + where + "." + _magic_hint(m.group(1), "__len__", "len(obj)"))
     if "does not support item assignment" in msg and "'str'" in msg:
         return "Strings can't be changed in place" + where + ". Build a new string instead (for example with slicing and " + code("+") + ")."
     if "does not support item assignment" in msg and "'tuple'" in msg:
@@ -951,6 +1016,30 @@ class _Trials:
             "short": short,
         }
 
+    def _spell_at_fault(self, exc):
+        """Errors raised at the boundary between a trial and the spell's own code.
+
+        For example a method that forgot self fails with a TypeError raised at the
+        call site (inside the trial), and a missing attribute on one of the
+        spell's objects fails where the trial reads it. Both are the spell's doing.
+        """
+        msg = str(exc)
+        if isinstance(exc, TypeError):
+            if re.search(r"\(\) (?:takes|missing|got an unexpected keyword|got multiple values)", msg):
+                return True
+            if re.search(r"__\w+__", msg):  # e.g. "__str__ returned non-string"
+                return True
+        if isinstance(exc, (TypeError, AttributeError)):
+            owner = getattr(exc, "obj", None)
+            if owner is not None:
+                cls = owner if isinstance(owner, type) else type(owner)
+                if getattr(cls, "__module__", None) == "__main__":
+                    return True
+            for name in re.findall(r"'(\w+)'", msg):
+                if isinstance(self.spell.get(name), type):
+                    return True
+        return False
+
     def run_one(self, name, func):
         record = {"name": name, "passed": False, "message": "", "line": None, "crash": False}
         buffer = _Capture(self.output_limit)
@@ -964,12 +1053,14 @@ class _Trials:
             except TooMuchOutput:
                 record["message"] = "Your spell printed far too much during this trial. Is a loop running forever?"
             except BaseException as exc:
-                if _blame_spell(exc):
+                if _blame_spell(exc) or self._spell_at_fault(exc):
                     info = describe_error(exc, "trial", self.spell)
                     record["line"] = info["line"]
-                    where = (" (line " + str(info["line"]) + ")") if info["line"] else ""
-                    record["message"] = ("Your spell raised " + info["type"] + where + ": " + info["message"]
-                                         + ". " + info["friendly"])
+                    if info["line"]:
+                        lead = "Your spell raised " + info["type"] + " (line " + str(info["line"]) + ")"
+                    else:
+                        lead = "When the trial used your code, Python raised " + info["type"]
+                    record["message"] = lead + ": " + info["message"] + ". " + info["friendly"]
                 else:
                     record["crash"] = True
                     record["message"] = ("This trial couldn't finish (" + type(exc).__name__ + ": " + str(exc)
