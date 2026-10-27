@@ -2059,6 +2059,10 @@
                   err = expect_raises(ValueError, obey, unknown,
                                       message=code("obey(" + short(unknown) + ")") + " should raise a ValueError: " + unknown
                                       + " isn't one of " + name + "'s skills.")
+                  if len(err.args) > 1:
+                      fail("Your ValueError got " + str(len(err.args)) + " separate values, " + short(err.args)
+                           + ". Give it one string as its message, for example with an f-string: "
+                           + code('raise ValueError(f"{self.name} doesn\'t know how to {order}")') + ".")
                   expect_equal(str(err), name + " doesn't know how to " + unknown,
                                "The ValueError's message is wrong (the message goes in the brackets: "
                                + code('raise ValueError("...")') + ").")

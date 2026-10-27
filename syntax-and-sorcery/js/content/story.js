@@ -1,5 +1,5 @@
 /*
- * Syntax & Sorcery — the prologue (shown once, before the map) and the epilogue
+ * Pyromancer — the prologue (shown once, before the map) and the epilogue
  * (shown after the final chapter). Speakers: ada, pip, glitch, hydra, narrator.
  * Each panel is 1–3 short sentences of RichText.
  */
@@ -10,11 +10,11 @@
     prologue: [
       {
         speaker: "narrator",
-        text: "Far above the clouds, a tower coils into the sky like a sleeping serpent. This is **Coilspire Academy**, where wizards learn their craft, and tonight its newest apprentice has arrived at the gate: you."
+        text: "Far above the clouds, a tower coils into the sky like a sleeping serpent. This is **Coilspire Academy**, where apprentices learn to kindle magic, and tonight the newest of them has arrived at the gate: you."
       },
       {
         speaker: "ada",
-        text: "Welcome, apprentice! I'm Archmage Ada, headmistress of Coilspire. Here, every spell is written in **Python**, the serpent's tongue."
+        text: "Welcome, young pyromancer! I'm Archmage Ada, headmistress of Coilspire. Don't worry, our pyromancy needs no fire: every spell is written in **Python**, the serpent's tongue."
       },
       {
         speaker: "ada",
@@ -52,7 +52,7 @@
       },
       {
         speaker: "ada",
-        text: "As for you, apprentice: by the authority of Coilspire Academy, I name you **Archmage**. Precisely earned."
+        text: "As for you, apprentice: by the authority of Coilspire Academy, I name you **Archmage**, and a true **Pyromancer**. Precisely earned."
       },
       {
         speaker: "pip",
