@@ -137,7 +137,7 @@
     concepts: ["booleans", "comparisons", "if / elif / else", "and / or / not", "for loops", "range()", "while loops", "break", "nested loops"],
     intro: [
       "Below the tower spreads the Hall of Forking Paths: a maze of doors, corridors and staircases where every path splits in two. Choosing the right way has always been part of an apprentice's training.",
-      "Lately, though, the choosing has gone wrong. **Glitch** 👾, a gremlin who thinks a scrambled spell is the funniest thing in the world, has been scampering through the hall and jinxing everything in sight.",
+      "Lately, though, the choosing has gone wrong: **Glitch** 👾 has been scampering through the hall, jinxing everything in sight.",
       "To put things right, your spells must learn two new tricks: making decisions, and repeating themselves."
     ],
     outro: [
@@ -1126,6 +1126,13 @@
             else:
                 print("No multiple of 7 here")
           `, output: "A multiple of 7: 56" },
+          "Its cousin `continue` skips the rest of this pass and jumps to the next one, without stopping the loop:",
+          { code: py`
+            for n in range(1, 8):
+                if n % 3 == 0:
+                    continue    # skip 3 and 6
+                print(n)
+          `, output: "1\n2\n4\n5\n7" },
           "Loops can also go **inside** other loops. The inner loop runs all the way through on every single round of the outer loop:",
           { code: py`
             for row in range(1, 4):
