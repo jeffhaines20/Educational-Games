@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Syntax &amp; Sorcery</title>
+  <meta name="description" content="A wizard's apprenticeship in Python: learn programming, data structures &amp; algorithms and object-oriented design by casting real Python spells in your browser.">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#0d0b24">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%90%8D%3C/text%3E%3C/svg%3E">
+
+  <!-- Record script files that fail to load (missing chapter, syntax error) so the game can say so. -->
+  <script>
+    window.SS_LOAD_ERRORS = [];
+    window.addEventListener("error", function (e) {
+      if (window.SS_LOAD_DONE) return;
+      var t = e && e.target;
+      if (t && t.tagName === "SCRIPT") window.SS_LOAD_ERRORS.push({ src: t.getAttribute("src") || "", kind: "missing" });
+      else if (e && e.filename) window.SS_LOAD_ERRORS.push({ src: e.filename, kind: "error", message: String(e.message || "") });
+    }, true);
+    document.addEventListener("DOMContentLoaded", function () { window.SS_LOAD_DONE = true; });
+  </script>
+
+  <!-- Fonts (optional: system fonts are used if Google Fonts is blocked). Loaded without blocking the page. -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <link rel="preconnect" href="https://cdnjs.cloudflare.com">
+  <link id="ss-fonts" rel="stylesheet" media="print" onload="this.media='all'"
+        href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&amp;family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;700&amp;display=swap">
+
+  <!-- The code editor (CodeMirror 5) is loaded on demand by js/ui/editor.js from cdnjs;
+       if it is blocked, a plain text editor is used instead. -->
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <noscript>
+    <div class="noscript">
+      <h1>Syntax &amp; Sorcery</h1>
+      <p>This game needs JavaScript to cast its Python spells. Please turn JavaScript on, or open the game in another browser.</p>
+    </div>
+  </noscript>
+
+  <div id="sky" aria-hidden="true"></div>
+  <div id="app">
+    <div class="boot" role="status">
+      <div class="boot-orb" aria-hidden="true"></div>
+      <p>Opening the academy gates…</p>
+    </div>
+  </div>
+  <div id="modal-root"></div>
+  <div id="toast-root" aria-live="polite"></div>
+  <div id="sr-live" class="sr-only" aria-live="polite" aria-atomic="true"></div>
+  <div id="sr-alert" class="sr-only" aria-live="assertive" aria-atomic="true"></div>
+  <div id="print-root"></div>
+
+  <!-- Engine -->
+  <script src="js/config.js"></script>
+  <script src="js/engine/harness.js"></script>
+  <script src="js/engine/runner.js"></script>
+  <script src="js/engine/scorm.js"></script>
+  <script src="js/engine/save.js"></script>
+  <script src="js/engine/progress.js"></script>
+
+  <!-- Content -->
+  <script src="js/content/registry.js"></script>
+  <script src="js/content/story.js"></script>
+  <script src="js/content/ch1-tower.js"></script>
+  <script src="js/content/ch2-hall.js"></script>
+  <script src="js/content/ch3-circle.js"></script>
+  <script src="js/content/ch4-library.js"></script>
+  <script src="js/content/ch5-workshop.js"></script>
+  <script src="js/content/ch6-labyrinth.js"></script>
+  <script src="js/content/ch7-hydra.js"></script>
+
+  <!-- User interface (app.js last: it boots the game on DOMContentLoaded) -->
+  <script src="js/ui/util.js"></script>
+  <script src="js/ui/richtext.js"></script>
+  <script src="js/ui/sound.js"></script>
+  <script src="js/ui/effects.js"></script>
+  <script src="js/ui/editor.js"></script>
+  <script src="js/ui/dialogs.js"></script>
+  <script src="js/ui/results.js"></script>
+  <script src="js/ui/panels.js"></script>
+  <script src="js/ui/screen-title.js"></script>
+  <script src="js/ui/screen-map.js"></script>
+  <script src="js/ui/screen-chapter.js"></script>
+  <script src="js/ui/screen-challenge.js"></script>
+  <script src="js/ui/screen-extras.js"></script>
+  <script src="js/ui/app.js"></script>
+</body>
+</html>

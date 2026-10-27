@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Engine runner test</title>
+  <style>
+    body { font: 14px/1.4 system-ui, sans-serif; margin: 16px; background: #fff; color: #111; }
+    pre { background: #f4f4f4; padding: 8px; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <h1>SS.PythonRunner test page</h1>
+  <p>Loads only config.js, harness.js and runner.js. Driven by tools/e2e/engine-runner.js
+     (or by hand: open the console and call <code>SS.PythonRunner.run({ code: "print(1)" })</code>).</p>
+  <pre id="status">(no status yet)</pre>
+  <script>
+    // Optional: ?noWorker=1 simulates a browser/iframe without Web Workers.
+    if (/[?&]noWorker=1/.test(location.search)) { window.Worker = undefined; }
+  </script>
+  <script src="../../js/config.js"></script>
+  <script src="../../js/engine/harness.js"></script>
+  <script src="../../js/engine/runner.js"></script>
+  <script>
+    window.__statusLog = [];
+    SS.PythonRunner.onStatus(function (s) {
+      window.__statusLog.push(s);
+      document.getElementById("status").textContent = s.state + ": " + s.message + (s.detail ? "\n" + s.detail : "");
+    });
+  </script>
+</body>
+</html>

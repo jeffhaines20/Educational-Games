@@ -1,0 +1,1228 @@
+#!/usr/bin/env node
+/*
+ * Engine tests: SS.config, SS.Progress, SS.Save, SS.Scorm (and the parts of
+ * SS.PythonRunner that work without a browser). Dependency-free: every scenario
+ * loads the real engine files into a fresh Node `vm` sandbox with a fake window,
+ * fake localStorage, fake timers, fake SCORM LMS APIs and a small fake content set,
+ * so the tests don't depend on the real chapters.
+ *
+ *   node tools/test_engine.js            # all tests
+ *   node tools/test_engine.js save       # only tests whose name contains "save"
+ *
+ * Browser tests for the runner live in tools/e2e/engine-runner.js.
+ */
+"use strict";
+const fs = require("fs");
+const path = require("path");
+const vm = require("vm");
+const assert = require("assert");
+
+const ROOT = path.resolve(__dirname, "..");
+const SOURCES = {};
+function source(rel) {
+  if (!SOURCES[rel]) SOURCES[rel] = fs.readFileSync(path.join(ROOT, rel), "utf8");
+  return SOURCES[rel];
+}
+
+// ---------------------------------------------------------------------------
+// Fakes
+// ---------------------------------------------------------------------------
+
+function makeTimers() {
+  let now = 0;
+  let nextId = 1;
+  const queue = new Map();
+  return {
+    setTimeout(fn, ms) { const id = nextId++; queue.set(id, { fn, at: now + (Number(ms) || 0) }); return id; },
+    clearTimeout(id) { queue.delete(id); },
+    advance(ms) {
+      now += ms;
+      let ran = true;
+      while (ran) {
+        ran = false;
+        const due = [...queue.entries()].filter(([, t]) => t.at <= now).sort((a, b) => a[1].at - b[1].at);
+        for (const [id, t] of due) { queue.delete(id); t.fn(); ran = true; }
+      }
+    },
+    get pending() { return queue.size; },
+  };
+}
+
+function makeLocalStorage() {
+  const data = new Map();
+  const ls = {
+    failWrites: false,
+    writes: 0,
+    getItem(k) { k = String(k); return data.has(k) ? data.get(k) : null; },
+    setItem(k, v) {
+      if (ls.failWrites) { const e = new Error("The quota has been exceeded."); e.name = "QuotaExceededError"; throw e; }
+      ls.writes++;
+      data.set(String(k), String(v));
+    },
+    removeItem(k) { data.delete(String(k)); },
+    clear() { data.clear(); },
+    key(i) { return [...data.keys()][i] ?? null; },
+    get length() { return data.size; },
+    _data: data,
+  };
+  return ls;
+}
+
+function makeScorm12(initial) {
+  const data = Object.assign({
+    "cmi.core.student_id": "learner-42",
+    "cmi.core.student_name": "Doe, Jane",
+    "cmi.core.lesson_status": "not attempted",
+    "cmi.suspend_data": "",
+  }, initial || {});
+  const calls = [];
+  let initialized = false;
+  let lastError = "0";
+  return {
+    data, calls,
+    LMSInitialize() { calls.push("init"); if (initialized) { lastError = "101"; return "false"; } initialized = true; lastError = "0"; return "true"; },
+    LMSGetValue(k) { calls.push("get " + k); lastError = "0"; return data[k] === undefined ? "" : String(data[k]); },
+    LMSSetValue(k, v) {
+      calls.push("set " + k);
+      if (k === "cmi.suspend_data" && String(v).length > 4096) { lastError = "405"; return "false"; }
+      data[k] = String(v); lastError = "0"; return "true";
+    },
+    LMSCommit() { calls.push("commit"); return "true"; },
+    LMSFinish() { calls.push("finish"); return "true"; },
+    LMSGetLastError() { return lastError; },
+    LMSGetErrorString() { return ""; },
+    LMSGetDiagnostic() { return ""; },
+    count(name) { return calls.filter((c) => c === name).length; },
+    _setInitialized(v) { initialized = v; },
+  };
+}
+
+function makeScorm2004(initial) {
+  const data = Object.assign({
+    "cmi.learner_id": "learner-2004",
+    "cmi.learner_name": "Lovelace, Ada",
+    "cmi.completion_status": "unknown",
+    "cmi.suspend_data": "",
+  }, initial || {});
+  const calls = [];
+  let initialized = false;
+  let lastError = "0";
+  return {
+    data, calls,
+    Initialize() { calls.push("init"); if (initialized) { lastError = "103"; return "false"; } initialized = true; return "true"; },
+    GetValue(k) { calls.push("get " + k); return data[k] === undefined ? "" : String(data[k]); },
+    SetValue(k, v) { calls.push("set " + k); data[k] = String(v); return "true"; },
+    Commit() { calls.push("commit"); return "true"; },
+    Terminate() { calls.push("finish"); return "true"; },
+    GetLastError() { return lastError; },
+    GetErrorString() { return ""; },
+    GetDiagnostic() { return ""; },
+    count(name) { return calls.filter((c) => c === name).length; },
+    _setInitialized(v) { initialized = v; },
+  };
+}
+
+/** A window whose properties throw, like a cross-origin parent (but `parent` works). */
+function crossOriginWindow(parent) {
+  return new Proxy({}, {
+    get(target, key) {
+      if (key === "parent") return parent;
+      throw new Error("SecurityError: Blocked a frame with origin from accessing a cross-origin frame.");
+    },
+  });
+}
+
+function topWindow(props) {
+  const win = Object.assign({}, props || {});
+  win.parent = win;
+  win.top = win;
+  return win;
+}
+
+// Fake content: 3 chapters, 6 challenges.
+const FAKE_CONTENT = `
+  SS.defineChapter({ id: "alpha", order: 1, title: "Alpha", challenges: [
+    { id: "alpha-one", difficulty: "easy", hints: ["a", "b", "c"] },
+    { id: "alpha-two", difficulty: "medium", hints: ["a", "b"] }
+  ]});
+  SS.defineChapter({ id: "beta", order: 2, title: "Beta", challenges: [
+    { id: "beta-one", difficulty: "hard", hints: ["a", "b", "c", "d"] }
+  ]});
+  SS.defineChapter({ id: "gamma", order: 3, title: "Gamma", challenges: [
+    { id: "gamma-one", difficulty: "easy", hints: ["a"] },
+    { id: "gamma-two", difficulty: "easy", hints: ["a", "b"] },
+    { id: "gamma-three", difficulty: "medium", hints: ["a", "b"] }
+  ]});
+`;
+
+/**
+ * A fresh engine in a vm sandbox.
+ * options: { storage: fakeLocalStorage | "blocked" | null, parent, opener, config, location,
+ *            content: js string | false, files: [...], document }
+ */
+function makeEngine(options) {
+  options = options || {};
+  const timers = makeTimers();
+  const listeners = {};
+  const docListeners = {};
+  const logs = [];
+  const quietConsole = { log() {}, info() {}, warn: (...a) => logs.push(a.join(" ")), error: (...a) => logs.push(a.join(" ")) };
+  const sb = {
+    console: quietConsole,
+    setTimeout: timers.setTimeout,
+    clearTimeout: timers.clearTimeout,
+    addEventListener(type, fn) { (listeners[type] = listeners[type] || []).push(fn); },
+    removeEventListener() {},
+  };
+  sb.window = sb;
+  sb.self = sb;
+  sb.top = options.parent ? (options.parent.top || options.parent) : sb;
+  sb.parent = options.parent || sb;
+  if (options.opener) sb.opener = options.opener;
+  if (options.location) sb.location = options.location;
+  if (options.config) sb.SS_CONFIG = options.config;
+  if (options.storage === "blocked") {
+    Object.defineProperty(sb, "localStorage", { get() { throw new Error("SecurityError: The operation is insecure."); } });
+  } else if (options.storage !== undefined) {
+    sb.localStorage = options.storage;
+  } else {
+    sb.localStorage = makeLocalStorage();
+  }
+  sb.document = options.document || {
+    visibilityState: "visible",
+    addEventListener(type, fn) { (docListeners[type] = docListeners[type] || []).push(fn); },
+  };
+  vm.createContext(sb);
+  const files = options.files || ["js/config.js", "js/engine/scorm.js", "js/engine/save.js", "js/engine/progress.js", "js/content/registry.js"];
+  for (const rel of files) vm.runInContext(source(rel), sb, { filename: rel });
+  if (options.content !== false) vm.runInContext(options.content || FAKE_CONTENT, sb, { filename: "fake-content.js" });
+  return {
+    sb, SS: sb.SS, timers, logs,
+    fire(type, event) { (listeners[type] || []).forEach((fn) => fn(event || {})); },
+    hide() { sb.document.visibilityState = "hidden"; (docListeners.visibilitychange || []).forEach((fn) => fn({})); },
+    run(code) { return vm.runInContext(code, sb); },
+  };
+}
+
+/** Objects from the sandbox have another realm's prototypes: compare plain copies. */
+function plain(value) { return JSON.parse(JSON.stringify(value)); }
+
+// ---------------------------------------------------------------------------
+// Tiny test runner
+// ---------------------------------------------------------------------------
+
+const tests = [];
+function test(name, fn) { tests.push({ name, fn }); }
+
+// ---------------------------------------------------------------------------
+// SS.config
+// ---------------------------------------------------------------------------
+
+test("config: defaults match the design document", () => {
+  const { SS } = makeEngine({ files: ["js/config.js"], content: false });
+  const c = SS.config;
+  assert.strictEqual(c.title, "Syntax & Sorcery");
+  assert.strictEqual(c.pyodideVersion, "0.29.5");
+  assert.deepStrictEqual(plain(c.pyodideBaseURLs), ["https://cdn.jsdelivr.net/pyodide/v0.29.5/full/", "https://unpkg.com/pyodide@0.29.5/"]);
+  assert.strictEqual(c.defaultTimeLimitMs, 8000);
+  assert.strictEqual(c.outputLimitChars, 50000);
+  assert.strictEqual(c.saveSlots, 3);
+  assert.strictEqual(c.storageKey, "syntax-and-sorcery");
+  assert.strictEqual(c.allowAnswerScroll, true);
+  assert.strictEqual(c.answerScrollAfterFailedCasts, 3);
+  assert.strictEqual(c.unlockAll, false);
+  assert.deepStrictEqual(plain(c.scorm), { enabled: true, completionThreshold: 1 });
+});
+
+test("config: SS_CONFIG overrides are validated", () => {
+  const { SS } = makeEngine({
+    files: ["js/config.js"], content: false,
+    config: { pyodideBaseURLs: "http://example.test/py", saveSlots: 99, defaultTimeLimitMs: "abc", scorm: { enabled: false, completionThreshold: 0.8 }, allowAnswerScroll: "no", extra: 7 },
+  });
+  assert.deepStrictEqual(plain(SS.config.pyodideBaseURLs), ["http://example.test/py/"]);
+  assert.strictEqual(SS.config.saveSlots, 10);
+  assert.strictEqual(SS.config.defaultTimeLimitMs, 8000);
+  assert.strictEqual(SS.config.allowAnswerScroll, true);
+  assert.deepStrictEqual(plain(SS.config.scorm), { enabled: false, completionThreshold: 0.8 });
+  assert.strictEqual(SS.config.extra, 7);
+});
+
+test("config: URL parameters (unlock, answers, localPyodide only on localhost, never URLs)", () => {
+  let { SS } = makeEngine({ files: ["js/config.js"], content: false, location: { search: "?unlock=all&answers=OFF&localPyodide=1", hostname: "localhost" } });
+  assert.strictEqual(SS.config.unlockAll, true);
+  assert.strictEqual(SS.config.allowAnswerScroll, false);
+  assert.deepStrictEqual(plain(SS.config.pyodideBaseURLs), ["/pyodide/"]);
+  ({ SS } = makeEngine({ files: ["js/config.js"], content: false, location: { search: "?localPyodide=1&pyodideBaseURLs=https://evil.test/", hostname: "school.example.org" } }));
+  assert.deepStrictEqual(plain(SS.config.pyodideBaseURLs), ["https://cdn.jsdelivr.net/pyodide/v0.29.5/full/", "https://unpkg.com/pyodide@0.29.5/"]);
+  ({ SS } = makeEngine({ files: ["js/config.js"], content: false, location: { search: "?%E0%A4%A=1&unlock=some", hostname: "127.0.0.1" } }));
+  assert.strictEqual(SS.config.unlockAll, false);
+});
+
+// ---------------------------------------------------------------------------
+// SS.Progress
+// ---------------------------------------------------------------------------
+
+function profileWith(records, settings) {
+  return { challenges: records || {}, settings: Object.assign({ unlockAll: false }, settings || {}), seen: {} };
+}
+const done = (stars) => ({ completed: true, stars });
+
+test("progress: stars and XP", () => {
+  const { SS } = makeEngine();
+  const P = SS.Progress;
+  assert.strictEqual(P.starsFor({ hintsUsed: 0 }), 3);
+  assert.strictEqual(P.starsFor({ hintsUsed: 1 }), 2);
+  assert.strictEqual(P.starsFor({ hintsUsed: 2 }), 1);
+  assert.strictEqual(P.starsFor({ hintsUsed: 9 }), 1);
+  assert.strictEqual(P.starsFor({ hintsUsed: 0, answerRevealed: true }), 1);
+  assert.strictEqual(P.starsFor({}), 3);
+  const easy = SS.content.challengesById["alpha-one"], medium = SS.content.challengesById["alpha-two"], hard = SS.content.challengesById["beta-one"];
+  assert.deepStrictEqual([3, 2, 1, 0].map((s) => P.xpFor(easy, s)), [10, 7, 3, 0]);
+  assert.deepStrictEqual([3, 2, 1].map((s) => P.xpFor(medium, s)), [20, 13, 7]);
+  assert.deepStrictEqual([3, 2, 1].map((s) => P.xpFor(hard, s)), [30, 20, 10]);
+  assert.strictEqual(P.xpFor("beta-one", 3), 30);
+  assert.strictEqual(P.xpFor("no-such-challenge", 3), 0);
+  assert.strictEqual(P.maxXp(), 10 + 20 + 30 + 10 + 10 + 20);
+  const prof = profileWith({ "alpha-one": done(3), "alpha-two": done(2), "ghost-id": done(3), "beta-one": { completed: false, stars: 3 } });
+  assert.strictEqual(P.totalXp(prof), 10 + 13);
+  assert.strictEqual(P.totalXp(null), 0);
+});
+
+test("progress: ranks, thresholds and fraction", () => {
+  const { SS } = makeEngine();
+  const P = SS.Progress;
+  assert.deepStrictEqual(plain(P.RANKS).map((r) => r.title), ["Novice", "Apprentice", "Initiate", "Adept", "Conjurer", "Sorcerer", "Archmage"]);
+  assert.deepStrictEqual(plain(P.RANKS).map((r) => r.share), [0, 0.04, 0.12, 0.25, 0.45, 0.65, 0.85]);
+  assert.ok(P.RANKS.every((r) => typeof r.icon === "string" && r.icon.length > 0));
+  const at = (xp, max) => P.rankFor(xp, max).title;
+  assert.deepStrictEqual([0, 3, 4, 11, 12, 24, 25, 44, 45, 64, 65, 84, 85, 100].map((x) => at(x, 100)),
+    ["Novice", "Novice", "Apprentice", "Apprentice", "Initiate", "Initiate", "Adept", "Adept", "Conjurer", "Conjurer", "Sorcerer", "Sorcerer", "Archmage", "Archmage"]);
+  // 250 max: 10, 30, 62.5→63, 112.5→113, 162.5→163, 212.5→213
+  assert.deepStrictEqual([62, 63, 112, 113].map((x) => at(x, 250)), ["Initiate", "Adept", "Adept", "Conjurer"]);
+  const r = P.rankFor(8, 100);
+  assert.deepStrictEqual(plain(r), { index: 1, title: "Apprentice", icon: r.icon, minXp: 4, nextTitle: "Initiate", nextXp: 12, fraction: 0.5 });
+  const top = P.rankFor(100, 100);
+  assert.strictEqual(top.nextTitle, null);
+  assert.strictEqual(top.nextXp, null);
+  assert.strictEqual(top.fraction, 1);
+  // Default max = the content's max XP (100 here).
+  assert.strictEqual(P.rankFor(85).title, "Archmage");
+  assert.strictEqual(P.rankFor(-5).title, "Novice");
+});
+
+test("progress: handles no content and missing profiles", () => {
+  const { SS } = makeEngine({ content: false });
+  const P = SS.Progress;
+  assert.strictEqual(P.maxXp(), 0);
+  assert.deepStrictEqual(plain(P.rankFor(0)), { index: 0, title: "Novice", icon: P.RANKS[0].icon, minXp: 0, nextTitle: "Apprentice", nextXp: 1, fraction: 0 });
+  assert.deepStrictEqual(plain(P.overallStats(null)), { completed: 0, total: 0, stars: 0, maxStars: 0, xp: 0, maxXp: 0, percent: 0 });
+  assert.deepStrictEqual(plain(P.chapterStats(null, "alpha")), { completed: 0, total: 0, stars: 0, maxStars: 0, complete: false });
+  assert.strictEqual(P.isChapterUnlocked(null, "alpha"), false);
+  assert.strictEqual(P.isChallengeUnlocked(undefined, "alpha-one"), false);
+  assert.strictEqual(P.firstIncomplete(null), null);
+  assert.strictEqual(P.nextChallenge(null, "alpha-one"), null);
+});
+
+test("progress: unlock rules", () => {
+  const { SS } = makeEngine();
+  const P = SS.Progress;
+  const fresh = profileWith({});
+  assert.strictEqual(P.isChapterUnlocked(fresh, "alpha"), true);
+  assert.strictEqual(P.isChapterUnlocked(fresh, "beta"), false);
+  assert.strictEqual(P.isChapterUnlocked(fresh, "nope"), false);
+  assert.strictEqual(P.isChallengeUnlocked(fresh, "alpha-one"), true);
+  assert.strictEqual(P.isChallengeUnlocked(fresh, "alpha-two"), false);
+  assert.strictEqual(P.isChallengeUnlocked(fresh, "beta-one"), false);
+  assert.strictEqual(P.isChallengeUnlocked(fresh, "nope"), false);
+
+  const one = profileWith({ "alpha-one": done(3) });
+  assert.strictEqual(P.isChallengeUnlocked(one, "alpha-two"), true);
+  assert.strictEqual(P.isChapterUnlocked(one, "beta"), false);
+
+  const alphaDone = profileWith({ "alpha-one": done(3), "alpha-two": done(1) });
+  assert.strictEqual(P.isChapterUnlocked(alphaDone, "beta"), true);
+  assert.strictEqual(P.isChallengeUnlocked(alphaDone, "beta-one"), true);
+  assert.strictEqual(P.isChapterUnlocked(alphaDone, "gamma"), false);
+
+  const free = profileWith({}, { unlockAll: true });
+  assert.strictEqual(P.unlockAll(free), true);
+  assert.strictEqual(P.isChallengeUnlocked(free, "gamma-three"), true);
+  SS.config.unlockAll = true;
+  assert.strictEqual(P.unlockAll(fresh), true);
+  assert.strictEqual(P.isChapterUnlocked(fresh, "gamma"), true);
+  SS.config.unlockAll = false;
+
+  // Completed in free practice, then free practice turned off: own work stays open.
+  const earlier = profileWith({ "gamma-two": done(2) });
+  assert.strictEqual(P.isChallengeUnlocked(earlier, "gamma-two"), true);
+  assert.strictEqual(P.isChapterUnlocked(earlier, "gamma"), true);
+  assert.strictEqual(P.isChallengeUnlocked(earlier, "gamma-one"), true);
+  assert.strictEqual(P.isChallengeUnlocked(earlier, "gamma-three"), true);
+});
+
+test("progress: stats, next challenge and continue target", () => {
+  const { SS } = makeEngine();
+  const P = SS.Progress;
+  const prof = profileWith({ "alpha-one": done(3), "alpha-two": done(2), "beta-one": done(1) });
+  assert.deepStrictEqual(plain(P.chapterStats(prof, "alpha")), { completed: 2, total: 2, stars: 5, maxStars: 6, complete: true });
+  assert.deepStrictEqual(plain(P.chapterStats(prof, "gamma")), { completed: 0, total: 3, stars: 0, maxStars: 9, complete: false });
+  assert.deepStrictEqual(plain(P.overallStats(prof)), { completed: 3, total: 6, stars: 6, maxStars: 18, xp: 10 + 13 + 10, maxXp: 100, percent: 50 });
+  assert.strictEqual(P.nextChallenge(prof, "alpha-one").id, "alpha-two");
+  assert.strictEqual(P.nextChallenge(prof, "alpha-two").id, "beta-one");
+  assert.strictEqual(P.nextChallenge(prof, "beta-one").id, "gamma-one");
+  assert.strictEqual(P.nextChallenge(profileWith({ "alpha-one": done(3) }), "alpha-two"), null, "next chapter still locked");
+  assert.strictEqual(P.nextChallenge(prof, "gamma-three"), null);
+  assert.strictEqual(P.nextChallenge(prof, "nope"), null);
+  assert.strictEqual(P.firstIncomplete(profileWith({})).id, "alpha-one");
+  assert.strictEqual(P.firstIncomplete(prof).id, "gamma-one");
+  const all = profileWith(Object.fromEntries(P.allChallenges().map((c) => [c.id, done(3)])));
+  assert.strictEqual(P.firstIncomplete(all), null);
+  assert.strictEqual(P.overallStats(all).percent, 100);
+  assert.strictEqual(P.rankFor(P.totalXp(all)).title, "Archmage");
+  assert.strictEqual(JSON.stringify(P.overallStats(prof)), JSON.stringify(P.overallStats(prof)), "deterministic");
+});
+
+// ---------------------------------------------------------------------------
+// SS.Save — local mode
+// ---------------------------------------------------------------------------
+
+async function initSave(engine) {
+  const result = await engine.SS.Save.init();
+  return plain(result);
+}
+
+test("save: create, list, persist and reload a profile", async () => {
+  const storage = makeLocalStorage();
+  let e = makeEngine({ storage });
+  assert.deepStrictEqual(await initSave(e), { storage: "local", scorm: false, learnerName: null, defaultWizardName: null });
+  const S = e.SS.Save;
+  assert.strictEqual(S.storageWarning(), null);
+  assert.strictEqual(S.isScorm(), false);
+  assert.deepStrictEqual(plain(S.listSlots()), [null, null, null]);
+  assert.strictEqual(S.getLastSlot(), null);
+  const p = S.createProfile(1, "  Merlin\u0007 the\n Wise ");
+  assert.strictEqual(p.wizardName, "Merlin the Wise");
+  assert.strictEqual(S.getProfile(), p);
+  assert.ok(storage.getItem("syntax-and-sorcery:slot:1"));
+  assert.strictEqual(storage.getItem("syntax-and-sorcery:lastSlot"), "1");
+  assert.strictEqual(S.getLastSlot(), 1);
+  const slots = plain(S.listSlots());
+  assert.strictEqual(slots[0], null);
+  assert.deepStrictEqual(Object.keys(slots[1]).sort(), ["completed", "rankIcon", "rankTitle", "slot", "stars", "total", "updatedAt", "wizardName", "xp"]);
+  assert.strictEqual(slots[1].wizardName, "Merlin the Wise");
+  assert.strictEqual(slots[1].total, 6);
+  assert.strictEqual(slots[1].rankTitle, "Novice");
+  assert.ok(Array.isArray(Object.keys(p.challenges)) && p.version === 1 && typeof p.id === "string");
+  assert.deepStrictEqual(plain(p.settings), { sound: true, reduceMotion: false, editorFontSize: 15, unlockAll: false });
+  S.recordCast("alpha-one", { passed: false });
+  S.recordCompletion("alpha-one", { code: "print('hi')\n" });
+
+  // "Reload the page": a new engine with the same storage.
+  e = makeEngine({ storage });
+  await initSave(e);
+  assert.strictEqual(e.SS.Save.getProfile(), null, "nothing is active until a slot is loaded");
+  assert.strictEqual(e.SS.Save.getLastSlot(), 1);
+  const again = e.SS.Save.loadProfile(1);
+  assert.strictEqual(again.wizardName, "Merlin the Wise");
+  assert.strictEqual(again.challenges["alpha-one"].completed, true);
+  assert.strictEqual(again.challenges["alpha-one"].bestCode, "print('hi')\n");
+  assert.strictEqual(e.SS.Save.loadProfile(0), null);
+  assert.strictEqual(e.SS.Save.getProfile().id, again.id, "a failed load keeps the active profile");
+  assert.throws(() => e.SS.Save.createProfile(3, "x"), /slot from 1 to 3/);
+  assert.throws(() => e.SS.Save.loadProfile(-1), /slot/);
+  assert.strictEqual(e.SS.Save.createProfile(0, "\u0000\u202E  ").wizardName, "Apprentice");
+});
+
+test("save: casts, hints, answers and completions (stars, best kept, XP)", async () => {
+  const e = makeEngine();
+  await initSave(e);
+  const S = e.SS.Save;
+  S.createProfile(0, "Ada");
+  const changes = [];
+  const off = S.onChange((profile, info) => changes.push(info.type + ":" + (info.challengeId || "")));
+
+  assert.deepStrictEqual(plain(S.recordCast("alpha-one", { passed: false })), Object.assign(plain(S.getRecord("alpha-one")), {}));
+  S.recordCast("alpha-one", { passed: false });
+  S.recordCast("alpha-one", { passed: true });
+  let rec = S.getRecord("alpha-one");
+  assert.strictEqual(rec.casts, 3);
+  assert.strictEqual(rec.failedCasts, 2);
+  assert.strictEqual(S.getProfile().lastChallengeId, "alpha-one");
+
+  assert.strictEqual(S.revealHint("alpha-one"), 1);
+  let res = plain(S.recordCompletion("alpha-one", { code: "two stars" }));
+  assert.strictEqual(res.firstTime, true);
+  assert.strictEqual(res.previousStars, 0);
+  assert.strictEqual(res.stars, 2);
+  assert.strictEqual(res.bestStars, 2);
+  assert.strictEqual(res.xpGained, 7);
+  assert.strictEqual(res.totalXp, 7);
+  assert.strictEqual(res.rankUp, true);          // 7 of 100 XP: Novice → Apprentice
+  assert.strictEqual(res.rank.title, "Apprentice");
+
+  // More hints later don't lower saved stars; a worse completion keeps the best.
+  assert.strictEqual(S.revealHint("alpha-one"), 2);
+  assert.strictEqual(S.revealHint("alpha-one"), 3);
+  assert.strictEqual(S.revealHint("alpha-one"), 3, "can't reveal more hints than the challenge has");
+  assert.strictEqual(S.getRecord("alpha-one").stars, 2);
+  res = plain(S.recordCompletion("alpha-one", { code: "one star" }));
+  assert.deepStrictEqual([res.firstTime, res.previousStars, res.stars, res.bestStars, res.xpGained, res.rankUp], [false, 2, 1, 2, 0, false]);
+  assert.strictEqual(S.getRecord("alpha-one").bestCode, "two stars", "bestCode comes from the best completion");
+
+  // Answer Scroll → 1 star.
+  S.revealAnswer("beta-one");
+  res = plain(S.recordCompletion("beta-one", { code: "x" }));
+  assert.deepStrictEqual([res.stars, res.xpGained], [1, 10]);
+
+  // A perfect completion of a new challenge.
+  res = plain(S.recordCompletion("alpha-two", { code: "y" }));
+  assert.deepStrictEqual([res.firstTime, res.stars, res.xpGained], [true, 3, 20]);
+  const completedAt = S.getRecord("alpha-two").completedAt;
+  assert.ok(!isNaN(Date.parse(completedAt)));
+  S.recordCompletion("alpha-two", { code: "z" });
+  assert.strictEqual(S.getRecord("alpha-two").completedAt, completedAt, "first completion time is kept");
+  assert.strictEqual(S.getRecord("alpha-two").bestCode, "z", "an equally good completion updates bestCode");
+  assert.strictEqual(e.SS.Progress.totalXp(S.getProfile()), 7 + 10 + 20);
+
+  assert.ok(changes.includes("cast:alpha-one") && changes.includes("hint:alpha-one") && changes.includes("completion:beta-one") && changes.includes("answer:beta-one"));
+  off();
+  S.markSeen("prologue");
+  assert.ok(!changes.includes("seen:"), "unsubscribed");
+  // Bad ids are ignored, never thrown.
+  assert.strictEqual(S.recordCast("__proto__", { passed: true }), null);
+  assert.strictEqual(S.revealHint(""), 0);
+  assert.strictEqual(Object.prototype.hasOwnProperty.call(S.getProfile().challenges, "__proto__"), false);
+});
+
+test("save: seen flags, settings and practice code", async () => {
+  const storage = makeLocalStorage();
+  const e = makeEngine({ storage });
+  await initSave(e);
+  const S = e.SS.Save;
+  S.createProfile(0, "Ada");
+  assert.strictEqual(S.hasSeen("prologue"), false);
+  S.markSeen("prologue");
+  S.markSeen("chapter:alpha");
+  assert.strictEqual(S.hasSeen("prologue"), true);
+  assert.strictEqual(S.hasSeen("chapter:alpha"), true);
+  assert.strictEqual(S.hasSeen("constructor"), false);
+  assert.strictEqual(S.hasSeen("toString"), false);
+  assert.strictEqual(S.markSeen("__proto__"), false);
+  assert.deepStrictEqual(plain(S.updateSettings({ sound: false, editorFontSize: 99, reduceMotion: "yes", bogus: 1 })),
+    { sound: false, reduceMotion: false, editorFontSize: 32, unlockAll: false });
+  assert.deepStrictEqual(plain(S.updateSettings({ editorFontSize: 3, unlockAll: true })).editorFontSize, 10);
+  assert.strictEqual(e.SS.Progress.unlockAll(S.getProfile()), true);
+  assert.strictEqual(S.getPracticeCode(), "");
+  S.savePracticeCode("print(42)");
+  assert.strictEqual(S.getPracticeCode(), "print(42)");
+  S.flush();
+  assert.strictEqual(JSON.parse(storage.getItem("syntax-and-sorcery:slot:0")).practiceCode, "print(42)");
+});
+
+test("save: drafts are debounced, and flushed on pagehide / visibilitychange", async () => {
+  const storage = makeLocalStorage();
+  const e = makeEngine({ storage });
+  await initSave(e);
+  const S = e.SS.Save;
+  S.createProfile(0, "Ada");
+  const stored = () => JSON.parse(storage.getItem("syntax-and-sorcery:slot:0"));
+  const changes = [];
+  S.onChange((p, info) => changes.push(info.type));
+  S.saveDraft("alpha-one", "print(1)");
+  S.saveDraft("alpha-one", "print(12)");
+  assert.strictEqual(S.getRecord("alpha-one").draft, "print(12)", "visible at once in memory");
+  assert.strictEqual(stored().challenges["alpha-one"], undefined, "not written yet");
+  e.timers.advance(2000);
+  assert.strictEqual(stored().challenges["alpha-one"].draft, "print(12)");
+  assert.deepStrictEqual(changes, [], "draft autosaves don't trigger onChange");
+
+  S.saveDraft("alpha-one", "print(123)");
+  e.fire("pagehide", { persisted: false });
+  assert.strictEqual(stored().challenges["alpha-one"].draft, "print(123)");
+  S.saveDraft("alpha-two", "draft two");
+  e.hide();
+  assert.strictEqual(stored().challenges["alpha-two"].draft, "draft two");
+  const writes = storage.writes;
+  S.saveDraft("alpha-two", "draft two");          // unchanged: nothing to do
+  e.timers.advance(2000);
+  assert.strictEqual(storage.writes, writes);
+  assert.strictEqual(S.saveDraft("alpha-one", "x".repeat(300000)), false, "absurdly long drafts are refused");
+  assert.strictEqual(S.getRecord("alpha-one").draft, "print(123)");
+  assert.strictEqual(S.saveDraft("not a valid id!", "x"), false);
+});
+
+test("save: delete a slot", async () => {
+  const storage = makeLocalStorage();
+  const e = makeEngine({ storage });
+  await initSave(e);
+  const S = e.SS.Save;
+  S.createProfile(0, "One");
+  S.createProfile(2, "Three");
+  assert.deepStrictEqual(plain(S.listSlots()).map((s) => s && s.wizardName), ["One", null, "Three"]);
+  assert.strictEqual(S.getLastSlot(), 2);
+  S.deleteSlot(2);
+  assert.strictEqual(S.getProfile(), null);
+  assert.strictEqual(S.getLastSlot(), null);
+  assert.deepStrictEqual(plain(S.listSlots()).map((s) => s && s.wizardName), ["One", null, null]);
+  assert.strictEqual(storage.getItem("syntax-and-sorcery:slot:2"), null);
+});
+
+test("save: blocked storage falls back to memory with a warning", async () => {
+  for (const storage of ["blocked", null]) {
+    const e = makeEngine({ storage });
+    const result = await initSave(e);
+    assert.strictEqual(result.storage, "memory");
+    const S = e.SS.Save;
+    assert.match(S.storageWarning(), /Save Scroll/);
+    const p = S.createProfile(0, "Ghost");
+    S.recordCompletion("alpha-one", { code: "x" });
+    S.saveDraft("alpha-two", "y");
+    e.fire("pagehide", { persisted: false });
+    assert.strictEqual(S.getProfile(), p);
+    assert.strictEqual(plain(S.listSlots())[0].wizardName, "Ghost");
+    assert.strictEqual(S.getLastSlot(), 0);
+    assert.ok(S.exportCode().startsWith("SNS1."));
+  }
+});
+
+test("save: quota errors keep data in memory, warn, and recover", async () => {
+  const storage = makeLocalStorage();
+  const e = makeEngine({ storage });
+  await initSave(e);
+  const S = e.SS.Save;
+  S.createProfile(0, "Full");
+  storage.failWrites = true;
+  S.recordCompletion("alpha-one", { code: "x" });
+  assert.match(S.storageWarning(), /full/);
+  assert.strictEqual(S.getRecord("alpha-one").completed, true);
+  assert.strictEqual(plain(S.listSlots())[0].completed, 1, "still listed from memory");
+  storage.failWrites = false;
+  S.recordCast("alpha-two", { passed: false });
+  assert.strictEqual(S.storageWarning(), null, "warning cleared once saving works again");
+  assert.strictEqual(JSON.parse(storage.getItem("syntax-and-sorcery:slot:0")).challenges["alpha-one"].completed, true);
+});
+
+test("save: corrupt and partly corrupt slots", async () => {
+  const storage = makeLocalStorage();
+  storage.setItem("syntax-and-sorcery:slot:0", "{not json");
+  storage.setItem("syntax-and-sorcery:slot:1", JSON.stringify({
+    wizardName: 42, createdAt: "yesterday-ish", challenges: { "alpha-one": { completed: true, stars: 7, casts: -4, hintsUsed: "2" }, "bad id!": {}, "beta-one": "nope" },
+    seen: { prologue: 1, "": true }, settings: { editorFontSize: "18", sound: "loud" }, practiceCode: 5, lastChallengeId: "alpha-one", hack: "<script>",
+  }));
+  storage.setItem("syntax-and-sorcery:slot:2", "[1,2,3]");
+  storage.setItem("syntax-and-sorcery:lastSlot", "0");
+  const e = makeEngine({ storage });
+  await initSave(e);
+  const S = e.SS.Save;
+  const slots = plain(S.listSlots());
+  assert.strictEqual(slots[0], null);
+  assert.strictEqual(slots[2], null);
+  assert.strictEqual(slots[1].wizardName, "42");
+  assert.strictEqual(S.getLastSlot(), null, "lastSlot points at a damaged slot");
+  assert.strictEqual(S.loadProfile(0), null);
+  const p = S.loadProfile(1);
+  assert.deepStrictEqual(plain(p.challenges["alpha-one"]), { completed: true, stars: 3, casts: 0, failedCasts: 0, hintsUsed: 2, answerRevealed: false, draft: null, bestCode: null, completedAt: null });
+  assert.deepStrictEqual(Object.keys(p.challenges), ["alpha-one"]);
+  assert.deepStrictEqual(plain(p.seen), { prologue: true });
+  assert.deepStrictEqual(plain(p.settings), { sound: true, reduceMotion: false, editorFontSize: 18, unlockAll: false });
+  assert.strictEqual(p.practiceCode, "");
+  assert.strictEqual(p.hack, undefined);
+  assert.ok(!isNaN(Date.parse(p.createdAt)));
+  storage.setItem("syntax-and-sorcery:lastSlot", "7");
+  assert.strictEqual(S.getLastSlot(), null);
+});
+
+test("save: name cleaning (control characters, 24 characters, emoji)", () => {
+  const { SS } = makeEngine();
+  const clean = SS.Save._cleanName;
+  assert.strictEqual(clean("  Zoë\u0000\u202E  the\n\tGreat  "), "Zoë the Great");
+  assert.strictEqual(clean("abcdefghijklmnopqrstuvwxyz0123"), "abcdefghijklmnopqrstuvwx");
+  assert.strictEqual(Array.from(clean("🧙".repeat(30))).length, 24, "counts characters, not UTF-16 units");
+  assert.strictEqual(clean("\ud800lone"), "lone");
+  assert.strictEqual(clean(null), "");
+  assert.strictEqual(clean("Ada\u200D♀"), "Ada\u200D♀", "ZWJ is kept for emoji sequences");
+  assert.strictEqual(SS.Save._fileName("Zoë / the: Great"), "syntax-and-sorcery-Zoë-the-Great.json");
+  assert.strictEqual(SS.Save._fileName("///"), "syntax-and-sorcery-wizard.json");
+});
+
+test("save: exportCode round-trips through importData (compact, no code)", async () => {
+  const e = makeEngine();
+  await initSave(e);
+  const S = e.SS.Save;
+  const p = S.createProfile(0, "Zoë 🧙 李");
+  S.recordCast("alpha-one", { passed: false });
+  S.revealHint("alpha-one");
+  S.recordCompletion("alpha-one", { code: "secret solution" });
+  S.saveDraft("alpha-two", "draft code");
+  S.recordCast("alpha-two", { passed: false });
+  S.revealAnswer("alpha-two");
+  S.markSeen("prologue");
+  S.markSeen("chapter:alpha");
+  S.updateSettings({ sound: false, editorFontSize: 20, unlockAll: true });
+  const code = S.exportCode();
+  assert.match(code, /^SNS1\.[A-Za-z0-9_-]+$/);
+  const json = Buffer.from(code.slice(5), "base64url").toString("utf8");
+  assert.ok(!/secret solution|draft code/.test(json), "the code holds no drafts or solutions");
+  assert.ok(code.length < 1000);
+
+  const imported = S.importData("  " + code.slice(0, 40) + "\n " + code.slice(40) + ".  ", 2);
+  assert.strictEqual(S.getProfile(), imported);
+  const strip = (prof) => {
+    const out = plain(prof);
+    for (const rec of Object.values(out.challenges)) { rec.draft = null; rec.bestCode = null; }
+    out.practiceCode = "";
+    delete out.updatedAt;
+    return out;
+  };
+  const original = strip(p);
+  delete original.challenges["alpha-two"].draft;
+  const copy = strip(imported);
+  assert.deepStrictEqual(copy.challenges, strip(p).challenges);
+  assert.strictEqual(copy.wizardName, p.wizardName);
+  assert.strictEqual(copy.id, p.id);
+  assert.strictEqual(copy.createdAt, p.createdAt);
+  assert.deepStrictEqual(copy.seen, plain(p.seen));
+  assert.deepStrictEqual(copy.settings, plain(p.settings));
+  assert.strictEqual(copy.lastChallengeId, "alpha-two");
+  assert.strictEqual(plain(S.listSlots())[2].wizardName, p.wizardName);
+  // Exporting the imported profile gives the same code (apart from updatedAt).
+  const reexport = JSON.parse(Buffer.from(S.exportCode().slice(5), "base64url").toString("utf8"));
+  const first = JSON.parse(json);
+  delete reexport.u; delete first.u;
+  assert.deepStrictEqual(reexport, first);
+});
+
+test("save: exportFile downloads everything and importData reads the file", async () => {
+  const clicks = [];
+  const blobs = [];
+  const doc = {
+    visibilityState: "visible",
+    addEventListener() {},
+    body: { appendChild(el) { el.parentNode = this; }, removeChild() {} },
+    createElement() { return { style: {}, click() { clicks.push(this.download); } }; },
+  };
+  const e = makeEngine({ document: doc });
+  e.sb.Blob = function (parts, opts) { blobs.push({ text: parts.join(""), type: opts.type }); };
+  e.sb.URL = { createObjectURL: () => "blob:fake", revokeObjectURL() {} };
+  await initSave(e);
+  const S = e.SS.Save;
+  S.createProfile(0, "Merlin the Great");
+  S.saveDraft("alpha-one", "my draft");
+  S.recordCompletion("alpha-two", { code: "best code" });
+  S.savePracticeCode("practice!");
+  assert.strictEqual(S.exportFile(), true);
+  assert.deepStrictEqual(clicks, ["syntax-and-sorcery-Merlin-the-Great.json"]);
+  assert.strictEqual(blobs[0].type, "application/json");
+  const file = JSON.parse(blobs[0].text);
+  assert.strictEqual(file.format, "syntax-and-sorcery-save");
+  assert.strictEqual(file.profile.challenges["alpha-one"].draft, "my draft");
+  const restored = S.importData(blobs[0].text, 1);
+  assert.strictEqual(restored.challenges["alpha-one"].draft, "my draft");
+  assert.strictEqual(restored.challenges["alpha-two"].bestCode, "best code");
+  assert.strictEqual(restored.practiceCode, "practice!");
+  // A bare profile JSON is accepted too.
+  assert.strictEqual(S.importData(JSON.stringify(file.profile), 2).wizardName, "Merlin the Great");
+  // Downloads blocked → false, never a throw.
+  e.sb.Blob = function () { throw new Error("blocked"); };
+  assert.strictEqual(S.exportFile(), false);
+});
+
+test("save: importData rejects junk with friendly messages", async () => {
+  const e = makeEngine();
+  await initSave(e);
+  const S = e.SS.Save;
+  S.createProfile(0, "Ada");
+  S.recordCompletion("alpha-one", {});
+  const good = S.exportCode();
+  const cases = [
+    ["", /Paste a save code/],
+    [null, /Paste a save code/],
+    ["hello there", /doesn't look like a Save Scroll/],
+    ["SNS1.!!!!", /damaged or incomplete/],
+    [good.slice(0, good.length - 12), /damaged or incomplete/],
+    ["SNS1." + Buffer.from('{"v":1}x').toString("base64url"), /damaged/],
+    ["SNS2.abcd", /newer version/],
+    ["SNS1." + Buffer.from(JSON.stringify({ v: 5 })).toString("base64url"), /newer version/],
+    ["{not json", /damaged/],
+    ['{"foo": 1}', /doesn't look like a Save Scroll/],
+    ['{"format": "syntax-and-sorcery-save", "version": 9, "profile": {}}', /newer version/],
+    ["[1, 2]", /doesn't look like a Save Scroll/],
+  ];
+  for (const [input, message] of cases) {
+    assert.throws(() => S.importData(input, 1), (err) => err instanceof e.sb.Error && message.test(err.message), "input: " + String(input).slice(0, 30));
+  }
+  assert.throws(() => S.importData(good, 5), /slot/);
+  assert.strictEqual(S.getProfile().wizardName, "Ada", "failed imports change nothing");
+  assert.deepStrictEqual(plain(S.listSlots()).map((s) => s && s.wizardName), ["Ada", null, null]);
+});
+
+test("save: imported data is sanitised (types, names, unknown fields, __proto__)", async () => {
+  const e = makeEngine();
+  await initSave(e);
+  const S = e.SS.Save;
+  const evil = '{"format":"syntax-and-sorcery-save","version":1,"profile":{"wizardName":"\\u0007Mallory\\u202e the Destroyer of Worlds and More",' +
+    '"__proto__":{"polluted":true},"isAdmin":true,"challenges":{"__proto__":{"completed":true},"constructor":{"completed":true,"stars":3},' +
+    '"alpha-one":{"completed":"yes","stars":3,"hintsUsed":1e9,"draft":{"x":1},"extra":1},"beta-one":{"completed":true,"stars":2.7,"casts":"12","completedAt":"9999-01-01"}},' +
+    '"seen":{"prologue":true,"__proto__":true,"x":false},"settings":{"sound":false,"editorFontSize":1e9,"theme":"evil"},"practiceCode":"ok","lastChallengeId":"<img>"}}';
+  const p = S.importData(evil, 0);
+  assert.strictEqual(p.wizardName, "Mallory the Destroyer of");
+  assert.strictEqual(p.isAdmin, undefined);
+  assert.strictEqual(({}).polluted, undefined);
+  assert.strictEqual(e.run("({}).polluted"), undefined, "no prototype pollution in the sandbox");
+  assert.deepStrictEqual(Object.keys(p.challenges).sort(), ["alpha-one", "beta-one", "constructor"]);
+  assert.deepStrictEqual(plain(p.challenges["alpha-one"]), { completed: false, stars: 0, casts: 0, failedCasts: 0, hintsUsed: 20, answerRevealed: false, draft: null, bestCode: null, completedAt: null });
+  assert.strictEqual(p.challenges["beta-one"].stars, 2);
+  assert.strictEqual(p.challenges["beta-one"].casts, 12);
+  assert.strictEqual(p.challenges["beta-one"].completedAt, null, "dates outside 2000-2200 are dropped");
+  assert.deepStrictEqual(plain(p.seen), { prologue: true });
+  assert.deepStrictEqual(plain(p.settings), { sound: false, reduceMotion: false, editorFontSize: 32, unlockAll: false });
+  assert.strictEqual(p.lastChallengeId, null);
+  assert.strictEqual(e.SS.Progress.isComplete(p, "constructor"), true, "odd ids are plain data");
+  assert.strictEqual(e.SS.Progress.totalXp(p), 20, "unknown ids give no XP");
+});
+
+// ---------------------------------------------------------------------------
+// SS.Scorm
+// ---------------------------------------------------------------------------
+
+test("scorm: no LMS → not active, every call is a harmless no-op", () => {
+  const { SS } = makeEngine();
+  const Sc = SS.Scorm;
+  assert.strictEqual(Sc.connect(), false);
+  assert.strictEqual(Sc.isActive(), false);
+  assert.strictEqual(Sc.version, null);
+  assert.deepStrictEqual(plain(Sc.getLearner()), { id: "", name: "" });
+  assert.strictEqual(Sc.loadSuspendData(), "");
+  assert.strictEqual(Sc.saveSuspendData("x"), false);
+  assert.strictEqual(Sc.reportProgress({ completed: 1, total: 2 }), false);
+  assert.strictEqual(Sc.commit(), false);
+  assert.strictEqual(Sc.finish(), false);
+});
+
+test("scorm: finds a 1.2 API through a cross-origin frame and talks to it", () => {
+  const api = makeScorm12();
+  const lms = topWindow({ API: api });
+  const middle = crossOriginWindow(lms);
+  const { SS } = makeEngine({ parent: middle });
+  const Sc = SS.Scorm;
+  assert.strictEqual(Sc.connect(), true);
+  assert.strictEqual(Sc.connect(), true, "idempotent");
+  assert.strictEqual(api.count("init"), 1);
+  assert.strictEqual(Sc.version, "1.2");
+  assert.strictEqual(api.data["cmi.core.lesson_status"], "incomplete");
+  assert.strictEqual(api.data["cmi.core.exit"], "suspend");
+  assert.deepStrictEqual(plain(Sc.getLearner()), { id: "learner-42", name: "Jane Doe" });
+  assert.strictEqual(Sc.saveSuspendData("S1|abc"), true);
+  assert.strictEqual(Sc.loadSuspendData(), "S1|abc");
+  assert.strictEqual(Sc.saveSuspendData("x".repeat(4097)), false);
+  assert.strictEqual(Sc.suspendDataLimit(), 4096);
+  assert.strictEqual(Sc.reportProgress({ completed: 1, total: 3 }), true);
+  assert.strictEqual(api.data["cmi.core.score.raw"], "33");
+  assert.strictEqual(api.data["cmi.core.score.min"], "0");
+  assert.strictEqual(api.data["cmi.core.score.max"], "100");
+  assert.strictEqual(api.data["cmi.core.lesson_status"], "incomplete");
+  Sc.reportProgress({ completed: 3, total: 3 });
+  assert.strictEqual(api.data["cmi.core.score.raw"], "100");
+  assert.strictEqual(api.data["cmi.core.lesson_status"], "completed");
+  Sc.reportProgress({ completed: 2, total: 3 });
+  assert.strictEqual(api.data["cmi.core.lesson_status"], "completed", "never downgraded");
+  assert.strictEqual(Sc.commit(), true);
+  assert.strictEqual(Sc.finish(), true);
+  assert.strictEqual(Sc.finish(), false);
+  assert.strictEqual(api.count("finish"), 1, "finish only once");
+  assert.match(api.data["cmi.core.session_time"], /^\d{2,4}:\d{2}:\d{2}\.\d{2}$/);
+  assert.strictEqual(Sc.isActive(), false);
+  assert.strictEqual(Sc.connect(), false, "no reconnect after finish");
+});
+
+test("scorm: 2004 API, completion threshold, opener windows, 'already initialised'", () => {
+  const api = makeScorm2004();
+  let { SS } = makeEngine({ parent: topWindow({ API_1484_11: api }), config: { scorm: { completionThreshold: 0.5 } } });
+  let Sc = SS.Scorm;
+  assert.strictEqual(Sc.connect(), true);
+  assert.strictEqual(Sc.version, "2004");
+  assert.strictEqual(api.data["cmi.completion_status"], "incomplete");
+  assert.deepStrictEqual(plain(Sc.getLearner()), { id: "learner-2004", name: "Ada Lovelace" });
+  assert.strictEqual(Sc.suspendDataLimit(), 64000);
+  Sc.reportProgress({ completed: 1, total: 4 });
+  assert.strictEqual(api.data["cmi.completion_status"], "incomplete");
+  assert.strictEqual(api.data["cmi.score.scaled"], "0.25");
+  assert.strictEqual(api.data["cmi.progress_measure"], "0.25");
+  Sc.reportProgress({ completed: 2, total: 4 });
+  assert.strictEqual(api.data["cmi.completion_status"], "completed");
+  assert.strictEqual(api.data["cmi.score.raw"], "50");
+  Sc.finish();
+  assert.match(api.data["cmi.session_time"], /^PT\d+H\d+M\d+\.\d{2}S$/);
+  assert.strictEqual(api.data["cmi.exit"], "suspend");
+
+  // A popup launched by the LMS: the API lives in the opener's frame chain.
+  const api2 = makeScorm12();
+  const lmsTop = topWindow({ API: api2 });
+  const openerFrame = { parent: lmsTop };
+  ({ SS } = makeEngine({ opener: openerFrame }));
+  assert.strictEqual(SS.Scorm.connect(), true);
+  assert.strictEqual(SS.Scorm.version, "1.2");
+
+  // The game was reloaded inside the same LMS session: Initialize fails with 103 / 101.
+  const again = makeScorm2004();
+  again._setInitialized(true);
+  ({ SS } = makeEngine({ parent: topWindow({ API_1484_11: again }) }));
+  assert.strictEqual(SS.Scorm.connect(), true);
+  const again12 = makeScorm12();
+  again12._setInitialized(true);
+  ({ SS } = makeEngine({ parent: topWindow({ API: again12 }) }));
+  assert.strictEqual(SS.Scorm.connect(), true);
+
+  // Status "completed" from an earlier session is never downgraded.
+  const old = makeScorm12({ "cmi.core.lesson_status": "passed" });
+  ({ SS } = makeEngine({ parent: topWindow({ API: old }) }));
+  SS.Scorm.connect();
+  SS.Scorm.reportProgress({ completed: 0, total: 5 });
+  assert.strictEqual(old.data["cmi.core.lesson_status"], "passed");
+
+  // Disabled by config.
+  ({ SS } = makeEngine({ parent: topWindow({ API: makeScorm12() }), config: { scorm: false } }));
+  assert.strictEqual(SS.Scorm.connect(), false);
+});
+
+test("scorm: a broken LMS API never makes the game throw", () => {
+  const boom = () => { throw new Error("LMS exploded"); };
+  const api = { LMSInitialize: boom, LMSGetValue: boom, LMSSetValue: boom, LMSCommit: boom, LMSFinish: boom, LMSGetLastError: boom };
+  let { SS } = makeEngine({ parent: topWindow({ API: api }) });
+  assert.strictEqual(SS.Scorm.connect(), false);
+  const flaky = makeScorm12();
+  flaky.LMSSetValue = boom;
+  flaky.LMSCommit = boom;
+  flaky.LMSFinish = boom;
+  ({ SS } = makeEngine({ parent: topWindow({ API: flaky }) }));
+  assert.strictEqual(SS.Scorm.connect(), true);
+  assert.strictEqual(SS.Scorm.saveSuspendData("x"), false);
+  assert.strictEqual(SS.Scorm.reportProgress({ completed: 1, total: 1 }), false);
+  assert.strictEqual(SS.Scorm.commit(), false);
+  assert.strictEqual(SS.Scorm.finish(), false);
+  assert.strictEqual(SS.Scorm._friendlyName("Smith, John"), "John Smith");
+  assert.strictEqual(SS.Scorm._friendlyName("  Grace  Hopper "), "Grace Hopper");
+});
+
+// ---------------------------------------------------------------------------
+// SS.Save — SCORM mode
+// ---------------------------------------------------------------------------
+
+test("save+scorm: one LMS profile; progress, score and status go to the LMS", async () => {
+  const api = makeScorm12();
+  const storage = makeLocalStorage();
+  const e = makeEngine({ parent: topWindow({ API: api }), storage });
+  assert.deepStrictEqual(await initSave(e), { storage: "local", scorm: true, learnerName: "Jane Doe", defaultWizardName: "Jane" });
+  const S = e.SS.Save;
+  assert.strictEqual(S.isScorm(), true);
+  assert.strictEqual(S.getProfile(), null, "first launch: the UI asks for a wizard name");
+  assert.deepStrictEqual(plain(S.listSlots()), [null]);
+  assert.strictEqual(S.getLastSlot(), null);
+  const p = S.createProfile(0, "Jane the Bold");
+  assert.strictEqual(S.getLastSlot(), 0);
+  assert.strictEqual(S.loadProfile(2), p, "slots are ignored in SCORM mode");
+  assert.strictEqual(S.deleteSlot(0), false, "the LMS profile can't be deleted");
+  assert.ok(api.data["cmi.suspend_data"].startsWith("S1|"));
+  const commits = api.count("commit");
+  S.saveDraft("alpha-one", "draft in progress");
+  S.revealHint("alpha-one");
+  const res = S.recordCompletion("alpha-one", { code: "print('done')" });
+  assert.strictEqual(res.stars, 2);
+  assert.ok(api.count("commit") > commits, "committed after a completion");
+  assert.strictEqual(api.data["cmi.core.score.raw"], String(Math.round(100 / 6)));
+  assert.strictEqual(api.data["cmi.core.lesson_status"], "incomplete");
+  assert.ok(!api.data["cmi.suspend_data"].includes("draft"), "no code in suspend_data");
+  const local = JSON.parse(storage.getItem("syntax-and-sorcery:scorm:learner-42"));
+  assert.strictEqual(local.challenges["alpha-one"].draft, "draft in progress");
+  assert.strictEqual(local.challenges["alpha-one"].bestCode, "print('done')");
+  assert.strictEqual(storage.getItem("syntax-and-sorcery:slot:0"), null, "no slots in SCORM mode");
+  for (const id of ["alpha-two", "beta-one", "gamma-one", "gamma-two", "gamma-three"]) S.recordCompletion(id, { code: "x" });
+  assert.strictEqual(api.data["cmi.core.score.raw"], "100");
+  assert.strictEqual(api.data["cmi.core.lesson_status"], "completed");
+  e.fire("pagehide", { persisted: true });
+  assert.strictEqual(api.count("finish"), 0, "a page going into the back/forward cache is not finished");
+  e.fire("pagehide", { persisted: false });
+  e.fire("pagehide", { persisted: false });
+  assert.strictEqual(api.count("finish"), 1);
+});
+
+test("save+scorm: resume on the same computer, on a new computer, and merging", async () => {
+  const api = makeScorm12();
+  const storage = makeLocalStorage();
+  let e = makeEngine({ parent: topWindow({ API: api }), storage });
+  await initSave(e);
+  let S = e.SS.Save;
+  S.createProfile(0, "Jane");
+  S.revealHint("alpha-one");
+  S.recordCompletion("alpha-one", { code: "first" });
+  S.saveDraft("alpha-two", "half done");
+  S.recordCast("alpha-two", { passed: false });
+  S.markSeen("prologue");
+  S.markSeen("custom:flag-only-the-ui-knows");
+  S.updateSettings({ editorFontSize: 19, sound: false });
+  e.fire("pagehide", { persisted: false });
+  const suspend = api.data["cmi.suspend_data"];
+
+  // Same computer, next session.
+  const api2 = makeScorm12({ "cmi.suspend_data": suspend, "cmi.core.lesson_status": "incomplete" });
+  e = makeEngine({ parent: topWindow({ API: api2 }), storage });
+  await initSave(e);
+  S = e.SS.Save;
+  let p = S.getProfile();
+  assert.strictEqual(p.wizardName, "Jane");
+  assert.strictEqual(p.challenges["alpha-one"].stars, 2);
+  assert.strictEqual(p.challenges["alpha-one"].bestCode, "first");
+  assert.strictEqual(p.challenges["alpha-two"].draft, "half done");
+  assert.strictEqual(p.challenges["alpha-two"].failedCasts, 1);
+  assert.strictEqual(S.hasSeen("prologue"), true);
+  assert.strictEqual(S.hasSeen("custom:flag-only-the-ui-knows"), true);
+  assert.strictEqual(S.getSettings().editorFontSize, 19);
+
+  // A new computer: progress comes back from the LMS alone (no drafts).
+  const api3 = makeScorm12({ "cmi.suspend_data": suspend });
+  e = makeEngine({ parent: topWindow({ API: api3 }), storage: makeLocalStorage() });
+  await initSave(e);
+  S = e.SS.Save;
+  p = S.getProfile();
+  assert.strictEqual(p.wizardName, "Jane");
+  assert.strictEqual(p.challenges["alpha-one"].completed, true);
+  assert.strictEqual(p.challenges["alpha-one"].stars, 2);
+  assert.strictEqual(p.challenges["alpha-one"].hintsUsed, 1);
+  assert.strictEqual(p.challenges["alpha-two"].draft, null);
+  assert.strictEqual(p.challenges["alpha-two"].casts, 1);
+  assert.strictEqual(S.hasSeen("custom:flag-only-the-ui-knows"), true, "seen flags survive as hashes");
+  assert.strictEqual(S.hasSeen("custom:other"), false);
+  assert.strictEqual(S.getSettings().sound, false);
+
+  // Merging: the LMS knows something the local copy doesn't, and vice versa.
+  const localProfile = JSON.parse(storage.getItem("syntax-and-sorcery:scorm:learner-42"));
+  localProfile.challenges["beta-one"] = { completed: true, stars: 3, casts: 4, failedCasts: 1, hintsUsed: 0, answerRevealed: false, draft: "local only", bestCode: "local best", completedAt: "2026-01-02T03:04:05.000Z" };
+  localProfile.wizardName = "Old Local Name";
+  storage.setItem("syntax-and-sorcery:scorm:learner-42", JSON.stringify(localProfile));
+  e = makeEngine({ parent: topWindow({ API: makeScorm12() }), storage, content: FAKE_CONTENT });
+  await initSave(e);
+  e.SS.Save.recordCompletion("gamma-one", { code: "lms" });         // only in this "other device" LMS data…
+  e.SS.Save.renameWizard("LMS Name");
+  const lmsSuspend = e.SS.Scorm.loadSuspendData();
+  // …now open the course again on the computer holding the local copy.
+  const api4 = makeScorm12({ "cmi.suspend_data": lmsSuspend });
+  storage.setItem("syntax-and-sorcery:scorm:learner-42", JSON.stringify(localProfile));
+  e = makeEngine({ parent: topWindow({ API: api4 }), storage });
+  await initSave(e);
+  p = e.SS.Save.getProfile();
+  assert.strictEqual(p.wizardName, "LMS Name", "the LMS wins for the name");
+  assert.strictEqual(p.challenges["gamma-one"].completed, true, "from the LMS");
+  assert.strictEqual(p.challenges["beta-one"].stars, 3, "from the local copy");
+  assert.strictEqual(p.challenges["beta-one"].bestCode, "local best");
+  assert.strictEqual(p.challenges["alpha-one"].stars, 2);
+  assert.strictEqual(api4.data["cmi.core.score.raw"], String(Math.round(300 / 6)), "the merged score is reported at once");
+  assert.ok(e.SS.Scorm.loadSuspendData().length > 0);
+});
+
+test("save+scorm: suspend_data stays under 4096 with 60 long-id challenges all complete", async () => {
+  const ids = [];
+  let content = "";
+  for (let c = 0; c < 7; c++) {
+    const chapterId = "chapter" + c + "-with-a-really-quite-long-and-descriptive-name";
+    const list = [];
+    for (let i = 0; i < (c < 4 ? 9 : 8); i++) {
+      const id = chapterId + "-challenge-number-" + i + "-about-something-wonderful-and-hard";
+      ids.push(id);
+      list.push({ id, difficulty: ["easy", "medium", "hard"][i % 3], hints: ["a", "b", "c", "d"] });
+    }
+    content += "SS.defineChapter(" + JSON.stringify({ id: chapterId, order: c + 1, challenges: list }) + ");\n";
+  }
+  assert.strictEqual(ids.length, 60);
+  assert.ok(ids.every((id) => id.length > 90));
+  const api = makeScorm12();
+  const storage = makeLocalStorage();
+  let e = makeEngine({ parent: topWindow({ API: api }), storage, content });
+  await initSave(e);
+  let S = e.SS.Save;
+  S.createProfile(0, "李".repeat(30));
+  for (let i = 0; i < ids.length; i++) {
+    for (let k = 0; k < 40; k++) S.recordCast(ids[i], { passed: k === 39 });
+    for (let h = 0; h < (i % 4); h++) S.revealHint(ids[i]);
+    if (i % 7 === 0) S.revealAnswer(ids[i]);
+    S.recordCompletion(ids[i], { code: "print('a long solution')\n".repeat(50) });
+  }
+  for (let k = 0; k < 150; k++) S.markSeen("seen-key-number-" + k + "-for-the-ui");
+  const text = api.data["cmi.suspend_data"];
+  assert.ok(text.length <= 4096, "suspend_data is " + text.length + " characters");
+  assert.ok(text.length <= 4000);
+  assert.strictEqual(api.data["cmi.core.lesson_status"], "completed");
+  assert.strictEqual(api.data["cmi.core.score.raw"], "100");
+
+  // Everything that matters survives a trip through the LMS alone.
+  const before = plain(S.getProfile());
+  e = makeEngine({ parent: topWindow({ API: makeScorm12({ "cmi.suspend_data": text }) }), storage: makeLocalStorage(), content });
+  await initSave(e);
+  const after = plain(e.SS.Save.getProfile());
+  for (const id of ids) {
+    for (const field of ["completed", "stars", "hintsUsed", "answerRevealed", "casts", "failedCasts", "completedAt"]) {
+      const want = field === "completedAt" ? new Date(Math.floor(Date.parse(before.challenges[id][field]) / 1000) * 1000).toISOString() : before.challenges[id][field];
+      assert.deepStrictEqual(after.challenges[id][field], want, id + " " + field);
+    }
+  }
+  assert.strictEqual(after.wizardName, before.wizardName);
+  assert.ok(e.SS.Save.hasSeen("seen-key-number-149-for-the-ui"));
+});
+
+test("save+scorm: hundreds of challenges degrade gracefully but keep every completion", async () => {
+  const list = [];
+  for (let i = 0; i < 400; i++) list.push({ id: "huge-" + i, difficulty: "easy", hints: ["a", "b"] });
+  const content = "SS.defineChapter(" + JSON.stringify({ id: "huge", order: 1, challenges: list }) + ");";
+  const api = makeScorm12();
+  const e = makeEngine({ parent: topWindow({ API: api }), content });
+  await initSave(e);
+  const S = e.SS.Save;
+  S.createProfile(0, "Big");
+  for (let i = 0; i < 400; i++) { S.recordCast(list[i].id, { passed: true }); S.recordCompletion(list[i].id, {}); }
+  const text = api.data["cmi.suspend_data"];
+  assert.ok(text.length <= 4000, "length " + text.length);
+  const back = e.SS.Save._decodeSuspend(text, null);
+  assert.strictEqual(Object.keys(back.challenges).length, 400);
+  assert.ok(Object.values(back.challenges).every((r) => r.completed && r.stars === 3));
+});
+
+test("save+scorm: unknown suspend_data entries are kept, junk is ignored", async () => {
+  const S0 = makeEngine().SS.Save;
+  const known = S0._hash6("alpha-one");
+  const unknown = S0._hash6("from-a-newer-version");
+  const suspend = ["S1", "1f", "Kay", S0._hash6("prologue") + "zzzzzz", known + "d0.3.1," + unknown + "d0.1,BAD!,", ""].join("|");
+  const api = makeScorm12({ "cmi.suspend_data": suspend });
+  const e = makeEngine({ parent: topWindow({ API: api }) });
+  await initSave(e);
+  const p = e.SS.Save.getProfile();
+  assert.strictEqual(p.wizardName, "Kay");
+  assert.strictEqual(p.challenges["alpha-one"].completed, true);
+  assert.strictEqual(p.challenges["alpha-one"].stars, 3);
+  assert.strictEqual(p.challenges["alpha-one"].casts, 3);
+  e.SS.Save.recordCast("alpha-two", { passed: false });
+  const saved = api.data["cmi.suspend_data"];
+  assert.ok(saved.includes(unknown + "d0.1"), "entries from a newer version are written back");
+  assert.ok(saved.includes("zzzzzz"), "unknown seen hashes are written back");
+  assert.ok(!saved.includes("BAD!"));
+  // Garbage in the LMS doesn't break anything.
+  const junk = makeEngine({ parent: topWindow({ API: makeScorm12({ "cmi.suspend_data": "{\"some\":\"other format\"}" }) }) });
+  await initSave(junk);
+  assert.strictEqual(junk.SS.Save.getProfile(), null);
+  assert.strictEqual(junk.SS.Save.createProfile(0, "Fresh").wizardName, "Fresh");
+});
+
+test("save+scorm: import merges into the LMS profile; blocked storage still saves to the LMS", async () => {
+  const plainEngine = makeEngine();
+  await initSave(plainEngine);
+  plainEngine.SS.Save.createProfile(0, "Web Player");
+  plainEngine.SS.Save.recordCompletion("alpha-one", {});
+  plainEngine.SS.Save.recordCompletion("alpha-two", {});
+  const code = plainEngine.SS.Save.exportCode();
+
+  const api = makeScorm12();
+  const e = makeEngine({ parent: topWindow({ API: api }), storage: "blocked" });
+  const init = await initSave(e);
+  assert.strictEqual(init.storage, "memory");
+  assert.strictEqual(init.scorm, true);
+  assert.match(e.SS.Save.storageWarning(), /still saved by your course/);
+  const S = e.SS.Save;
+  S.createProfile(0, "LMS Jane");
+  S.recordCompletion("beta-one", {});
+  const merged = S.importData(code, 0);
+  assert.strictEqual(merged.wizardName, "LMS Jane");
+  assert.deepStrictEqual(Object.keys(merged.challenges).filter((id) => merged.challenges[id].completed).sort(), ["alpha-one", "alpha-two", "beta-one"]);
+  assert.strictEqual(api.data["cmi.core.score.raw"], "50");
+});
+
+// ---------------------------------------------------------------------------
+// SS.PythonRunner without a browser
+// ---------------------------------------------------------------------------
+
+test("runner: without Web Workers, init() rejects with a clear message and run() never rejects", async () => {
+  const e = makeEngine({ files: ["js/config.js", "js/engine/harness.js", "js/engine/runner.js"], content: false });
+  const R = e.SS.PythonRunner;
+  assert.strictEqual(R.getStatus().state, "idle");
+  assert.strictEqual(R.isReady(), false);
+  const seen = [];
+  const off = R.onStatus((s) => seen.push(s.state));
+  let rejected = null;
+  await R.init().then(() => { throw new Error("should reject"); }, (err) => { rejected = err; });
+  assert.match(rejected.message, /background worker/);
+  assert.strictEqual(R.getStatus().state, "error");
+  assert.deepStrictEqual(seen, ["error"]);
+  off();
+  const result = await R.run({ code: "print(1)" });
+  assert.strictEqual(result.status, "internal-error");
+  assert.match(result.error.friendly, /background worker/);
+  assert.strictEqual(typeof result.durationMs, "number");
+  await R.restart().then(() => { throw new Error("should reject"); }, () => {});
+});
+
+test("runner: results from the worker are validated and normalised", () => {
+  const e = makeEngine({ files: ["js/config.js", "js/engine/harness.js", "js/engine/runner.js"], content: false });
+  const norm = e.SS.PythonRunner._normaliseResult;
+  assert.strictEqual(norm(null), null);
+  assert.strictEqual(norm({ status: "hacked", stdout: "", tests: [] }), null);
+  assert.strictEqual(norm({ status: "passed", stdout: 5, tests: [] }), null);
+  assert.strictEqual(norm({ status: "passed", stdout: "", tests: "x" }), null);
+  const r = plain(norm({
+    status: "passed", stdout: "hi", truncated: "yes", extra: 1,
+    tests: [{ name: "a", passed: true }, { name: 7, passed: "true", message: null, line: "3", crash: 1 }, "junk"],
+    error: { type: "X", message: 5, line: -2, phase: "weird", traceback: null, friendly: "f" },
+  }, 50000, 12.6));
+  assert.deepStrictEqual(r, {
+    status: "failed", stdout: "hi", truncated: false,
+    error: { type: "X", message: "5", line: null, phase: "runtime", traceback: "", friendly: "f" },
+    tests: [
+      { name: "a", passed: true, message: "", line: null, crash: false },
+      { name: "7", passed: false, message: "", line: null, crash: false },
+      { name: "Trial", passed: false, message: "", line: null, crash: false },
+    ],
+    passed: 1, total: 3, durationMs: 13,
+  });
+  const t = plain(e.SS.PythonRunner._timeoutResult(8000, 8004));
+  assert.strictEqual(t.status, "timeout");
+  assert.match(t.error.friendly, /more than 8 seconds/);
+  assert.match(t.error.friendly, /base case/);
+  assert.strictEqual(t.error.phase, "runtime");
+  assert.strictEqual(plain(e.SS.PythonRunner._timeoutResult(1500, 0)).error.friendly.includes("1.5 seconds"), true);
+});
+
+// ---------------------------------------------------------------------------
+// Real content sanity check (skipped if the chapters don't load right now)
+// ---------------------------------------------------------------------------
+
+test("content: real challenge ids have distinct SCORM hashes", () => {
+  const dir = path.join(ROOT, "js", "content");
+  const files = fs.readdirSync(dir).filter((f) => f.endsWith(".js") && f !== "registry.js").sort();
+  const e = makeEngine({ content: false });
+  for (const f of files) {
+    try { vm.runInContext(fs.readFileSync(path.join(dir, f), "utf8"), e.sb, { filename: f }); } catch (err) { /* another author is mid-edit */ }
+  }
+  const ids = e.SS.Progress.allChallenges().map((c) => c.id);
+  const hashes = new Map();
+  for (const id of ids) {
+    const h = e.SS.Save._hash6(id);
+    assert.ok(!hashes.has(h), "hash collision between " + id + " and " + hashes.get(h));
+    hashes.set(h, id);
+  }
+});
+
+// ---------------------------------------------------------------------------
+
+(async () => {
+  const filter = process.argv[2] || "";
+  let passed = 0, failed = 0;
+  for (const t of tests) {
+    if (filter && !t.name.includes(filter)) continue;
+    try {
+      await t.fn();
+      passed++;
+      console.log("  ok   " + t.name);
+    } catch (err) {
+      failed++;
+      console.log("  FAIL " + t.name + "\n       " + String(err && err.stack || err).split("\n").slice(0, 6).join("\n       "));
+    }
+  }
+  console.log("\n" + passed + " passed, " + failed + " failed");
+  process.exit(failed ? 1 : 0);
+})();
