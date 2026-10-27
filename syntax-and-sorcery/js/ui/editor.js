@@ -215,7 +215,11 @@
       if (hooks.onChange) hooks.onChange(ed.getValue());
     });
     var input = cm.getInputField();
-    if (input && hooks.describedBy) input.setAttribute("aria-describedby", hooks.describedBy);
+    if (input) {
+      if (hooks.describedBy) input.setAttribute("aria-describedby", hooks.describedBy);
+      input.setAttribute("role", "textbox");
+      input.setAttribute("aria-multiline", "true");
+    }
 
     return {
       kind: "codemirror",
@@ -269,9 +273,32 @@
       },
       destroy: function () {
         var wrapper = cm.getWrapperElement();
+        stopCodeMirror(cm);
         u.remove(wrapper);
       }
     };
+  }
+
+  /**
+   * CodeMirror keeps a few timers running (cursor blink, input polling, a 1-second
+   * scrollbar check). Left alone, they hold a removed editor — and everything its
+   * callbacks reach — in memory for a while. Stop them and drop our key bindings.
+   */
+  function stopCodeMirror(cm) {
+    function noop() {}
+    u.safe(function () { cm.setOption("extraKeys", null); });
+    u.safe(function () {
+      var d = cm.display || {};
+      clearInterval(d.blinker);
+      if (d.input) clearTimeout(d.input.readDOMTimeout);
+      var sb = d.scrollbars || {};
+      [sb.disableHoriz, sb.disableVert, d.input && d.input.polling, cm.state && cm.state.highlight].forEach(function (t) {
+        if (!t) return;
+        if (t.id) clearTimeout(t.id);
+        t.id = 0;
+        t.f = noop;   // a no-op (not null): a stray CodeMirror timer may still call it
+      });
+    });
   }
 
   // --------------------------------------------------------------------------
@@ -589,8 +616,12 @@
       destroyed = true;
       var i = live.indexOf(api);
       if (i >= 0) live.splice(i, 1);
+      clearTimeout(escapeTimer);
       if (impl) impl.destroy();
       impl = null;
+      // Cut every path from editor internals back to the screen that owned this editor.
+      opts.onChange = opts.onCast = opts.onUpgrade = null;
+      Object.keys(hooks).forEach(function (k) { if (typeof hooks[k] === "function") hooks[k] = function () {}; });
       u.remove(shell);
     };
 

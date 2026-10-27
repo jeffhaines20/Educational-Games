@@ -13,6 +13,10 @@
 
   // Properties that must be set as DOM properties rather than attributes.
   var PROPS = { value: 1, checked: 1, disabled: 1, hidden: 1, selected: 1, readOnly: 1, open: 1, indeterminate: 1 };
+
+  /** The game's player-facing name (storage keys and file names are separate and unchanged). */
+  var GAME_NAME = "Pyromancer";
+  var TAGLINE = "Master Python. Unleash the Magic.";
   var SVG_NS = "http://www.w3.org/2000/svg";
 
   function append(parent, child) {
@@ -221,10 +225,32 @@
       emoji(info.icon), h("span", null, info.label));
   }
 
+  var PY_WORDS = {};
+  ("and or not break continue def class lambda raise return self if elif else for while in is None True False " +
+    "yield import with try except pass global nonlocal assert del from as").split(" ").forEach(function (w) { PY_WORDS[w] = true; });
+
+  /** Does a concept tag look like code ("print()", "__init__", "if / elif / else") rather than prose ("recursion")? */
+  function isCodeConcept(text) {
+    var t = String(text || "").trim();
+    if (/\(\)|^[.@]|__\w+__|==|[<>]=?|\/\/|%|\w\.\w/.test(t)) return true;
+    var words = t.split(/\s*[\/&+]\s*|\s+/).filter(Boolean);
+    return words.length > 0 && words.every(function (w) { return PY_WORDS[w] || /^[A-Z]\w*(Error|Implemented)$/.test(w); });
+  }
+
+  function chip(item, tag) {
+    var text = String(item);
+    return h(tag || "li", { class: "chip" + (isCodeConcept(text) ? " chip-code" : "") }, text);
+  }
+
   function chips(items, extraClass) {
     if (!items || !items.length) return null;
     return h("ul", { class: "chips" + (extraClass ? " " + extraClass : ""), "aria-label": "Concepts" },
-      items.map(function (item) { return h("li", { class: "chip" }, String(item)); }));
+      items.map(function (item) { return chip(item, "li"); }));
+  }
+
+  /** True when the game runs inside a frame (an LMS page, a course site…). */
+  function isFramed() {
+    try { return global.self !== global.top; } catch (err) { return true; }   // cross-origin parent: framed
   }
 
   /** A progress bar. fraction 0..1 */
@@ -407,6 +433,11 @@
     difficultyInfo: difficultyInfo,
     difficultyBadge: difficultyBadge,
     chips: chips,
+    chip: chip,
+    isCodeConcept: isCodeConcept,
+    isFramed: isFramed,
+    GAME_NAME: GAME_NAME,
+    TAGLINE: TAGLINE,
     progressBar: progressBar,
     announce: announce,
     focusables: focusables,

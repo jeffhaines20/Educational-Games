@@ -77,7 +77,7 @@
 
 
     def small_cache_note():
-        """Explain @lru_cache's size limit (128 by default) if the spell relies on it."""
+        """Explain @lru_cache's size limit if the spell relies on one (128 is the default)."""
         try:
             tree = _ast.parse(source)
         except SyntaxError:
@@ -92,11 +92,21 @@
                 sizes = []
                 if isinstance(deco, _ast.Call):
                     sizes = list(deco.args[:1]) + [k.value for k in deco.keywords if k.arg == "maxsize"]
-                if not any(isinstance(size, _ast.Constant) and size.value is None for size in sizes):
-                    return (" Your " + code("@lru_cache") + " on " + code(node.name) + " has a size "
-                            "limit (128 answers unless you set " + code("maxsize") + "), so it keeps "
-                            "forgetting old answers. Write " + code("@lru_cache(maxsize=None)")
-                            + ", or use " + code("@cache") + ", so it remembers them all.")
+                if not sizes:
+                    size, default = 128, True
+                elif isinstance(sizes[-1], _ast.Constant):
+                    size, default = sizes[-1].value, False
+                elif isinstance(sizes[-1], _ast.Name):
+                    size, default = spell.get(sizes[-1].id, 0), False
+                else:
+                    continue                      # a size we can't work out: say nothing
+                if size is None or isinstance(size, bool) or not isinstance(size, int):
+                    continue                      # unlimited (or not a size at all)
+                kept = "only the " + format(size, ",") + " most recent answers" + (
+                    " (its default size)" if default else "")
+                return (" Your " + code("@lru_cache") + " on " + code(node.name) + " keeps " + kept
+                        + ", so it keeps forgetting old ones. Write " + code("@lru_cache(maxsize=None)")
+                        + ", or use " + code("@cache") + ", so it remembers them all.")
         return ""
 
 
@@ -120,6 +130,14 @@
         func = need_function(name, params)
         try:
             return func(*args)
+        except RecursionError:
+            fail(code(name) + " recursed deeper than the realm allows (about "
+                 + format(_sys.getrecursionlimit(), ",") + " nested calls). If the smaller trials "
+                 "passed, your base cases are fine: on long inputs each level of top-down recursion "
+                 "costs several calls (" + code("@lru_cache") + " and a generator inside "
+                 + code("sum()") + "/" + code("min()") + "/" + code("max()") + " each add one). Fill a "
+                 "table bottom-up instead, or memoize a helper that takes positions. (If even small "
+                 "inputs fail this way, check that every call moves closer to a base case.)")
         except TypeError as exc:
             frames = _traceback.extract_tb(exc.__traceback__)
             if "unhashable" in str(exc) and not any(f.filename == _SPELL_FILE for f in frames):
@@ -130,8 +148,29 @@
             raise
 
 
-    def shared_memo_note():
-        """Extra advice for spells that keep a memo between calls (a global or default dict)."""
+    def _cached_outside(key, value, public):
+        """For a module-level @lru_cache/@cache function that has remembered answers: the name
+        of the global data it reads, "" if it takes fewer arguments than the public function,
+        or None if it looks self-contained."""
+        try:
+            if key == public or getattr(value, "cache_info")().currsize <= 0:
+                return None
+            inner = getattr(value, "__wrapped__", value)
+            reads = [n for n in inner.__code__.co_names       # global inputs, like a list of strides
+                     if isinstance(spell.get(n), (list, tuple, set, frozenset, dict, str))]
+            if reads:
+                return reads[0]
+            mine = inner.__code__.co_argcount
+            front = spell.get(public)
+            theirs = getattr(front, "__wrapped__", front).__code__.co_argcount if front else mine
+            return "" if mine < theirs else None
+        except Exception:
+            return None
+
+
+    def shared_memo_note(public=None, depends=None):
+        """Extra advice for spells that keep answers between calls: a global dict, a dict
+        default argument, or a module-level cache that doesn't take every input as an argument."""
         for key, value in list(spell.items()):
             if key.startswith("__"):
                 continue
@@ -145,6 +184,12 @@
             if any(isinstance(d, dict) and d for d in defaults):
                 return (" " + code(key) + " keeps a dictionary as a default argument, which every "
                         "call shares: is it remembering answers that belong to a different call?")
+            outside = _cached_outside(key, value, public)
+            if outside is not None:
+                also = (", but it also reads " + code(outside) + " from outside") if outside else ""
+                like = (" (like " + depends + ")") if depends else ""
+                return (" " + code(key) + " remembers answers between calls" + also + ": is "
+                        "everything the answer depends on" + like + " one of its arguments?")
         return ""
 
 

@@ -222,7 +222,7 @@
     var body = h("div", { class: "callout-body" });
     if (Array.isArray(content)) body.appendChild(render(content));
     else body.appendChild(h("p", null, inline(content)));
-    return h("aside", { class: "callout callout-" + kind, "aria-label": title },
+    return h("div", { class: "callout callout-" + kind, role: "note", "aria-label": title },
       h("span", { class: "callout-icon", "aria-hidden": "true" }, icon), body);
   }
 
