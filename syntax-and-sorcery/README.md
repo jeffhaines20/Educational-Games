@@ -175,7 +175,8 @@ dist/                 ready-made single-file and SCORM builds
 * **Add or edit a challenge:** follow [docs/DESIGN.md](docs/DESIGN.md) §7, then run
   `python3 tools/validate_content.py` (checks every solution passes, every starter and
   known-wrong answer fails). Try any attempt with
-  `python3 tools/try_spell.py <challenge-id> attempt.py`.
+  `python3 tools/try_spell.py <challenge-id> attempt.py`. `node tools/validate_pyodide.js`
+  repeats the checks in the browser's own Python engine.
 * **Run locally:** `bash tools/fetch_pyodide.sh` (once), `node tools/dev_server.js 8000`, then
   open `http://localhost:8000/?localPyodide=1`.
 * **Rebuild the bundles:** `python3 tools/build.py` (writes `dist/`).

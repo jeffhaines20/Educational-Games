@@ -594,6 +594,8 @@ or `aria-label`s. Animations are tasteful and short, and disabled under
 
 * `python3 tools/validate_content.py` — structure + every solution/starter/alt/wrong.
 * `python3 tools/try_spell.py <challenge-id> <file.py>` — run any attempt.
+* `node tools/validate_pyodide.js [id]` — the same solution/starter/wrong checks in the real
+  browser Python (Pyodide under Node), with timings; needs `tools/fetch_pyodide.sh` first.
 * `bash tools/fetch_pyodide.sh` — cache Pyodide locally for browser tests.
 * `node tools/dev_server.js 8000` — serve the game; `?localPyodide=1` uses the cache.
 * `node tools/e2e/<test>.js` — Playwright scripts; `tools/e2e/lib.js` provides
