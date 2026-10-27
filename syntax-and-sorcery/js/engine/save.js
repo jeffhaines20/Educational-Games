@@ -44,7 +44,7 @@
   var DEFAULT_SETTINGS = { sound: true, reduceMotion: false, editorFontSize: 15, unlockAll: false };
   var FONT_MIN = 10, FONT_MAX = 32;
 
-  var ID_RE = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,99}$/;
+  var ID_RE = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,199}$/;
   var PROFILE_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
   // Control and invisible formatting characters (ZWJ/ZWNJ are kept: emoji and some scripts need them).
   var CONTROL_CLASS = "[\\u0000-\\u001F\\u007F-\\u009F\\u200B\\u200E\\u200F\\u2028-\\u202E\\u2060-\\u2064\\u2066-\\u2069\\uFEFF\\uFFF9-\\uFFFB]";
@@ -187,7 +187,7 @@
   }
 
   function validSeenKey(key) {
-    return typeof key === "string" && key.length > 0 && key.length <= 100 && key !== "__proto__" &&
+    return typeof key === "string" && key.length > 0 && key.length <= 200 && key !== "__proto__" &&
       !HAS_CONTROL_RE.test(key);
   }
 
@@ -1170,7 +1170,7 @@
       var rec = p.challenges[id];
       if (!meaningful(rec)) return;
       var row = [(rec.completed ? 1 : 0) + (rec.answerRevealed ? 2 : 0), rec.stars, rec.hintsUsed, rec.casts, rec.failedCasts];
-      if (rec.completedAt) row.push(Math.floor(Date.parse(rec.completedAt) / 1000));
+      if (rec.completedAt) row.push(Date.parse(rec.completedAt));
       ch[id] = row;
     });
     var data = {
@@ -1254,7 +1254,7 @@
           hintsUsed: row[2],
           casts: row[3],
           failedCasts: row[4],
-          completedAt: typeof row[5] === "number" ? row[5] * 1000 : null
+          completedAt: typeof row[5] === "number" ? row[5] : null
         };
       });
     }

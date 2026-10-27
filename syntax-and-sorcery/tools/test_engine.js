@@ -176,7 +176,9 @@ function makeEngine(options) {
   };
   sb.window = sb;
   sb.self = sb;
-  sb.top = options.parent ? (options.parent.top || options.parent) : sb;
+  let top = sb;
+  if (options.parent) { try { top = options.parent.top || options.parent; } catch (e) { top = options.parent; } }
+  sb.top = top;
   sb.parent = options.parent || sb;
   if (options.opener) sb.opener = options.opener;
   if (options.location) sb.location = options.location;
@@ -749,7 +751,7 @@ test("save: importData rejects junk with friendly messages", async () => {
     ["[1, 2]", /doesn't look like a Save Scroll/],
   ];
   for (const [input, message] of cases) {
-    assert.throws(() => S.importData(input, 1), (err) => err instanceof e.sb.Error && message.test(err.message), "input: " + String(input).slice(0, 30));
+    assert.throws(() => S.importData(input, 1), (err) => err instanceof e.run("Error") && message.test(err.message), "input: " + String(input).slice(0, 30));
   }
   assert.throws(() => S.importData(good, 5), /slot/);
   assert.strictEqual(S.getProfile().wizardName, "Ada", "failed imports change nothing");

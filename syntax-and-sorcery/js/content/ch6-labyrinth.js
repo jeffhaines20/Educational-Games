@@ -246,9 +246,20 @@
                       return item
               return None
 
+          def _has_string(items):
+              return any(isinstance(item, str) or (isinstance(item, list) and _has_string(item)) for item in items)
+
           def _check(echoes, expected, note="", label=None):
-              result = _flatten()(echoes)
               call = label or code("flatten(" + short(echoes, 70) + ")")
+              try:
+                  result = _flatten()(echoes)
+              except RecursionError:
+                  if _has_string(echoes):
+                      fail(call + " never stopped calling itself (RecursionError). A string can be looped over just like a list, "
+                           + "and each of its letters is a string again, so treating strings like bundles splits them forever. Only "
+                           + "call " + code("flatten") + " again on items that are lists: " + code("isinstance(item, list)") + ".")
+                  fail(call + " never stopped calling itself (RecursionError). Only call " + code("flatten") + " again on items "
+                       + "that are lists, so that every call works on a smaller part of the bundle.")
               if result is None:
                   fail(call + " returned None. Build a new list and " + code("return") + " it at the end.")
               expect(isinstance(result, list), call + " should return a list, but it returned " + short(result) + ".")
@@ -2357,12 +2368,17 @@
               given = list(cavern)
               squares = sum(len(row) for row in cavern)
               limit = 400 * squares + 5000
-              with _Budget(limit, "Your spell ran more than " + format(limit, ",") + " lines of code on a map of only "
-                           + format(squares, ",") + " squares without finishing. It seems to explore the same squares again and "
-                           + "again. Add each square to your " + code("seen") + " set the moment you reach it, and never explore a "
-                           + "seen square again."):
-                  result = count_islands(cavern)
               call = label or code("count_islands(" + short(given, 80) + ")")
+              try:
+                  with _Budget(limit, "Your spell ran more than " + format(limit, ",") + " lines of code on a map of only "
+                               + format(squares, ",") + " squares without finishing. It seems to explore the same squares again "
+                               + "and again. Add each square to your " + code("seen") + " set the moment you reach it, and never "
+                               + "explore a seen square again."):
+                      result = count_islands(cavern)
+              except RecursionError:
+                  fail(call + " never stopped calling itself (RecursionError). Without marking squares as seen, a flood steps back "
+                       + "and forth between two rock squares forever. Add each square to " + code("seen") + " before you explore "
+                       + "its neighbours, and skip squares that are already in it.")
               expect(cavern == given, code("count_islands") + " changed the map it was given, and it's the only map of the "
                      + "caverns! Keep track of explored squares in your own set (or your own copy of the map).")
               if result is None:
@@ -2668,12 +2684,17 @@
               given = list(maze)
               squares = sum(len(row) for row in maze)
               limit = 300 * squares + 5000
-              with _Budget(limit, "Your spell ran more than " + format(limit, ",") + " lines of code on a maze of only "
-                           + format(squares, ",") + " squares without finishing. It seems to explore the same squares again and "
-                           + "again, or to try every possible route. Keep a set of seen squares: add each square the moment you "
-                           + "queue it, and never queue a seen square again."):
-                  result = shortest_path(maze)
               call = label or code("shortest_path(" + short(given, 80) + ")")
+              try:
+                  with _Budget(limit, "Your spell ran more than " + format(limit, ",") + " lines of code on a maze of only "
+                               + format(squares, ",") + " squares without finishing. It seems to explore the same squares again "
+                               + "and again, or to try every possible route. Keep a set of seen squares: add each square the moment "
+                               + "you queue it, and never queue a seen square again."):
+                      result = shortest_path(maze)
+              except RecursionError:
+                  fail(call + " went more than about 1,000 calls deep (RecursionError). A recursive search that follows long paths, "
+                       + "or tries every possible route, runs into Python's recursion limit in a big maze. Breadth-first search needs "
+                       + "no recursion at all: use a " + code("deque") + " and a " + code("seen") + " set.")
               expect(maze == given, code("shortest_path") + " changed the maze it was given. Keep track of visited squares in "
                      + "your own set instead.")
               if result is None:

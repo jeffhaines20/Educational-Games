@@ -137,14 +137,14 @@
     icon: "🐉",
     concepts: ["memoization", "functools.lru_cache", "tabulation", "1-D DP", "2-D DP", "rebuilding answers"],
     intro: [
-      "Far beneath the Labyrinth of Echoes, the floor trembles. Glitch has woken **the Hydra of Overlapping Subproblems** — and whenever a careless spell cuts off one of its heads, two more grow back.",
+      "Behind the door of seven serpent heads, far beneath the Labyrinth, Glitch's poke has woken **the Hydra of Overlapping Subproblems**. Whenever a careless spell cuts off one of its heads, two more grow back.",
       "Archmage Ada rolls up her sleeves. \"Brute force only feeds it. We win by *remembering*: face each head once, write down the answer, and never fight it twice. That, apprentice, is **dynamic programming**.\"",
       { tip: "The trials in this lair count how often your functions are called. Spells that remember their answers pass easily; spells that keep recomputing them are stopped, with a warning, before the Hydra grows too many heads." }
     ],
     outro: [
       "The last head sinks to the floor and, to everyone's surprise, begins to purr. Tamed at last, the Hydra curls around your feet like an enormous, scaly cat. It was never truly wicked — just dreadfully repetitive.",
       "You beat it the way great algorithms do: name the subproblem, find the recurrence, settle the base cases, and remember every answer.",
-      "From behind a stalagmite comes a small, guilty squeak. Ada smiles. \"Back to the tower, apprentice. Someone there wants to apologise, and I've been saving a ceremony just for you.\""
+      "From behind a stalagmite comes a small, guilty squeak. Ada smiles. \"Come out, Glitch. Back to the tower, everyone: there's an apology to make, and a ceremony I've been saving just for you, apprentice.\""
     ],
     challenges: [
       // ------------------------------------------------------------------ 1
@@ -383,7 +383,7 @@
           "\"Don't try every climb,\" Ada advises. \"Count the ways to reach each step from the steps just below it. Small answers build big ones — precisely.\""
         ],
         task: [
-          "Write `count_ways(n, strides)` that **returns** how many different ways there are to climb exactly `n` steps, where every stride covers one of the step counts in the list `strides` (for example `[1, 2]`).",
+          "Write `count_ways(n, strides)` that **returns** how many different ways there are to climb exactly `n` steps, when each stride climbs one of the numbers of steps listed in `strides` (for example `[1, 2]`: one step or two at a time).",
           "Order matters: a stride of 1 then 2 is a different way from 2 then 1.",
           { code: py`
             print(count_ways(4, [1, 2]))     # 1+1+1+1, 1+1+2, 1+2+1, 2+1+1, 2+2
@@ -1101,7 +1101,7 @@
         difficulty: "hard",
         concepts: ["2-D DP on strings", "subsequences", "prefix tables"],
         story: [
-          "Two scribes once copied the Hydra's ancient riddle, and each of them skipped letters here and there. Only the letters both copies share, in the same order, can be trusted.",
+          "The fourth head guards two copies of an ancient riddle. Each scribe who copied it skipped letters here and there, so only the letters both copies share, in the same order, can be trusted.",
           "\"The longer that shared thread, the closer we are to the original,\" says Ada. \"Compare the scrolls letter by letter — and remember every comparison you make.\""
         ],
         task: [
@@ -1315,7 +1315,7 @@
         difficulty: "hard",
         concepts: ["0/1 knapsack", "take it or leave it", "2-D DP"],
         story: [
-          "Behind the fourth head glitters the Hydra's hoard. Ada hands you a Bag of Holding: enchanted, but not bottomless. It tears if its treasures weigh more than its limit.",
+          "Behind the fifth head glitters the Hydra's hoard. Ada hands you a Bag of Holding: enchanted, but not bottomless. It tears if its treasures weigh more than its limit.",
           "\"Each treasure is one of a kind,\" she says. \"For every one, decide: take it or leave it. Weigh the richest choice precisely.\""
         ],
         task: [
@@ -1548,7 +1548,7 @@
         difficulty: "hard",
         concepts: ["edit distance", "three choices per entry", "2-D DP"],
         story: [
-          "The fifth head guards its lair with alchemy, transmuting one word into another. Every change — inserting a letter, deleting one, or turning one letter into another — costs a drop of precious mana.",
+          "The sixth head guards its lair with alchemy, transmuting one word into another. Every change — inserting a letter, deleting one, or turning one letter into another — costs a drop of precious mana.",
           "\"Lead into gold costs three drops,\" says Ada. \"Waste none. Find the cheapest transmutation between any two words.\""
         ],
         task: [
@@ -1773,7 +1773,7 @@
         difficulty: "hard",
         concepts: ["word break", "rebuilding the answer", "memoization"],
         story: [
-          "Only the last and greatest head remains. It hisses its true name as one endless string of runes — no spaces, no mercy.",
+          "Only the seventh and greatest head remains. It hisses its true name as one endless string of runes — no spaces, no mercy.",
           "\"Speak it back as words from the ancient lexicon and the Hydra is tamed,\" Ada whispers. \"Many splits lead nowhere, and they branch like heads. Remember the dead ends.\""
         ],
         task: [
