@@ -65,7 +65,7 @@
 
   function chipSpans(items) {
     if (!items || !items.length) return null;
-    return h("span", { class: "chips" }, items.map(function (c) { return h("span", { class: "chip" }, String(c)); }));
+    return h("span", { class: "chips" }, items.map(function (c) { return u.chip(c, "span"); }));
   }
 
   UI.screens.chapter = function (params) {

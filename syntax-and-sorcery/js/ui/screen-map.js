@@ -92,18 +92,6 @@
         h("span", { class: "btn-sub" }, "Every spell mastered!"));
     }
 
-    var quick = h("nav", { class: "map-quick", "aria-label": "Academy places" },
-      tile("📖", "Grimoire", "Your spells & report", function () { app().go("grimoire"); }),
-      tile("🧪", "Practice Chamber", "Free spellcasting", function () { app().go("practice"); }),
-      tile("📜", "Save Scroll", "Export or import", function () { UI.panels.saveScroll(); }),
-      tile("⚙️", "Settings", "Sound, motion, text size", function () { UI.panels.settings(); }));
-
-    function tile(icon, label, sub, onClick) {
-      return h("button", { type: "button", class: "quick-tile", on: { click: onClick } },
-        h("span", { class: "quick-icon", "aria-hidden": "true" }, icon),
-        h("span", { class: "quick-texts" }, h("span", { class: "quick-label" }, label), h("span", { class: "quick-sub" }, sub)));
-    }
-
     // ---- notices ----------------------------------------------------------------
     var notices = h("div", { class: "notices" });
     var storage = UI.panels.storageBanner(function () { UI.panels.saveScroll(); });
@@ -238,7 +226,8 @@
     var el = h("section", { class: "map-screen" },
       h("div", { class: "map-top" },
         wizardCard,
-        h("div", { class: "map-actions" }, cta || null, quick)),
+        cta ? h("div", { class: "map-actions" }, cta,
+          h("p", { class: "map-actions-help" }, "Your Grimoire, the Practice Chamber, the Save Scroll and Settings are in the bar at the top.")) : null),
       notices,
       h("header", { class: "map-heading" },
         h("h1", { class: "screen-title" }, "The Grounds of Coilspire Academy"),
@@ -281,6 +270,7 @@
     return {
       el: el,
       title: "Academy map",
+      focus: cta || null,
       onShow: function () {
         drawTrail();
         if (global.ResizeObserver) {

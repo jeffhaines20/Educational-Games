@@ -202,12 +202,22 @@
                        + code("def __init__(self, name, material, height=2):") + note + ".")
 
 
+          def height_note(golem, want):
+              # Point at the likely cause when a golem's height is always the default.
+              got = need_attr(golem, "height")
+              if got != want and got == 2:
+                  return (" It looks like every golem gets height 2, whatever it was given: store the parameter with "
+                          + code("self.height = height") + ", and let the default in " + code("height=2")
+                          + " cover the golems built without one.")
+              return ""
+
+
           @test('Golem("Pebble", "sand", 3) keeps its own name, material and height')
           def _():
               pebble = build("Pebble", "sand", 3)
               expect_equal(need_attr(pebble, "name"), "Pebble", "The golem's " + code("name") + " is wrong.")
               expect_equal(need_attr(pebble, "material"), "sand", "The golem's " + code("material") + " is wrong.")
-              expect_equal(need_attr(pebble, "height"), 3, "The golem's " + code("height") + " is wrong.")
+              expect_equal(need_attr(pebble, "height"), 3, "The golem's " + code("height") + " is wrong." + height_note(pebble, 3))
               build("Granite", "rock", 9)
               expect_equal((pebble.name, pebble.material, pebble.height), ("Pebble", "sand", 3),
                            "Building a second golem changed the first one! Store each value on the object being built ("
@@ -233,7 +243,8 @@
               expect_equal((need_attr(clay, "name"), need_attr(clay, "material"), need_attr(clay, "height")),
                            ("Clod", "clay", 2), "The name, material and height of " + code("clay") + " are wrong.")
               expect_equal((need_attr(stone, "name"), need_attr(stone, "material"), need_attr(stone, "height")),
-                           ("Boulder", "stone", 5), "The name, material and height of " + code("stone") + " are wrong.")
+                           ("Boulder", "stone", 5), "The name, material and height of " + code("stone") + " are wrong."
+                           + height_note(stone, 5))
               for label, golem in (("clay.runes", clay), ("stone.runes", stone)):
                   runes = need_attr(golem, "runes")
                   expect(isinstance(runes, list), code(label) + " should be a list, but it's " + short(runes) + ".")
@@ -1188,6 +1199,8 @@
           def _():
               Golem, FireGolem = classes()
               clod = build(Golem, "Clod", 4)
+              expect(not hasattr(clod, "heat"), "Golem has gained a " + code("heat") + " attribute. Keep the given Golem as it was: "
+                     + "FireGolem stores " + code("heat") + " itself, after " + code("super().__init__(name, strength)") + ".")
               expect_equal(text(clod, "describe"), "Clod: strength 4, energy 10",
                            "Golem's " + code("describe()") + " has changed. Please keep the given Golem class as it was.")
               expect_equal(text(clod, "work"), "Clod hauls stones.",
@@ -1281,7 +1294,7 @@
       // ------------------------------------------------------------------
       {
         id: "workshop-familiar-chorus",
-        title: "The Familiars' Chorus",
+        title: "The Singing Familiars",
         difficulty: "medium",
         concepts: ["polymorphism", "raise", "NotImplementedError"],
         story: [
@@ -1567,6 +1580,11 @@
               except TypeError as exc:
                   if _in_spell(exc):
                       raise
+                  if "abstract" in str(exc):
+                      fail("Python won't build " + code(cls.__name__ + "(" + short(name) + ")") + " at all, because Familiar uses "
+                           + code("@abstractmethod") + " (" + str(exc) + "). That's a fine real-world design, but this task wants an "
+                           + "ordinary class whose " + code("speak()") + " raises " + code("NotImplementedError") + ": remove "
+                           + code("ABC") + " and " + code("@abstractmethod") + ".")
                   fail("Python couldn't build " + code(cls.__name__ + "(" + short(name) + ")") + ": " + str(exc)
                        + ". Every familiar is built with just a name, using Familiar's " + code("def __init__(self, name):") + ".")
 
@@ -1631,6 +1649,9 @@
                   if _in_spell(exc):
                       raise
                   fail("Python couldn't call " + code("speak()") + ": " + str(exc) + ". It should start " + code("def speak(self):") + ".")
+              except Exception as exc:
+                  fail(code('Familiar("Blob").speak()') + " raised " + code(type(exc).__name__) + " (" + str(exc) + "), but it should raise "
+                       + code("NotImplementedError") + ": " + code('raise NotImplementedError("...")') + ".")
               if isinstance(result, BaseException) or result is NotImplementedError:
                   fail(code("speak()") + " returned the error instead of raising it. Write " + code("raise NotImplementedError(...)")
                        + ", not " + code("return") + ".")
@@ -1736,6 +1757,7 @@
           `, output: "Coin(7) True False\n[Coin(1), Coin(3), Coin(5)]" },
           "`isinstance(other, Coin)` checks whether `other` is a Coin. Returning the special value `NotImplemented` tells Python \"not my job\": it then asks the other object, and if that can't help either, `==` settles for `False` (unless both sides are the very same object), while `+` and `<` raise a `TypeError`.",
           { warning: "`__add__` should build and return a **new** object. Changing `self` and returning it would secretly alter the original." },
+          { warning: "Don't mix them up: you **return** `NotImplemented` from `__eq__`, `__add__` and `__lt__`; you **raise** `NotImplementedError` in a method that subclasses must override." },
           { tip: "Once a class defines `__eq__`, its objects can't go in a set or be dictionary keys unless it also defines `__hash__`. You won't need that today." }
         ],
         starter: py`
@@ -1940,6 +1962,16 @@
                        + code("def " + method + ("(self, other):" if args else "(self):")) + ".")
 
 
+          def mixed_up(value):
+              # NotImplementedError (an exception) where NotImplemented (the special value) belongs.
+              return value is NotImplementedError or isinstance(value, NotImplementedError)
+
+
+          MIX_UP = (" Return the special value " + code("NotImplemented") + " (no Error) instead. Don't mix them up: you "
+                    + code("return NotImplemented") + " from " + code("__eq__") + ", " + code("__add__") + " and " + code("__lt__")
+                    + "; you " + code("raise NotImplementedError") + " in a method that subclasses must override.")
+
+
           @test("A potion keeps its name and power, and repr() gives Potion('Glow', 3)")
           def _():
               glow = brew("Glow", 3)
@@ -1992,13 +2024,18 @@
               glow = brew("Glow", 3)
               magic(glow, "__eq__", brew("Glow", 3))
               for other in ("Glow", 3, None, ["Glow", 3]):
+                  label = code("Potion('Glow', 3) == " + short(other))
                   try:
                       same = glow == other
                       differ = glow != other
+                  except NotImplementedError:
+                      fail(label + " raised NotImplementedError." + MIX_UP)
                   except Exception as exc:
-                      fail(code("Potion('Glow', 3) == " + short(other)) + " crashed with " + type(exc).__name__ + ": " + str(exc)
-                           + ". When " + code("other") + " isn't a Potion, " + code("__eq__") + " should "
-                           + code("return NotImplemented") + " before it looks at " + code("other.name") + ".")
+                      where = (" before it looks at " + code("other.name")) if isinstance(exc, AttributeError) else ", not raise an error"
+                      fail(label + " crashed with " + type(exc).__name__ + ": " + str(exc) + ". When " + code("other")
+                           + " isn't a Potion, " + code("__eq__") + " should " + code("return NotImplemented") + " (or False)" + where + ".")
+                  if mixed_up(same):
+                      fail(label + " gave " + short(same) + ": your " + code("__eq__") + " returned the exception NotImplementedError." + MIX_UP)
                   if same is None:
                       fail(code("Potion('Glow', 3) == " + short(other)) + " gave None. It should be False: make " + code("__eq__")
                            + " " + code("return NotImplemented") + " (or False) when " + code("other") + " isn't a Potion.")
@@ -2009,6 +2046,11 @@
           @test("< compares power, so sorted(), min() and max() can order potions")
           def _():
               zest, glow, haste, calm = brew("Zest", 2), brew("Glow", 3), brew("Haste", 5), brew("Calm", 1)
+              Potion = need_class("Potion")
+              if not has_own_method(Potion, "__lt__") and has_own_method(Potion, "__gt__"):
+                  fail("Your Potion defines " + code("__gt__") + " (for " + code(">") + "), but the task asks for " + code("__lt__")
+                       + ": " + code("a < b") + " calls " + code("a.__lt__(b)") + ", and " + code("sorted()") + " compares with "
+                       + code("<") + ".")
               first = magic(zest, "__lt__", glow)
               expect(first is not NotImplemented, code("zest.__lt__(glow)") + " returned " + code("NotImplemented")
                      + ", but glow is a Potion! Check your " + code("isinstance") + " test.")
@@ -2027,11 +2069,22 @@
           def _():
               glow = brew("Glow", 3)
               magic(glow, "__add__", brew("Calm", 1))
-              expect_raises(TypeError, lambda: glow + 5,
-                            message=code("glow + 5") + " should raise a TypeError. In " + code("__add__") + ", "
-                            + code("return NotImplemented") + " when " + code("other") + " isn't a Potion, and Python raises it for you.")
-              expect_raises(TypeError, lambda: glow + "Haste",
-                            message=code('glow + "Haste"') + " should raise a TypeError too: a string isn't a potion.")
+              advice = (" In " + code("__add__") + ", " + code("return NotImplemented") + " when " + code("other")
+                        + " isn't a Potion, and Python raises the TypeError for you.")
+              for other, label in ((5, "glow + 5"), ("Haste", 'glow + "Haste"')):
+                  try:
+                      result = glow + other
+                  except TypeError:
+                      continue
+                  except NotImplementedError:
+                      fail(code(label) + " raised NotImplementedError, but it should raise a TypeError." + MIX_UP
+                           + " Python then raises the TypeError for you.")
+                  except Exception as exc:
+                      fail(code(label) + " should raise a TypeError, but it raised " + type(exc).__name__ + ": " + str(exc) + "." + advice)
+                  if mixed_up(result):
+                      fail(code(label) + " gave " + short(result) + ": your " + code("__add__") + " returned the exception NotImplementedError."
+                           + MIX_UP)
+                  fail(code(label) + " should raise a TypeError, but it gave " + short(result) + "." + advice)
         `,
         scene: { icon: "⚗️", successIcon: "🧪", successText: "The potions line up along the shelf, weakest to strongest, and the cauldron bubbles approvingly.", effect: "bubble" }
       },

@@ -29,6 +29,7 @@
     _SPELL_FILE = "<spell>"   # the harness compiles every spell under this file name
     _CO_GENERATOR = 0x20      # generator frames resume many times: count real calls only
     _CLOCK = {"left": 5.0}    # seconds that all hydra_watch blocks may use in one cast (limit: 8)
+    _WATCHING = {"depth": 0}  # > 0 while a big "without waking the Hydra" block is running
 
 
     @_contextlib.contextmanager
@@ -69,10 +70,12 @@
 
         previous = _sys.getprofile()
         _sys.setprofile(watcher)
+        _WATCHING["depth"] += 1
         try:
             yield state
         finally:
             _sys.setprofile(previous)
+            _WATCHING["depth"] -= 1
             _CLOCK["left"] -= _time.perf_counter() - started
 
 
@@ -131,13 +134,17 @@
         try:
             return func(*args)
         except RecursionError:
-            fail(code(name) + " recursed deeper than the realm allows (about "
-                 + format(_sys.getrecursionlimit(), ",") + " nested calls). If the smaller trials "
-                 "passed, your base cases are fine: on long inputs each level of top-down recursion "
-                 "costs several calls (" + code("@lru_cache") + " and a generator inside "
-                 + code("sum()") + "/" + code("min()") + "/" + code("max()") + " each add one). Fill a "
-                 "table bottom-up instead, or memoize a helper that takes positions. (If even small "
-                 "inputs fail this way, check that every call moves closer to a base case.)")
+            limit = format(_sys.getrecursionlimit(), ",")
+            if not _WATCHING["depth"]:          # a small input: almost always a missing base case
+                fail(code(name) + " kept calling itself and never reached a base case (Python "
+                     "stopped it after about " + limit + " nested calls). Every recursive function "
+                     "needs a simple case it answers directly, and each call must move closer to it.")
+            fail(code(name) + " recursed deeper than the realm allows (about " + limit + " nested "
+                 "calls). If the smaller trials passed, your base cases are fine: on long inputs each "
+                 "level of top-down recursion costs several calls (" + code("@lru_cache") + " and a "
+                 "generator inside " + code("sum()") + "/" + code("min()") + "/" + code("max()")
+                 + " each add one). Fill a table bottom-up instead, or memoize a helper that takes "
+                 "positions.")
         except TypeError as exc:
             frames = _traceback.extract_tb(exc.__traceback__)
             if "unhashable" in str(exc) and not any(f.filename == _SPELL_FILE for f in frames):
@@ -2089,7 +2096,7 @@
           def verify_split(result, name, words, call, example):
               if result is None:
                   fail(code(call) + " returned " + code("None") + ", but this name can be split, for "
-                       "example as " + short(example) + "." + shared_memo_note())
+                       "example as " + short(example) + "." + shared_memo_note("split_name", "the words"))
               if not isinstance(result, list):
                   fail(code(call) + " should return a list of words, but it returned " + short(result)
                        + " (" + type(result).__name__ + ").")
@@ -2099,18 +2106,18 @@
                            + short(word) + ".")
                   if word not in words:
                       fail(code(call) + " returned " + short(result) + ", but " + short(word)
-                           + " isn't one of the allowed words." + shared_memo_note())
+                           + " isn't one of the allowed words." + shared_memo_note("split_name", "the words"))
               joined = "".join(result)
               if joined != name:
                   fail(code(call) + " returned " + short(result) + ", which joins up to "
-                       + short(joined) + " instead of " + short(name) + "." + shared_memo_note())
+                       + short(joined) + " instead of " + short(name) + "." + shared_memo_note("split_name", "the words"))
 
 
           def expect_no_split(result, name, call):
               if result is not None:
                   fail("There is no way to split " + short(name) + " into those words, so " + code(call)
                        + " should return " + code("None") + ", but it returned " + short(result) + "."
-                       + shared_memo_note())
+                       + shared_memo_note("split_name", "the words"))
 
 
           def check_split(name, words, example):

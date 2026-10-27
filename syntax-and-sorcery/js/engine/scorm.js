@@ -1,21 +1,27 @@
 /*
- * Syntax & Sorcery — SS.Scorm: a small, defensive SCORM 1.2 / 2004 adapter.
+ * Pyromancer — SS.Scorm: a small, defensive SCORM 1.2 / 2004 adapter.
  *
  *   SS.Scorm.connect()                 → boolean (an LMS API was found and initialised)
  *   SS.Scorm.isActive()                → boolean
  *   SS.Scorm.version                   → "1.2" | "2004" | null
  *   SS.Scorm.getLearner()              → { id, name }   ("Last, First" becomes "First Last")
+ *   SS.Scorm.isFreshAttempt()          → boolean: a new (or instructor-reset) attempt —
+ *                                        1.2 lesson_status was "not attempted", 2004 entry "ab-initio"
  *   SS.Scorm.loadSuspendData()         → string ("" if none)
  *   SS.Scorm.saveSuspendData(text)     → boolean
  *   SS.Scorm.suspendDataLimit()        → number (4096 for 1.2, 64000 for 2004)
  *   SS.Scorm.reportProgress({ completed, total }) → boolean  (score raw/min/max + status)
- *   SS.Scorm.commit()                  → boolean
+ *   SS.Scorm.commit()                  → boolean (does nothing if no value changed since the last commit)
  *   SS.Scorm.finish()                  → boolean (only the first call does anything)
+ *   SS.Scorm.lastError()               → null | { call, code, text, diagnostic }
  *
  * The LMS API (`API` for 1.2, `API_1484_11` for 2004) is searched for in this window,
  * its parents (up to 10 levels) and the opener's chain. Every access is wrapped in
  * try/catch: cross-origin frames throw, and LMS APIs can be buggy. Nothing here ever
- * throws. A completed status is never downgraded to incomplete.
+ * throws. Failed LMS calls are logged to the console with the LMS's own error code,
+ * text and diagnostic. Values are only sent when they change, and commit() only talks
+ * to the LMS when something was sent since the last commit. No score is written until
+ * there is progress to report, and a completed status is never downgraded.
  */
 (function (global) {
   "use strict";
@@ -26,17 +32,18 @@
   var KEYS = {
     "1.2": {
       init: "LMSInitialize", get: "LMSGetValue", set: "LMSSetValue", commit: "LMSCommit",
-      finish: "LMSFinish", lastError: "LMSGetLastError",
+      finish: "LMSFinish", lastError: "LMSGetLastError", errorString: "LMSGetErrorString", diagnostic: "LMSGetDiagnostic",
       learnerId: "cmi.core.student_id", learnerName: "cmi.core.student_name",
-      status: "cmi.core.lesson_status", exit: "cmi.core.exit", sessionTime: "cmi.core.session_time",
+      status: "cmi.core.lesson_status", entry: "cmi.core.entry", exit: "cmi.core.exit", sessionTime: "cmi.core.session_time",
       raw: "cmi.core.score.raw", min: "cmi.core.score.min", max: "cmi.core.score.max",
       suspend: "cmi.suspend_data", limit: 4096
     },
     "2004": {
       init: "Initialize", get: "GetValue", set: "SetValue", commit: "Commit",
-      finish: "Terminate", lastError: "GetLastError",
+      finish: "Terminate", lastError: "GetLastError", errorString: "GetErrorString", diagnostic: "GetDiagnostic",
       learnerId: "cmi.learner_id", learnerName: "cmi.learner_name",
-      status: "cmi.completion_status", exit: "cmi.exit", sessionTime: "cmi.session_time",
+      status: "cmi.completion_status", success: "cmi.success_status", entry: "cmi.entry", exit: "cmi.exit",
+      sessionTime: "cmi.session_time",
       raw: "cmi.score.raw", min: "cmi.score.min", max: "cmi.score.max", scaled: "cmi.score.scaled",
       progress: "cmi.progress_measure",
       suspend: "cmi.suspend_data", limit: 64000
@@ -49,10 +56,18 @@
   var finished = false;
   var startedAt = 0;
   var wasCompleted = false;
-  var completeWord = "completed";   // "passed" if the LMS already said so
+  var completeWord = "completed";   // "passed" if the LMS already said so (1.2)
+  var initialStatus = "";
+  var entry = "";
+  var sent = {};           // value last sent for each element (so unchanged values aren't re-sent)
+  var dirty = false;       // something was sent since the last commit
+  var failure = null;      // the last failed LMS call
 
-  function warn(message, error) {
-    try { if (global.console && global.console.warn) global.console.warn("[SS.Scorm] " + message, error || ""); } catch (e) { /* ignore */ }
+  function log(level, message, extra) {
+    try {
+      var c = global.console;
+      if (c && c[level]) c[level]("[SS.Scorm] " + message, extra === undefined ? "" : extra);
+    } catch (e) { /* ignore */ }
   }
 
   // ---------------------------------------------------------------------------
@@ -110,7 +125,7 @@
       if (typeof fn !== "function") return null;
       return fn.apply(api, args);
     } catch (e) {
-      warn(keys[method] + " failed", e);
+      log("warn", keys[method] + " threw", e);
       return null;
     }
   }
@@ -119,9 +134,31 @@
     return result === true || String(result) === "true";
   }
 
-  function lastError() {
+  function lastErrorCode() {
     var code = invoke("lastError");
     return code === null || code === undefined ? "" : String(code);
+  }
+
+  /** Why the last LMS call failed, in the LMS's own words. */
+  function describeFailure(call) {
+    var code = lastErrorCode();
+    var text = "", diagnostic = "";
+    if (code && code !== "0") {
+      text = String(invoke("errorString", code) || "");
+      diagnostic = String(invoke("diagnostic", code) || "");
+    }
+    return { call: call, code: code, text: text, diagnostic: diagnostic };
+  }
+
+  function logFailure(f) {
+    failure = f;
+    log("warn", f.call + " failed" + (f.code ? ": error " + f.code : "") + (f.text ? " (" + f.text + ")" : "") +
+      (f.diagnostic && f.diagnostic !== f.text ? " — " + f.diagnostic : ""));
+    return f;
+  }
+
+  function noteFailure(call) {
+    return logFailure(describeFailure(call));
   }
 
   function getValue(name) {
@@ -129,8 +166,19 @@
     return value === null || value === undefined ? "" : String(value);
   }
 
-  function setValue(name, value) {
-    return truthy(invoke("set", name, String(value)));
+  /** Send a value (skipped when it hasn't changed, unless force). */
+  function setValue(name, value, force) {
+    value = String(value);
+    if (!force && Object.prototype.hasOwnProperty.call(sent, name) && sent[name] === value) return true;
+    var ok = truthy(invoke("set", name, value));
+    if (ok) {
+      sent[name] = value;
+      dirty = true;
+    } else {
+      delete sent[name];
+      noteFailure(keys.set + "(" + name + ")");
+    }
+    return ok;
   }
 
   // ---------------------------------------------------------------------------
@@ -150,26 +198,31 @@
     var ok = truthy(invoke("init", ""));
     if (!ok) {
       // Already initialised (e.g. the game was reloaded inside the same LMS session)?
-      var code = lastError();
-      if (found.version === "2004" && code === "103") ok = true;
-      else {
+      var initFailure = describeFailure(keys.init);
+      if (found.version === "2004" && initFailure.code === "103") ok = true;
+      else if (found.version === "1.2") {
         getValue(keys.learnerId);
-        ok = lastError() === "0";
+        ok = lastErrorCode() === "0";
       }
-    }
-    if (!ok) {
-      api = null;
-      keys = null;
-      return false;
+      if (!ok) {
+        logFailure(initFailure);
+        api = null;
+        keys = null;
+        return false;
+      }
     }
     active = true;
     startedAt = Date.now();
+    sent = {};
+    dirty = false;
     SS.Scorm.version = found.version;
 
-    var status = getValue(keys.status).toLowerCase();
-    wasCompleted = status === "completed" || status === "passed";
-    completeWord = status === "passed" ? "passed" : "completed";
-    if (!wasCompleted && (status === "" || status === "not attempted" || status === "unknown" || status === "browsed")) {
+    initialStatus = getValue(keys.status).toLowerCase();
+    entry = getValue(keys.entry).toLowerCase();
+    wasCompleted = initialStatus === "completed" || initialStatus === "passed";
+    completeWord = initialStatus === "passed" ? "passed" : "completed";
+    if (!wasCompleted && (initialStatus === "" || initialStatus === "not attempted" || initialStatus === "unknown" ||
+        initialStatus === "browsed")) {
       setValue(keys.status, "incomplete");
     }
     // Keep the attempt open so the LMS gives suspend_data back next time.
@@ -180,6 +233,12 @@
 
   function isActive() {
     return active;
+  }
+
+  /** A new attempt: nothing from an earlier attempt should be carried into it. */
+  function isFreshAttempt() {
+    if (!keys) return false;
+    return SS.Scorm.version === "2004" ? entry === "ab-initio" : initialStatus === "not attempted";
   }
 
   /** "Last, First" → "First Last" (other formats are kept as they are). */
@@ -203,14 +262,16 @@
 
   function loadSuspendData() {
     if (!active) return "";
-    return getValue(keys.suspend);
+    var text = getValue(keys.suspend);
+    sent[keys.suspend] = text;          // what the LMS holds now
+    return text;
   }
 
   function saveSuspendData(text) {
     if (!active) return false;
     text = String(text === null || text === undefined ? "" : text);
     if (text.length > keys.limit) {
-      warn("suspend_data is " + text.length + " characters; the limit is " + keys.limit + ". Not saved.");
+      log("warn", "suspend_data is " + text.length + " characters; the limit is " + keys.limit + ". Not saved.");
       return false;
     }
     return setValue(keys.suspend, text);
@@ -221,6 +282,8 @@
     progress = progress || {};
     var total = Math.max(0, Math.floor(Number(progress.total) || 0));
     var completed = Math.min(total, Math.max(0, Math.floor(Number(progress.completed) || 0)));
+    // Nothing to report yet: don't write a 0 score at the start (or over an earlier score).
+    if (!completed && !Object.prototype.hasOwnProperty.call(sent, keys.raw)) return true;
     var raw = total ? Math.round((100 * completed) / total) : 0;
     var config = SS.config || {};
     var threshold = config.scorm && Number(config.scorm.completionThreshold);
@@ -234,12 +297,17 @@
     if (keys.scaled) setValue(keys.scaled, String(raw / 100));
     if (keys.progress) setValue(keys.progress, String(total ? Math.round((10000 * completed) / total) / 10000 : 0));
     setValue(keys.status, wasCompleted ? completeWord : "incomplete");
+    if (keys.success && wasCompleted) setValue(keys.success, "passed");
     return ok;
   }
 
   function commit() {
     if (!active) return false;
-    return truthy(invoke("commit", ""));
+    if (!dirty) return true;
+    var ok = truthy(invoke("commit", ""));
+    if (ok) dirty = false;
+    else noteFailure(keys.commit);
+    return ok;
   }
 
   function pad(n, width) {
@@ -263,18 +331,24 @@
   function finish() {
     if (!active || finished) return false;
     finished = true;
-    setValue(keys.sessionTime, sessionTime(Date.now() - startedAt));
-    setValue(keys.exit, "suspend");
+    setValue(keys.sessionTime, sessionTime(Date.now() - startedAt), true);
+    setValue(keys.exit, "suspend", true);
     commit();
     var ok = truthy(invoke("finish", ""));
+    if (!ok) noteFailure(keys.finish);
     active = false;
     return ok;
+  }
+
+  function lastError() {
+    return failure ? { call: failure.call, code: failure.code, text: failure.text, diagnostic: failure.diagnostic } : null;
   }
 
   SS.Scorm = {
     version: null,
     connect: connect,
     isActive: isActive,
+    isFreshAttempt: isFreshAttempt,
     getLearner: getLearner,
     loadSuspendData: loadSuspendData,
     saveSuspendData: saveSuspendData,
@@ -282,6 +356,7 @@
     reportProgress: reportProgress,
     commit: commit,
     finish: finish,
+    lastError: lastError,
     // For tests.
     _friendlyName: friendlyName,
     _sessionTime: sessionTime

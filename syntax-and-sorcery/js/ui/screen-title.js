@@ -1,9 +1,15 @@
 /*
- * Syntax & Sorcery — title, save slots and story screens.
+ * Pyromancer — title, save slots and story screens.
  *
- *   SS.UI.screens.title()                 logo, Begin / Continue, engine status
+ *   SS.UI.screens.title()                 the painting, Begin / Continue, engine status
  *   SS.UI.screens.slots()                 the save slots (shown as Slot 1–3) + Import Save Scroll
  *   SS.UI.screens.story({ kind })         prologue or epilogue, full screen
+ *
+ * Title art (assets/): on landscape screens the full painting, which carries the
+ * painted title and tagline, is the hero and the buttons sit on a dark panel under
+ * the painted tagline (never over the title or the witch's face). On portrait
+ * screens the left crop (no painted text) is a banner above an HTML title. The h1
+ * is always in the page for screen readers.
  */
 (function (global) {
   "use strict";
@@ -12,36 +18,10 @@
   UI.screens = UI.screens || {};
   var u = UI.util;
   var h = u.h;
-  var XLINK = "http://www.w3.org/1999/xlink";
+
+  var ART_ALT = "A young witch at a moonlit desk in Coilspire Academy: a golden snake coils beside her, and a glowing Python spell book lies open in front of her.";
 
   function app() { return UI.app; }
-
-  function magicCircle() {
-    var s = u.svg;
-    var pathId = u.uid("rune-path");
-    var runes = "def ✦ class ✦ lambda ✦ yield ✦ return ✦ while ✦ for ✦ in ✦ import ✦ try ✦ with ✦ if ✦ else ✦ ";
-    var textPath = s("textPath", { startOffset: "0" }, runes + runes);
-    textPath.setAttribute("href", "#" + pathId);
-    textPath.setAttributeNS(XLINK, "xlink:href", "#" + pathId);
-    function poly(angles, r) {
-      return angles.map(function (a) {
-        var rad = a * Math.PI / 180;
-        return (200 + r * Math.cos(rad)).toFixed(1) + "," + (200 + r * Math.sin(rad)).toFixed(1);
-      }).join(" ");
-    }
-    return s("svg", { class: "magic-circle", viewBox: "0 0 400 400", "aria-hidden": "true", focusable: "false" },
-      s("defs", null, s("path", { id: pathId, d: "M200,200 m-149,0 a149,149 0 1,1 298,0 a149,149 0 1,1 -298,0" })),
-      s("g", { class: "mc-outer" },
-        s("circle", { cx: "200", cy: "200", r: "186", class: "mc-ring" }),
-        s("circle", { cx: "200", cy: "200", r: "172", class: "mc-ring mc-thin" }),
-        s("text", { class: "mc-runes" }, textPath),
-        s("circle", { cx: "200", cy: "200", r: "134", class: "mc-ring mc-thin" })),
-      s("g", { class: "mc-inner" },
-        s("polygon", { class: "mc-star", points: poly([-90, 30, 150], 126) }),
-        s("polygon", { class: "mc-star", points: poly([90, 210, 330], 126) }),
-        s("circle", { cx: "200", cy: "200", r: "64", class: "mc-ring" }),
-        s("circle", { cx: "200", cy: "200", r: "56", class: "mc-ring mc-thin" })));
-  }
 
   function rankIconFor(title) {
     var ranks = (SS.Progress && SS.Progress.RANKS) || [];
@@ -60,18 +40,13 @@
   function soundToggle() {
     var btn = h("button", { type: "button", class: "icon-btn title-sound" });
     function sync() {
-      var on = u.settings().sound !== false && UI.sound.isEnabled();
+      var on = app().soundOn();
       btn.textContent = on ? "🔊" : "🔇";
       btn.setAttribute("aria-label", "Sound");
       btn.setAttribute("aria-pressed", on ? "true" : "false");
       btn.title = on ? "Sound is on" : "Sound is off";
     }
-    btn.addEventListener("click", function () {
-      var on = UI.sound.isEnabled();
-      app().updateSettings({ sound: !on });
-      if (!on) UI.sound.play("click");
-      sync();
-    });
+    btn.addEventListener("click", function () { app().toggleSound(); sync(); });
     sync();
     return btn;
   }
@@ -88,7 +63,7 @@
     var slots = scorm ? [] : app().slotList();
     var lastSlot = scorm ? null : u.safe(function () { return SS.Save.getLastSlot(); }, null);
     var last = slots.filter(function (s) { return s.data && s.slot === lastSlot; })[0] || null;
-    var anySaved = slots.some(function (s) { return !!s.data; });
+    var anySaved = slots.some(function (s) { return !!s.data || s.damaged; });
 
     function continueButton(name, sub, onClick) {
       return h("button", { type: "button", class: "btn btn-primary btn-lg btn-continue", on: { click: onClick } },
@@ -114,45 +89,60 @@
     } else {
       var first = slots[0] ? slots[0].slot : 0;
       actions.appendChild(u.button("Begin your apprenticeship", { kind: "primary", size: "lg", icon: "✨", onClick: function () { app().newGame(first); } }));
-      actions.appendChild(u.button("I have a Save Scroll", {
-        kind: "ghost", icon: "📜",
+      actions.appendChild(u.button("I have a Save Scroll (save code or file)", {
+        kind: "ghost", icon: "📜", class: "btn-savescroll",
         onClick: function () { UI.panels.saveScroll({ chooseSlot: true }); }
       }));
     }
 
     var warn = UI.panels.storageBanner(scorm ? null : function () { UI.panels.saveScroll({ chooseSlot: true }); });
     var conf = u.config();
+    var heading = h("h1", { class: "title-h1" }, u.GAME_NAME);
     var el = h("section", { class: "title-screen" },
-      h("div", { class: "title-hero" },
-        h("div", { class: "title-emblem-wrap" },
-          magicCircle(),
-          h("div", { class: "title-emblem", "aria-hidden": "true" }, "🐍")),
-        h("p", { class: "title-eyebrow" }, "Coilspire Academy presents"),
-        h("h1", { class: "title-logo" }, "Syntax ", h("span", { class: "amp" }, "&"), " Sorcery"),
-        h("p", { class: "tagline" }, "Learn Python by casting real spells: from your first ", h("code", { class: "inline-code" }, "print()"), " to taming the Hydra with dynamic programming."),
-        actions,
-        chip.el,
-        warn),
-      h("footer", { class: "title-footer" },
-        h("span", { class: "title-version" }, (conf.title || "Syntax & Sorcery") + " " + (conf.version || "")),
-        h("button", { type: "button", class: "link-btn", on: { click: aboutDialog } }, "About"),
-        soundToggle()));
+      warn ? h("div", { class: "title-warning" }, warn) : null,
+      h("div", { class: "title-canvas" },
+        h("img", {
+          class: "title-img",
+          src: "assets/pyromancer-title.webp",
+          srcset: "assets/pyromancer-title-1024.webp 1024w, assets/pyromancer-title.webp 1536w",
+          sizes: "100vw",
+          width: "1536", height: "1024",
+          alt: ART_ALT,
+          loading: "lazy",
+          decoding: "async"
+        }),
+        h("div", { class: "title-banner", role: "img", "aria-label": ART_ALT }),
+        h("div", { class: "title-panel" },
+          h("div", { class: "title-words" },
+            heading,
+            h("p", { class: "title-tagline" }, u.TAGLINE),
+            h("p", { class: "title-pitch" }, "Learn Python by casting real spells, from your first ", h("code", { class: "inline-code" }, "print()"), " to taming the Hydra.")),
+          actions,
+          chip.el,
+          h("footer", { class: "title-footer" },
+            h("span", { class: "title-version" }, u.GAME_NAME + (conf.version ? " " + conf.version : "")),
+            h("button", { type: "button", class: "link-btn", on: { click: aboutDialog } }, "About"),
+            soundToggle()))));
 
     return {
       el: el,
       hideTopbar: true,
       title: "",
+      focus: heading,
       destroy: function () { chip.destroy(); }
     };
   };
 
   function aboutDialog() {
+    var scorm = app().isScorm();
     UI.dialogs.open({
-      title: "About the game", icon: "📜", size: "md", body: h("div", { class: "about-standalone" },
-        h("p", null, "Syntax & Sorcery teaches Python, data structures & algorithms and object-oriented programming. You are an apprentice at Coilspire Academy; every spell is real Python code, checked by trials."),
+      title: "About " + u.GAME_NAME, icon: "🔥", size: "md", body: h("div", { class: "about-standalone" },
+        h("p", null, h("strong", null, u.GAME_NAME), " teaches Python, data structures & algorithms and object-oriented programming. You are an apprentice at Coilspire Academy; every spell is real Python code, checked by trials."),
         h("ul", { class: "about-list" },
-          h("li", null, "Progress saves automatically in this browser (three save slots)."),
-          h("li", null, "A ", h("strong", null, "Save Scroll"), " moves your progress to another computer."),
+          scorm
+            ? h("li", null, "Your course saves your progress automatically.")
+            : h("li", null, "Progress saves automatically in this browser (three save slots, one per wizard)."),
+          scorm ? null : h("li", null, "A ", h("strong", null, "Save Scroll"), " moves your progress to another computer."),
           h("li", null, "Stuck? Pip the owl has hints, and every challenge has a lesson.")),
         UI.panels.about()),
       actions: [{ label: "Close", kind: "primary" }]
@@ -170,8 +160,18 @@
     function render() {
       u.clear(grid);
       app().slotList().forEach(function (entry) {
-        grid.appendChild(h("li", { class: "slot-item" }, entry.data ? filledCard(entry) : emptyCard(entry)));
+        var card = entry.data ? filledCard(entry) : entry.damaged ? damagedCard(entry) : emptyCard(entry);
+        grid.appendChild(h("li", { class: "slot-item" }, card));
       });
+    }
+
+    function afterDelete(entry) {
+      if (app().state.slot === entry.slot) app().state.slot = null;
+      UI.sound.play("reset");
+      render();
+      var heading = el.querySelector("h1");
+      if (heading) u.focusEl(heading);
+      u.announce("Save deleted.");
     }
 
     function filledCard(entry) {
@@ -200,12 +200,29 @@
               }).then(function (ok) {
                 if (!ok) return;
                 u.safe(function () { SS.Save.deleteSlot(entry.slot); });
-                if (app().state.slot === entry.slot) app().state.slot = null;
-                UI.sound.play("reset");
-                render();
-                var heading = el.querySelector("h1");
-                if (heading) u.focusEl(heading);
-                u.announce("Save deleted.");
+                afterDelete(entry);
+              });
+            }
+          })));
+    }
+
+    function damagedCard(entry) {
+      return h("article", { class: "slot-card damaged panel" },
+        h("p", { class: "slot-num" }, "Slot " + (entry.index + 1)),
+        h("div", { class: "slot-portrait damaged", "aria-hidden": "true" }, "⚠️"),
+        h("h2", { class: "slot-name" }, "Damaged save"),
+        h("p", { class: "slot-rank" }, "This save can't be read. Delete it to free the slot?"),
+        h("div", { class: "slot-actions" },
+          u.button("Delete it", {
+            kind: "danger-ghost", icon: "🗑️", ariaLabel: "Delete the damaged save in slot " + (entry.index + 1),
+            onClick: function () {
+              UI.dialogs.confirm({
+                title: "Delete the damaged save?", icon: "🗑️", danger: true, confirmLabel: "Delete it",
+                message: "Slot " + (entry.index + 1) + " holds a save that can't be read. Deleting it makes room for a new apprentice (or an imported Save Scroll)."
+              }).then(function (ok) {
+                if (!ok) return;
+                u.safe(function () { SS.Save.deleteSlot(entry.slot); });
+                afterDelete(entry);
               });
             }
           })));
@@ -231,7 +248,7 @@
       warn,
       grid,
       h("div", { class: "slots-footer" },
-        u.button("Import a Save Scroll", {
+        u.button("Import a Save Scroll (save code or file)", {
           kind: "ghost", icon: "📥",
           onClick: function () { UI.panels.saveScroll({ chooseSlot: true, onImported: function () { app().enterGame(); } }); }
         })));
@@ -255,8 +272,8 @@
       if (kind === "prologue") {
         app().go("map");
       } else {
-        UI.effects.celebrate();
         app().go("certificate");
+        UI.effects.celebrate();
       }
     }
 

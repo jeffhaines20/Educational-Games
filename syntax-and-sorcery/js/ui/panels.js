@@ -250,7 +250,7 @@
     var picked = null;
     var slotPicker = null;
     if (slots) {
-      var firstEmpty = slots.filter(function (s) { return !s.data; })[0];
+      var firstEmpty = slots.filter(function (s) { return !s.data && !s.damaged; })[0];
       picked = (firstEmpty || slots[0]).slot;
       var groupName = u.uid("slotpick");
       slotPicker = h("fieldset", { class: "slot-picker" },
@@ -260,7 +260,7 @@
           var input = h("input", { type: "radio", name: groupName, id: id, value: String(s.slot), checked: s.slot === picked });
           input.addEventListener("change", function () { if (input.checked) picked = s.slot; });
           return h("label", { class: "slot-option", for: id }, input,
-            h("span", null, "Slot " + (s.index + 1) + ": ", s.data ? h("strong", null, s.data.wizardName || "Apprentice") : h("em", null, "empty")));
+            h("span", null, "Slot " + (s.index + 1) + ": ", s.data ? h("strong", null, s.data.wizardName || "Apprentice") : h("em", null, s.damaged ? "damaged save" : "empty")));
         }));
     }
     var fileId = u.uid("savefile");
@@ -281,8 +281,8 @@
       if (!text) { importError.textContent = "Paste a save code or choose a save file first."; return; }
       var slot = targetSlot();
       var slotData = slots ? slots.filter(function (s) { return s.slot === slot; })[0] : null;
-      var occupied = slots ? !!(slotData && slotData.data) : !!p;
-      var who = slots ? (slotData && slotData.data && slotData.data.wizardName) : (p && p.wizardName);
+      var occupied = slots ? !!(slotData && (slotData.data || slotData.damaged)) : !!p;
+      var who = slots ? (slotData && slotData.data ? slotData.data.wizardName : "the damaged save") : (p && p.wizardName);
       var ask = occupied && !scorm
         ? UI.dialogs.confirm({
           title: "Replace this save?", icon: "📜", danger: true, confirmLabel: "Replace it",

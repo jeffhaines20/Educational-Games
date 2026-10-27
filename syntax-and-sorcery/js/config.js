@@ -1,5 +1,5 @@
 /*
- * Syntax & Sorcery — configuration (SS.config).
+ * Pyromancer — configuration (SS.config).
  *
  * Overrides are applied in this order:
  *   1. the defaults below,
@@ -10,6 +10,10 @@
  *
  * The query string can never supply a URL: scripts are only ever loaded from
  * addresses written in code or in SS_CONFIG.
+ *
+ * tools/build.py can bake values into a bundle the same way (a small script that fills
+ * window.SS_CONFIG before this file): the SCORM package sets scormRequired, and
+ * `--answers off` sets allowAnswerScroll to false.
  *
  * Classic script (no modules): works from file://, in LMS iframes, and in Node
  * (`global.window = global; require("./js/config.js")`).
@@ -22,7 +26,7 @@
 
   function defaults() {
     return {
-      title: "Syntax & Sorcery",
+      title: "Pyromancer",
       version: "1.0.0",
       pyodideVersion: PYODIDE_VERSION,
       pyodideBaseURLs: [                       // tried in order until one loads
@@ -33,17 +37,29 @@
       defaultTimeLimitMs: 8000,                // per cast; a challenge may set timeLimitMs
       outputLimitChars: 50000,
       stepLimit: 2000000,                      // loop iterations + calls per run / trial (0 = no limit)
-      // Python's recursion limit in the browser. The worker's JavaScript stack is small: recursion
-      // through C code (sorted(key=...), str()/repr() of self, ==, len()...) overflows it after
-      // ~300-600 levels in Chromium, so the limit makes Python raise RecursionError first.
-      // Plain recursion and functools.lru_cache recursion use no JS stack (see runner.js).
-      recursionLimit: 350,
+      // Python's recursion limit, as in desktop CPython. Measured in Chromium's worker
+      // (node tools/e2e/engine-runner.js measure): plain recursion and functools.lru_cache
+      // recursion (the runner uses CPython's pure-Python wrapper) never touch the small
+      // JavaScript stack, and recursion through a generator inside max()/sum() costs two
+      // frames per level, so it stops with a normal RecursionError (~500 levels) before
+      // the stack overflows (~615). Only recursion that passes through C code once per
+      // level - sorted(key=f), map(f, ...), str()/repr()/==/len() of objects whose dunder
+      // methods call themselves - can overflow first (after ~300-640 levels). The runner
+      // reports that as a friendly RecursionError and restarts Python automatically, so a
+      // high limit is safe, and correct top-down DP (3-5 frames per level with lru_cache,
+      // count_calls and generators) keeps the headroom it has on a desktop.
+      recursionLimit: 1000,
       saveSlots: 3,
-      storageKey: "syntax-and-sorcery",        // localStorage key prefix
+      storageKey: "pyromancer",                // localStorage key prefix
       allowAnswerScroll: true,
       answerScrollAfterFailedCasts: 3,
       unlockAll: false,
-      scorm: { enabled: true, completionThreshold: 1.0 }   // share of challenges for "completed"
+      // SCORM: completionThreshold = share of challenges for "completed". Importing a Save
+      // Scroll is off in an LMS (it would change the gradebook) unless allowImport is true.
+      scorm: { enabled: true, completionThreshold: 1.0, allowImport: false },
+      // Set by tools/build.py in the SCORM package: when no LMS connection can be made,
+      // the player is warned that progress and score aren't being recorded.
+      scormRequired: false
     };
   }
 
@@ -103,7 +119,8 @@
     storageKey: text(64),
     allowAnswerScroll: bool,
     answerScrollAfterFailedCasts: number(0, 1000, true),
-    unlockAll: bool
+    unlockAll: bool,
+    scormRequired: bool
   };
 
   function applyOverrides(config, overrides) {
@@ -116,6 +133,7 @@
           config.scorm.enabled = value;
         } else if (isObject(value)) {
           config.scorm.enabled = bool(value.enabled, config.scorm.enabled);
+          config.scorm.allowImport = bool(value.allowImport, config.scorm.allowImport);
           var threshold = number(0, 1, false)(value.completionThreshold, config.scorm.completionThreshold);
           if (threshold > 0) config.scorm.completionThreshold = threshold;
         }

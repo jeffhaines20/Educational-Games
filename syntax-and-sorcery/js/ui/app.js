@@ -134,7 +134,10 @@
     return u.safe(function () { return SS.Save && SS.Save.storageWarning ? SS.Save.storageWarning() : null; }, null);
   }
 
-  /** [{ index, slot, data|null }] — data is the summary from SS.Save.listSlots(). */
+  /**
+   * [{ index, slot, data|null, damaged }] — data is the summary from SS.Save.listSlots();
+   * an unreadable slot comes back as { slot, damaged: true } and gets data: null, damaged: true.
+   */
   function slotList() {
     var count = (SS.config && SS.config.saveSlots) || 3;
     var raw = u.safe(function () { return SS.Save.listSlots(); }, []) || [];
@@ -144,8 +147,14 @@
     }
     var out = [];
     for (var j = 0; j < Math.max(count, raw.length); j++) {
-      var data = raw[j] || null;
-      out.push({ index: j, slot: data && typeof data.slot === "number" ? data.slot : j + base, data: data });
+      var item = raw[j] || null;
+      var damaged = !!(item && item.damaged);
+      out.push({
+        index: j,
+        slot: item && typeof item.slot === "number" ? item.slot : j + base,
+        data: item && !damaged ? item : null,
+        damaged: damaged
+      });
     }
     return out;
   }
