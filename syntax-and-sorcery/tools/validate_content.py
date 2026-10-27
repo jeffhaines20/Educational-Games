@@ -39,11 +39,20 @@ SLOW_SECONDS = 1.5
 RUNNER = r"""
 import json, sys
 sys.path.insert(0, sys.argv[1])
-sys.setrecursionlimit(1000)  # match Pyodide's default
-import spellcheck
 payload = json.loads(sys.stdin.read())
-result = spellcheck.run_spell(payload["code"], payload["tests"], payload.get("inputs") or [])
-sys.stdout.write("\n@@RESULT@@" + json.dumps(result))
+runtime = payload.get("runtime") or {}
+inputs_json = json.dumps(payload.get("inputs") or [])
+if payload.get("setup"):
+    # The browser runner's own set-up code: same recursion limit, step limit and lru_cache.
+    namespace = {"__name__": "__ss_setup__"}
+    exec(payload["setup"], namespace)
+    text = namespace["_ss_run"](payload["code"], payload["tests"], inputs_json, runtime.get("outputLimit") or 50000,
+                                runtime.get("stepLimit"), runtime.get("recursionLimit"))
+else:
+    import spellcheck
+    sys.setrecursionlimit(runtime.get("recursionLimit") or 1000)
+    text = spellcheck.run_spell_json(payload["code"], payload["tests"], inputs_json)
+sys.stdout.write("\n@@RESULT@@" + text)
 """
 
 
@@ -55,7 +64,10 @@ def load_content():
     if proc.returncode != 0:
         sys.stderr.write(proc.stderr)
         sys.exit(2)
-    return json.loads(proc.stdout)
+    data = json.loads(proc.stdout)
+    RUNTIME["setup"] = data.get("setupPy")
+    RUNTIME["runtime"] = data.get("runtime")
+    return data
 
 
 # ---------------------------------------------------------------------------
@@ -196,8 +208,12 @@ KNOWN_CHALLENGE_KEYS = {
 # Running spells
 # ---------------------------------------------------------------------------
 
+RUNTIME = {}  # filled in by load_content(): the browser runner's set-up code and limits
+
+
 def run(harness_dir, code, tests, inputs):
-    payload = json.dumps({"code": code, "tests": tests, "inputs": inputs})
+    payload = json.dumps({"code": code, "tests": tests, "inputs": inputs,
+                          "setup": RUNTIME.get("setup"), "runtime": RUNTIME.get("runtime")})
     started = time.monotonic()
     try:
         proc = subprocess.run(

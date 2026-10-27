@@ -2727,7 +2727,7 @@
                                + "you queue it, and never queue a seen square again."):
                       result = shortest_path(maze)
               except RecursionError:
-                  fail(call + " went more than about 1,000 calls deep (RecursionError). A recursive search that follows long paths, "
+                  fail(call + " went too many calls deep (RecursionError). A recursive search that follows long paths, "
                        + "or tries every possible route, runs into Python's recursion limit in a big maze. Breadth-first search needs "
                        + "no recursion at all: use a " + code("deque") + " and a " + code("seen") + " set.")
               expect(maze == given, code("shortest_path") + " changed the maze it was given. Keep track of visited squares in "

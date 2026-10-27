@@ -20,6 +20,10 @@
  *   * Runs are queued, one at a time. The time limit starts when the worker reports
  *     that the run has begun. On timeout the worker is terminated and a new one is
  *     loaded automatically; a crashed Python is restarted the same way.
+ *   * SS.config.recursionLimit and SS.config.stepLimit are passed to every run. If Python
+ *     still dies of a JavaScript stack overflow (deep recursion through C code) the run
+ *     is reported as an ordinary "error" with type RecursionError (out of memory: a
+ *     MemoryError), and a fresh worker is loaded.
  *   * Messages from the worker are untrusted (a spell can `import js` and post
  *     messages): only messages carrying this worker's secret session token are
  *     considered, and results are validated and normalised before use.
@@ -34,10 +38,12 @@
 
   // Python run once in each new worker. It is constant source: no player data is ever
   // pasted in here. It imports the harness and defines
-  //     _ss_run(code, tests, inputs_json, output_limit) -> JSON string
+  //     _ss_run(code, tests, inputs_json, output_limit, step_limit=None, recursion_limit=None)
+  //       -> JSON string
   // which first resets interpreter-wide state that an earlier spell may have changed
-  // (builtins, the harness module, sys streams and hooks, the recursion limit, sys.path,
-  // warning filters) and then calls spellcheck.run_spell_json().
+  // (builtins, the harness module, sys streams and hooks, sys.path, warning filters), sets
+  // the recursion limit (SS.config.recursionLimit) and then calls spellcheck.run_spell_json()
+  // with SS.config.stepLimit.
   //
   // It also makes functools.lru_cache / functools.cache use CPython's own pure-Python
   // wrapper. A worker has a small native stack: recursion that passes through the C
@@ -47,7 +53,7 @@
   //
   // Exposed as SS.PythonRunner.SETUP_PY so tools can reproduce the in-game environment.
   var SETUP_PY = [
-    "import builtins, functools, gc, importlib.util, sys, warnings",
+    "import builtins, functools, gc, importlib.util, inspect, sys, warnings",
     "if '/home/pyodide' not in sys.path:",
     "    sys.path.insert(0, '/home/pyodide')",
     "import spellcheck",
@@ -81,6 +87,11 @@
     "_ss_harness = dict(spellcheck.__dict__)",
     "_ss_sys = {name: getattr(sys, name) for name in ('stdout', 'stderr', 'stdin', 'displayhook', 'excepthook', 'breakpointhook') if hasattr(sys, name)}",
     "_ss_limit = sys.getrecursionlimit()",
+    "try:",
+    "    _ss_params = list(inspect.signature(spellcheck.run_spell_json).parameters.values())",
+    "    _ss_takes_steps = len(_ss_params) >= 5 or any(p.kind == p.VAR_POSITIONAL for p in _ss_params)",
+    "except (TypeError, ValueError):",
+    "    _ss_takes_steps = False",
     "_ss_path = list(sys.path)",
     "_ss_filters = list(warnings.filters)",
     "",
@@ -91,20 +102,26 @@
     "        if target.get(key, _ss_missing) is not value:",
     "            target[key] = value",
     "",
-    "def _ss_run(code, tests, inputs_json, output_limit):",
+    "def _ss_run(code, tests, inputs_json, output_limit, step_limit=None, recursion_limit=None):",
     "    _ss_restore(builtins.__dict__, _ss_builtins)",
     "    _ss_restore(spellcheck.__dict__, _ss_harness)",
     "    for name, value in _ss_sys.items():",
     "        setattr(sys, name, value)",
     "    sys.settrace(None)",
     "    sys.setprofile(None)",
-    "    sys.setrecursionlimit(_ss_limit)",
+    "    try:",
+    "        sys.setrecursionlimit(max(50, int(recursion_limit)) if recursion_limit else _ss_limit)",
+    "    except (TypeError, ValueError, RecursionError):",
+    "        sys.setrecursionlimit(_ss_limit)",
     "    sys.path[:] = _ss_path",
     "    warnings.filters[:] = _ss_filters",
     "    gc.enable()",
     "    if _ss_lru is not None:",
     "        functools._lru_cache_wrapper = _ss_lru",
-    "    return _ss_harness['run_spell_json'](code, tests, inputs_json, output_limit)",
+    "    run = _ss_harness['run_spell_json']",
+    "    if _ss_takes_steps and step_limit is not None:",
+    "        return run(code, tests, inputs_json, output_limit, int(step_limit))",
+    "    return run(code, tests, inputs_json, output_limit)",
     ""
   ].join("\n");
 
@@ -203,7 +220,10 @@
       var t0 = clock();
       var json;
       try {
-        json = runSpell(String(message.code), String(message.tests), String(message.inputsJson), Number(message.outputLimit) || 50000);
+        json = runSpell(String(message.code), String(message.tests), String(message.inputsJson),
+          Number(message.outputLimit) || 50000,
+          typeof message.stepLimit === "number" ? message.stepLimit : null,
+          typeof message.recursionLimit === "number" ? message.recursionLimit : null);
       } catch (e) {
         // The harness catches every Python exception, so anything that lands here means
         // the interpreter itself is broken (e.g. a fatal stack overflow).
@@ -307,14 +327,36 @@
     "This can happen when a spell recurses extremely deeply or uses a huge amount of memory. Check for a " +
     "recursive function without a base case, or a list that keeps growing, then cast again.";
 
-  var STACK_FRIENDLY = "Your spell went so deep that the browser ran out of room, and the Python spirit " +
-    "collapsed (a fresh one has been summoned). Something kept calling itself: a recursive function without " +
-    "a base case, or a method such as `__repr__` or `__str__` that uses itself (for example `str(self)` or an " +
-    "f-string of `self` inside `__str__`). The browser has less room than a desktop Python, so very deep " +
-    "recursion through `sorted(key=...)`, `map()` or `repr()` can also do this: try a loop instead.";
+  var STACK_FRIENDLY = "Your spell's recursion went deeper than the browser can follow, so the academy's " +
+    "wards stopped it. Check the base case: every recursive call must get closer to it. A method such as " +
+    "`__str__` or `__repr__` that uses `self` in an f-string or in `str(self)` calls itself forever. For very " +
+    "big inputs, use a loop (bottom-up) instead of recursion.";
 
-  function crashFriendly(reason) {
-    return /call stack|stack overflow|too much recursion/i.test(String(reason)) ? STACK_FRIENDLY : CRASH_FRIENDLY;
+  var MEMORY_FRIENDLY = "Your spell used more memory than the browser can give it, so the academy's wards " +
+    "stopped it. Is a list or a string growing forever inside a loop? (Gigantic numbers such as " +
+    "`10 ** 10 ** 9` can do this too.)";
+
+  function errorResult(type, message, friendly, durationMs) {
+    return plainResult("error", {
+      type: type, message: message, line: null, phase: "runtime", traceback: "", friendly: friendly
+    }, durationMs);
+  }
+
+  /**
+   * The result for a run during which Python itself died. A JavaScript stack overflow
+   * (deep recursion through C code) is reported as an ordinary RecursionError and running
+   * out of memory as a MemoryError; anything else is an internal error.
+   */
+  function crashResult(reason, durationMs) {
+    var text = String(reason || "");
+    if (/call stack|stack overflow|too much recursion|stack size/i.test(text)) {
+      return errorResult("RecursionError", "maximum recursion depth exceeded (the browser ran out of stack space)",
+        STACK_FRIENDLY, durationMs);
+    }
+    if (/out of memory|\bOOM\b|enlarge memory|allocation failed|could not allocate/i.test(text)) {
+      return errorResult("MemoryError", "the spell used more memory than the browser allows", MEMORY_FRIENDLY, durationMs);
+    }
+    return internalErrorResult(CRASH_FRIENDLY, "Python stopped unexpectedly: " + text, durationMs);
   }
 
   function str(value, max) {
@@ -381,6 +423,8 @@
   // Runner state
   // ---------------------------------------------------------------------------
 
+  var DEFAULT_STEP_LIMIT = 2000000;
+  var DEFAULT_RECURSION_LIMIT = 350;
   var HELLO_TIMEOUT_MS = 15000;      // the worker script must start within this
   var BOOTSTRAP_TIMEOUT_MS = 30000;  // pyodide.js (18 KB) must arrive within this
   var START_TIMEOUT_MS = 15000;      // a posted run must report "started" within this
@@ -714,7 +758,8 @@
     try {
       engine.worker.postMessage({
         type: "run", session: engine.token, id: job.id, code: job.code, tests: job.tests,
-        inputsJson: job.inputsJson, outputLimit: job.outputLimit
+        inputsJson: job.inputsJson, outputLimit: job.outputLimit,
+        stepLimit: job.stepLimit, recursionLimit: job.recursionLimit
       });
     } catch (e) {
       onWorkerCrash("could not send the spell: " + e);
@@ -745,8 +790,7 @@
     current = null;
     if (job) {
       clearTimeout(job.timer);
-      job.resolve(internalErrorResult(crashFriendly(reason), "Python stopped unexpectedly: " + reason,
-        now() - (job.startedAt || job.postedAt)));
+      job.resolve(crashResult(reason, now() - (job.startedAt || job.postedAt)));
     }
     startLoading(MSG.afterCrash);
   }
@@ -783,6 +827,12 @@
     };
   }
 
+  function wholeNumber(value, min, max, fallback) {
+    var n = Number(value);
+    if (value === null || value === undefined || value === "" || !isFinite(n)) return fallback;
+    return Math.min(max, Math.max(min, Math.round(n)));
+  }
+
   function run(options) {
     options = options && typeof options === "object" ? options : {};
     var cfg = config();
@@ -796,6 +846,8 @@
       tests: options.tests === undefined || options.tests === null ? "" : String(options.tests),
       inputsJson: JSON.stringify(inputs.map(function (v) { return v === null || v === undefined ? "" : String(v); })),
       outputLimit: Math.max(1000, Number(cfg.outputLimitChars) || 50000),
+      stepLimit: wholeNumber(options.stepLimit !== undefined ? options.stepLimit : cfg.stepLimit, 0, 1e9, DEFAULT_STEP_LIMIT),
+      recursionLimit: wholeNumber(cfg.recursionLimit, 50, 1e6, DEFAULT_RECURSION_LIMIT),
       limit: limit,
       started: false,
       timer: null
@@ -834,6 +886,7 @@
     SETUP_PY: SETUP_PY,
     // Exposed for tests (pure helpers, no state).
     _normaliseResult: normaliseResult,
-    _timeoutResult: timeoutResult
+    _timeoutResult: timeoutResult,
+    _crashResult: crashResult
   };
 })(typeof window !== "undefined" ? window : globalThis);

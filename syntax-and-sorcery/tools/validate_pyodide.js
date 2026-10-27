@@ -28,11 +28,21 @@ if (!isMainThread) {
     const pyodide = await loadPyodide({ indexURL: PYODIDE_DIR + path.sep });
     pyodide.FS.writeFile("/home/pyodide/spellcheck.py", workerData.harness);
     pyodide.runPython("import sys\nsys.path.insert(0, '/home/pyodide')\nimport spellcheck");
-    const run = pyodide.globals.get("spellcheck").run_spell_json;
+    const rt = workerData.runtime || {};
+    let run;
+    if (workerData.setupPy) {
+      // Exactly what the game's Web Worker does before each cast.
+      pyodide.runPython(workerData.setupPy);
+      const ssRun = pyodide.globals.get("_ss_run");
+      run = (code, tests, inputs) => ssRun(code, tests, inputs, rt.outputLimit || 50000, rt.stepLimit, rt.recursionLimit);
+    } else {
+      const plain = pyodide.globals.get("spellcheck").run_spell_json;
+      run = (code, tests, inputs) => plain(code, tests, inputs, 50000);
+    }
     parentPort.postMessage({ type: "ready" });
     parentPort.on("message", (job) => {
       const started = Date.now();
-      const json = run(job.code, job.tests, JSON.stringify(job.inputs || []), 50000);
+      const json = run(job.code, job.tests, JSON.stringify(job.inputs || []));
       parentPort.postMessage({ type: "result", id: job.id, result: JSON.parse(json), ms: Date.now() - started });
     });
   })().catch((err) => parentPort.postMessage({ type: "fatal", error: String(err && err.stack || err) }));
@@ -56,7 +66,7 @@ let nextId = 1;
 const pending = new Map();
 
 function startWorker() {
-  worker = new Worker(__filename, { workerData: { harness: data.harness } });
+  worker = new Worker(__filename, { workerData: { harness: data.harness, setupPy: data.setupPy, runtime: data.runtime } });
   ready = new Promise((resolve, reject) => {
     worker.on("message", (msg) => {
       if (msg.type === "ready") resolve();

@@ -147,6 +147,20 @@ Add these to the game's address:
 They can be combined: `…/syntax-and-sorcery/?unlock=all&answers=off`. Defaults live in
 [`js/config.js`](js/config.js).
 
+### Troubleshooting
+
+* **"Python couldn't be summoned" / the engine never loads:** the browser must reach
+  `cdn.jsdelivr.net` (with `unpkg.com` as a fallback). Some school networks block CDNs —
+  ask IT to allow them. Advanced: host the Pyodide files yourself and point
+  `pyodideBaseURLs` in `js/config.js` at them.
+* **Sites with a Content-Security-Policy** (some LMS or school portals) must allow:
+  scripts and connections to the Pyodide CDN, `'wasm-unsafe-eval'` (WebAssembly), and
+  `worker-src blob:` (Python runs in a Web Worker created from a blob).
+* **"Saving is blocked" warning:** private windows and tightly sandboxed iframes can't
+  keep data. Use the Save Scroll, or open the game in its own tab.
+* **A spell "ran too long":** spells stop after about 2 million loop steps (or 8 seconds), so
+  a loop that never ends can't freeze the page. Check the highlighted line.
+
 ### Privacy and accessibility
 
 The game has no accounts, analytics or tracking; nothing a student types leaves their

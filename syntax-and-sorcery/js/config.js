@@ -32,6 +32,12 @@
       pyodideLoadTimeoutMs: 180000,            // give up on one base URL after this long
       defaultTimeLimitMs: 8000,                // per cast; a challenge may set timeLimitMs
       outputLimitChars: 50000,
+      stepLimit: 2000000,                      // loop iterations + calls per run / trial (0 = no limit)
+      // Python's recursion limit in the browser. The worker's JavaScript stack is small: recursion
+      // through C code (sorted(key=...), str()/repr() of self, ==, len()...) overflows it after
+      // ~300-600 levels in Chromium, so the limit makes Python raise RecursionError first.
+      // Plain recursion and functools.lru_cache recursion use no JS stack (see runner.js).
+      recursionLimit: 350,
       saveSlots: 3,
       storageKey: "syntax-and-sorcery",        // localStorage key prefix
       allowAnswerScroll: true,
@@ -91,6 +97,8 @@
     pyodideLoadTimeoutMs: number(5000, 1800000, true),
     defaultTimeLimitMs: number(250, 600000, true),
     outputLimitChars: number(1000, 10000000, true),
+    stepLimit: number(0, 1000000000, true),
+    recursionLimit: number(50, 1000000, true),
     saveSlots: number(1, 10, true),
     storageKey: text(64),
     allowAnswerScroll: bool,

@@ -228,6 +228,8 @@ test("config: defaults match the design document", () => {
   assert.deepStrictEqual(plain(c.pyodideBaseURLs), ["https://cdn.jsdelivr.net/pyodide/v0.29.5/full/", "https://unpkg.com/pyodide@0.29.5/"]);
   assert.strictEqual(c.defaultTimeLimitMs, 8000);
   assert.strictEqual(c.outputLimitChars, 50000);
+  assert.strictEqual(c.stepLimit, 2000000);
+  assert.strictEqual(c.recursionLimit, 350);
   assert.strictEqual(c.saveSlots, 3);
   assert.strictEqual(c.storageKey, "syntax-and-sorcery");
   assert.strictEqual(c.allowAnswerScroll, true);
@@ -1197,6 +1199,18 @@ test("runner: results from the worker are validated and normalised", () => {
     ],
     passed: 1, total: 3, durationMs: 13,
   });
+  const crash = (reason) => plain(e.SS.PythonRunner._crashResult(reason, 12));
+  let c = crash("RangeError: Maximum call stack size exceeded");
+  assert.deepStrictEqual([c.status, c.error.type, c.error.phase, c.error.line, c.stdout, c.durationMs], ["error", "RecursionError", "runtime", null, "", 12]);
+  assert.match(c.error.friendly, /deeper than the browser can follow/);
+  assert.match(c.error.friendly, /loop \(bottom-up\)/);
+  assert.strictEqual(crash("InternalError: too much recursion").error.type, "RecursionError", "Firefox's wording");
+  c = crash("Aborted(OOM)");
+  assert.deepStrictEqual([c.status, c.error.type], ["error", "MemoryError"]);
+  c = crash("RuntimeError: memory access out of bounds");
+  assert.deepStrictEqual([c.status, c.error.type], ["internal-error", "InternalError"]);
+  assert.match(c.error.friendly, /summoned again/);
+  assert.match(e.SS.PythonRunner.SETUP_PY, /def _ss_run\(code, tests, inputs_json, output_limit, step_limit=None, recursion_limit=None\)/);
   const t = plain(e.SS.PythonRunner._timeoutResult(8000, 8004));
   assert.strictEqual(t.status, "timeout");
   assert.match(t.error.friendly, /more than 8 seconds/);

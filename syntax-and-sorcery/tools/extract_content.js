@@ -23,6 +23,9 @@ const files = [
   path.join(contentDir, "registry.js"),
   ...chapterFiles.map((name) => path.join(contentDir, name)),
 ];
+// Optional: the game's config and the runner's Python set-up, so validators can run
+// spells exactly as the browser does (recursion limit, step limit, lru_cache…).
+const engineFiles = [path.join(root, "js", "config.js"), path.join(root, "js", "engine", "runner.js")];
 
 const sandbox = { console };
 sandbox.window = sandbox;
@@ -45,6 +48,14 @@ for (const file of files) {
   }
 }
 
+for (const file of engineFiles) {
+  try {
+    if (fs.existsSync(file)) vm.runInContext(fs.readFileSync(file, "utf8"), sandbox, { filename: file });
+  } catch (err) {
+    console.error(`Warning: could not load ${path.relative(root, file)} (${err.message}); using harness defaults.`);
+  }
+}
+
 // Which content files does index.html actually load? (Missing script tags are a common mistake.)
 let indexScripts = null;
 const indexPath = path.join(root, "index.html");
@@ -58,6 +69,12 @@ process.stdout.write(
   JSON.stringify(
     {
       harness: SS.HARNESS_PY,
+      setupPy: (SS.PythonRunner && SS.PythonRunner.SETUP_PY) || null,
+      runtime: {
+        recursionLimit: (SS.config && SS.config.recursionLimit) || null,
+        stepLimit: SS.config && typeof SS.config.stepLimit === "number" ? SS.config.stepLimit : null,
+        outputLimit: (SS.config && SS.config.outputLimitChars) || 50000,
+      },
       chapters: SS.content.chapters,
       story: SS.content.story,
       sceneEffects: SS.SCENE_EFFECTS,

@@ -476,8 +476,9 @@ def explain(exc, line=None, namespace=None):
         return ("Your spell called " + code("input()") + " more times than the challenge provides ("
                 + _plural(exc.provided, "value") + ").")
     if isinstance(exc, RecursionError):
-        return ("Your function called itself too many times in a row (Python allows about 1,000 nested "
-                "calls). Usually the base case is missing or never reached: every recursive function needs a "
+        return ("Your function called itself too many times in a row (this realm allows about "
+                + format(sys.getrecursionlimit(), ",") + " nested calls). "
+                "Usually the base case is missing or never reached: every recursive function needs a "
                 "simple situation it answers directly, and each call must move closer to it. If the input "
                 "really is that big, solve it with a loop (bottom-up) instead of recursion.")
     if isinstance(exc, UnboundLocalError):
@@ -697,8 +698,9 @@ def _explain_type_error(msg, where):
 # ---------------------------------------------------------------------------
 
 def _frames(exc):
+    """The innermost frames of a traceback (capped: a deep RecursionError can have thousands)."""
     try:
-        return traceback.extract_tb(exc.__traceback__)
+        return traceback.extract_tb(exc.__traceback__, limit=-60)
     except Exception:
         return []
 
