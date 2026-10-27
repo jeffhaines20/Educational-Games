@@ -123,7 +123,11 @@
     var MOD = UI.Editor.modKey;
 
     function later(fn, ms) {
-      var id = setTimeout(function () { timers.splice(timers.indexOf(id), 1); fn(); }, ms);
+      var id = setTimeout(function () {
+        var i = timers.indexOf(id);
+        if (i >= 0) timers.splice(i, 1);
+        fn();
+      }, ms);
       timers.push(id);
       return id;
     }

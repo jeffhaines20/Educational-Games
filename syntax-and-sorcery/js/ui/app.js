@@ -1,5 +1,5 @@
 /*
- * Syntax & Sorcery — the app shell (SS.UI.app). Loaded last; boots the game on
+ * Pyromancer — the app shell (SS.UI.app). Loaded last; boots the game on
  * DOMContentLoaded.
  *
  *   go(screen, params)    show a screen from SS.UI.screens (title, slots, story, map,
@@ -570,7 +570,7 @@
     Promise.resolve(initResult).then(function (info) {
       state.bootInfo = info || {};
     }, function (err) {
-      if (global.console) console.warn("[Syntax & Sorcery] SS.Save.init failed", err);
+      if (global.console) console.warn("[Pyromancer] SS.Save.init failed", err);
       state.bootInfo = { storage: "memory", scorm: false, learnerName: null };
     }).then(function () {
       u.safe(function () { SS.Save.onChange(function () { refreshTopbar(); }); });

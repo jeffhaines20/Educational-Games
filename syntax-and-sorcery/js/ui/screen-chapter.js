@@ -1,5 +1,5 @@
 /*
- * Syntax & Sorcery — a chapter's screen (SS.UI.screens.chapter) and its story
+ * Pyromancer — a chapter's screen (SS.UI.screens.chapter) and its story
  * beats (SS.UI.chapterStory.intro / .outro).
  */
 (function (global) {

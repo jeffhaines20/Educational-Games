@@ -1,5 +1,5 @@
 /*
- * Syntax & Sorcery — dialogs (SS.UI.dialogs).
+ * Pyromancer — dialogs (SS.UI.dialogs).
  *
  *   open({ title, icon, body, actions, size, className, dismissable, initialFocus, onClose }) → { el, body, close(value), result }
  *   confirm({ title, message, confirmLabel, danger }) → Promise<boolean>

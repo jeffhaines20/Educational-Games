@@ -1,5 +1,5 @@
 /*
- * Syntax & Sorcery — showing what a cast did (SS.UI.results).
+ * Pyromancer — showing what a cast did (SS.UI.results).
  *
  *   render(container, result, { trials, inputs, onGoToLine(line), getLine(n) })
  *   casting(container, label)      the "Casting…" state

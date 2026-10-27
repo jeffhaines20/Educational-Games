@@ -1,5 +1,5 @@
 /*
- * Syntax & Sorcery — shared panels (SS.UI.panels).
+ * Pyromancer — shared panels (SS.UI.panels).
  *
  *   settings()                       sound, motion, editor size, free practice, rename, engine, about
  *   saveScroll({ chooseSlot, onImported })   export a save code / file, import one

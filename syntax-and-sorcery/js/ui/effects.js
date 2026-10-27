@@ -1,5 +1,5 @@
 /*
- * Syntax & Sorcery — visual effects (SS.UI.effects).
+ * Pyromancer — visual effects (SS.UI.effects).
  *
  *   initSky(el)                 draw the starfield behind the whole game
  *   createStage(scene)          a challenge's scene panel → { el, play(opts), fizzle(), reset(), casting(on) }

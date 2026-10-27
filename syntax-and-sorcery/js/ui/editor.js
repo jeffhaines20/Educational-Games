@@ -1,5 +1,5 @@
 /*
- * Syntax & Sorcery — the spell editor (SS.UI.Editor).
+ * Pyromancer — the spell editor (SS.UI.Editor).
  *
  * Uses CodeMirror 5 (from cdnjs) when it can be loaded, otherwise a plain
  * <textarea> with line numbers, Tab indentation and auto-indent. CodeMirror is

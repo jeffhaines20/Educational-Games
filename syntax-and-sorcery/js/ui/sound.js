@@ -1,5 +1,5 @@
 /*
- * Syntax & Sorcery — synthesized sound effects (SS.UI.sound).
+ * Pyromancer — synthesized sound effects (SS.UI.sound).
  *
  * Every sound is generated with the Web Audio API (no audio files). The audio
  * context is created lazily on the first sound, which always follows a click or

@@ -1,5 +1,5 @@
 /*
- * Syntax & Sorcery — RichText renderer and Python highlighter (SS.UI.rich).
+ * Pyromancer — RichText renderer and Python highlighter (SS.UI.rich).
  *
  * RichText (docs/DESIGN.md §7.4) is a string (one paragraph) or an array of
  * blocks: "text", {code}, {code, output}, {output}, {list}, {steps}, {tip},

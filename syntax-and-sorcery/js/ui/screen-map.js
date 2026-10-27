@@ -1,5 +1,5 @@
 /*
- * Syntax & Sorcery — the academy map (SS.UI.screens.map).
+ * Pyromancer — the academy map (SS.UI.screens.map).
  *
  * Chapters are stations on a winding trail. The layout is plain CSS (it works for
  * any number of chapters and at any width); the glowing path is an SVG drawn

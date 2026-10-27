@@ -1,5 +1,5 @@
 /*
- * Syntax & Sorcery — UI utilities (SS.UI.util).
+ * Pyromancer — UI utilities (SS.UI.util).
  *
  * Builds DOM without innerHTML (every string becomes a text node), plus small
  * helpers shared by the screens: formatting, stars/badges, announcements for
@@ -151,7 +151,7 @@
     try {
       return fn();
     } catch (err) {
-      if (global.console && console.warn) console.warn("[Syntax & Sorcery UI]", err);
+      if (global.console && console.warn) console.warn("[Pyromancer UI]", err);
       return fallback;
     }
   }

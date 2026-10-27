@@ -1,8 +1,9 @@
 /*
  * Chapter 5 — The Golem Workshop (medium → hard)
  * Concepts: classes & objects, __init__ and self, attributes, methods, class attributes,
- * __str__/__repr__, inheritance & super(), overriding, polymorphism, raising exceptions,
- * magic methods (__add__, __eq__, __lt__, __len__, __contains__, __getitem__, __iter__),
+ * __str__/__repr__, inheritance & super(), overriding, polymorphism, raising and catching
+ * exceptions (raise, try/except, except ... as err), magic methods (__add__, __eq__, __lt__,
+ * __len__, __contains__, __getitem__, __iter__),
  * @property and composition.
  *
  * Note for trial authors: calling a class or method with the wrong number of arguments
@@ -22,13 +23,13 @@
     title: "The Golem Workshop",
     subtitle: "Blueprints that come alive",
     icon: "🗿",
-    concepts: ["classes & objects", "__init__ & self", "methods", "__str__ / __repr__", "inheritance & super()", "polymorphism", "magic methods", "@property"],
+    concepts: ["classes & objects", "__init__ & self", "methods", "__str__ / __repr__", "inheritance & super()", "polymorphism", "try / except", "magic methods", "@property"],
     intro: [
       "You follow a trail of tiny clay footprints through the side door marked **Golem Workshop**. Inside, rows of clay and stone golems stand perfectly still, each one waiting for a blueprint and a purpose. Glitch is nowhere to be seen… for now.",
-      "Ada unrolls a blueprint. \"In Python, a blueprint is a **class**, and every golem built from it is an **object**. Today you'll write blueprints of your own, and learn the double-underscore methods that bring them to life. Python programmers really do call them *magic methods*.\""
+      "Ada unrolls a blueprint. \"In Python, a blueprint is a **class**, and every golem built from it is an **object**. Today you'll write blueprints of your own, teach your golems to turn down nonsense politely, and learn the double-underscore methods that bring them to life. Python programmers really do call them *magic methods*.\""
     ],
     outro: [
-      "Your golems march in perfect formation, each one built from a blueprint you wrote. Fire golems forge, familiars sing, potions sort themselves, and the living spellbook purrs on its stand.",
+      "Your golems march in perfect formation, each one built from a blueprint you wrote. Fire golems forge, familiars sing, golems politely refuse to juggle the cat, potions sort themselves, and the living spellbook purrs on its stand.",
       "Then, behind the last workbench, a trapdoor creaks open onto stairs spiralling down into the dark, and from far below comes a familiar giggle — echoing, and echoing, and echoing. Glitch has slipped into the **Labyrinth of Echoes**. Better bring a lantern… and a stack."
     ],
     challenges: [
@@ -1699,7 +1700,414 @@
       },
 
       // ------------------------------------------------------------------
-      // 6. Operator magic methods: __add__, __eq__, __lt__
+      // 6. Exceptions: try / except, raising your own ValueError, catching one raised by a method
+      // ------------------------------------------------------------------
+      {
+        id: "workshop-golem-who-says-no",
+        title: "The Golem Who Says No",
+        difficulty: "medium",
+        concepts: ["try / except", "raise ValueError", "except … as err"],
+        story: [
+          "Glitch has been slipping silly orders into the golems' order box: *juggle the cat*, *eat the moon*, *lift twelvety crates*. The poor golems try to obey every one, and topple over with a crash.",
+          "\"A good golem doesn't crash,\" says Ada. \"It says no, politely, and gets back to work. In Python, that's called **catching an exception**.\""
+        ],
+        task: [
+          "Orders arrive on paper slips, so even numbers arrive as text. Write:",
+          { list: [
+            "`safe_int(text, default)`: return `int(text)`, or `default` if `int()` raises a `ValueError`. Catch **only** `ValueError`: other errors, like the `TypeError` from `safe_int(None, 0)`, must not be hidden;",
+            "`class Golem` with `__init__(self, name, skills)` storing both (`skills` is a list of strings) and `obey(self, order)`: if `order` is one of its skills, return `\"<name> begins to <order>.\"`, otherwise raise `ValueError(\"<name> doesn't know how to <order>\")`;",
+            "`command(golem, order)`: return `golem.obey(order)`, but if that raises a `ValueError`, return `\"Sorry, I can't: \"` followed by the error's message. Let other kinds of error through."
+          ] },
+          { code: py`
+            clod = Golem("Clod", ["lift", "dig"])
+            command(clod, "dig")       # 'Clod begins to dig.'
+            command(clod, "dance")     # "Sorry, I can't: Clod doesn't know how to dance"
+            safe_int(" -12 ", 0)       # -12
+            safe_int("twelvety", 0)    # 0
+          ` }
+        ],
+        lesson: [
+          "When something goes wrong, Python **raises an exception**: `int(\"forty\")` raises a `ValueError`, and so does any `raise ValueError(\"...\")` you write yourself. Unless something **catches** it, an exception stops the whole spell.",
+          "Put the risky code inside `try:`. If it raises the exception named after `except`, Python jumps there instead of stopping. Write `except ValueError as err:` to get hold of the exception itself: `str(err)` is its message. An exception raised inside a method travels back to whoever called it, so the caller can catch it:",
+          { code: py`
+            class Cauldron:
+                def __init__(self, litres):
+                    self.litres = litres
+
+                def fill(self, amount):
+                    if amount > self.litres:
+                        raise ValueError(f"{amount} litres won't fit in {self.litres}")
+                    return f"Filled with {amount} litres"
+
+            pot = Cauldron(5)
+            for amount in [3, 8]:
+                try:
+                    print(pot.fill(amount))
+                except ValueError as err:
+                    print("Oops:", err)
+            print("The spell carries on.")
+          `, output: "Filled with 3 litres\nOops: 8 litres won't fit in 5\nThe spell carries on." },
+          { warning: "Catch only the exceptions you expect. A bare `except:` (or `except Exception:`) also swallows real bugs, such as a misspelled name or `None` where text should be, and hides them where nobody will ever find them." },
+          { tip: "Two optional extras: an `else:` block after `except` runs only if the `try` succeeded, and a `finally:` block runs no matter what." }
+        ],
+        starter: py`
+          def safe_int(text, default):
+              # Try int(text). If it raises a ValueError, return default instead.
+              return int(text)
+
+
+          class Golem:
+              def __init__(self, name, skills):
+                  self.name = name
+                  self.skills = skills
+
+              def obey(self, order):
+                  # Raise a ValueError for an order that isn't in self.skills.
+                  return f"{self.name} begins to {order}."
+
+
+          def command(golem, order):
+              # Return golem.obey(order), or a polite refusal if it raises a ValueError.
+              return golem.obey(order)
+        `,
+        hints: [
+          "All three parts use one idea. `safe_int` and `command` each put the risky call inside `try:` and deal with the failure in `except ValueError:`. In `obey`, *you* are the one who raises: `raise ValueError(...)` when the order isn't one of the golem's skills.",
+          "`safe_int`: `return int(text)` inside the `try`, and `return default` inside `except ValueError:`. `command`: call `golem.obey(order)` inside the `try`, and write `except ValueError as err:` so that you can use the error's message.",
+          "`obey`: `if order not in self.skills: raise ValueError(f\"{self.name} doesn't know how to {order}\")`, then return the \"begins to\" sentence. `command`: `except ValueError as err: return \"Sorry, I can't: \" + str(err)`."
+        ],
+        solution: py`
+          def safe_int(text, default):
+              try:
+                  return int(text)
+              except ValueError:          # only "not a whole number": other errors still show
+                  return default
+
+
+          class Golem:
+              def __init__(self, name, skills):
+                  self.name = name
+                  self.skills = skills
+
+              def obey(self, order):
+                  if order not in self.skills:
+                      raise ValueError(f"{self.name} doesn't know how to {order}")
+                  return f"{self.name} begins to {order}."
+
+
+          def command(golem, order):
+              try:
+                  return golem.obey(order)
+              except ValueError as err:   # the golem said no: pass on its reason, politely
+                  return "Sorry, I can't: " + str(err)
+        `,
+        altSolutions: [
+          py`
+            def safe_int(text, default):
+                try:
+                    number = int(text)
+                except ValueError:
+                    return default
+                else:                       # runs only when int() worked
+                    return number
+
+
+            class Golem:
+                def __init__(self, name, skills):
+                    self.name = name
+                    self.skills = list(skills)
+
+                def obey(self, order):
+                    if order in self.skills:
+                        return self.name + " begins to " + order + "."
+                    problem = self.name + " doesn't know how to " + order
+                    raise ValueError(problem)
+
+
+            def command(golem, order):
+                try:
+                    reply = golem.obey(order)
+                except ValueError as err:
+                    reply = f"Sorry, I can't: {err}"
+                return reply
+
+
+            clod = Golem("Clod", ["lift", "dig"])
+            print(command(clod, "dig"))
+            print(command(clod, "dance"))
+            print(safe_int(" -12 ", 0), safe_int("twelvety", 0))
+          `,
+          py`
+            def safe_int(text, default):
+                result = default
+                try:
+                    result = int(text)
+                except ValueError:
+                    pass
+                return result
+
+
+            class Golem:
+                def __init__(self, name, skills):
+                    self.name = name
+                    self.skills = set(skills)
+
+                def obey(self, order):
+                    if order not in self.skills:
+                        raise ValueError("{} doesn't know how to {}".format(self.name, order))
+                    return "{} begins to {}.".format(self.name, order)
+
+
+            def command(golem, order):
+                try:
+                    return golem.obey(order)
+                except ValueError as refusal:
+                    return "Sorry, I can't: {}".format(refusal.args[0])
+          `
+        ],
+        wrongSolutions: [
+          py`
+            # Catches everything, so real bugs are hidden too.
+            def safe_int(text, default):
+                try:
+                    return int(text)
+                except:
+                    return default
+
+
+            class Golem:
+                def __init__(self, name, skills):
+                    self.name = name
+                    self.skills = skills
+
+                def obey(self, order):
+                    if order not in self.skills:
+                        raise ValueError(f"{self.name} doesn't know how to {order}")
+                    return f"{self.name} begins to {order}."
+
+
+            def command(golem, order):
+                try:
+                    return golem.obey(order)
+                except Exception as err:
+                    return "Sorry, I can't: " + str(err)
+          `,
+          py`
+            # safe_int catches the wrong kind of exception.
+            def safe_int(text, default):
+                try:
+                    return int(text)
+                except TypeError:
+                    return default
+
+
+            class Golem:
+                def __init__(self, name, skills):
+                    self.name = name
+                    self.skills = skills
+
+                def obey(self, order):
+                    if order not in self.skills:
+                        raise ValueError(f"{self.name} doesn't know how to {order}")
+                    return f"{self.name} begins to {order}."
+
+
+            def command(golem, order):
+                try:
+                    return golem.obey(order)
+                except ValueError as err:
+                    return "Sorry, I can't: " + str(err)
+          `,
+          py`
+            # Tries to predict every problem with if-checks instead of catching it.
+            def safe_int(text, default):
+                if text.isdigit():
+                    return int(text)
+                return default
+
+
+            class Golem:
+                def __init__(self, name, skills):
+                    self.name = name
+                    self.skills = skills
+
+                def obey(self, order):
+                    if order not in self.skills:
+                        raise ValueError(f"{self.name} doesn't know how to {order}")
+                    return f"{self.name} begins to {order}."
+
+
+            def command(golem, order):
+                if order in golem.skills:
+                    return golem.obey(order)
+                return "Sorry, I can't: " + golem.name + " doesn't know how to " + order
+          `
+        ],
+        tests: py`
+          import traceback as _traceback
+
+
+          def _in_spell(exc):
+              # True if the error happened inside the spell's own code, not at the call itself.
+              return any(frame.filename == "<spell>" for frame in _traceback.extract_tb(exc.__traceback__))
+
+
+          def make(cls, name, skills):
+              try:
+                  return cls(name, skills)
+              except TypeError as exc:
+                  if _in_spell(exc):
+                      raise
+                  fail("Python couldn't build " + code("Golem(" + short(name) + ", " + short(skills) + ")") + ": " + str(exc)
+                       + ". Its " + code("__init__") + " should start " + code("def __init__(self, name, skills):") + ".")
+
+
+          def call(method, label, *args):
+              try:
+                  return method(*args)
+              except TypeError as exc:
+                  if _in_spell(exc):
+                      raise
+                  fail("Python couldn't run " + code(label) + ": " + str(exc) + ". The method should start "
+                       + code("def obey(self, order):") + ".")
+
+
+          def finally_note():
+              # A return inside finally: swallows every exception, even ones nobody caught.
+              import ast as _ast
+              for node in _ast.walk(_ast.parse(source)):
+                  if isinstance(node, _ast.Try) and any(isinstance(inner, _ast.Return)
+                                                        for part in node.finalbody for inner in _ast.walk(part)):
+                      return (" (Watch out: a " + code("return") + " inside " + code("finally:") + " throws away any exception "
+                              + "that wasn't caught, so it hides errors too.)")
+              return ""
+
+
+          def tired_kind():
+              # Knows its skills, but refuses anyway with a ValueError of its own.
+              class TiredGolem(need_class("Golem")):
+                  def obey(self, order):
+                      raise ValueError("Pebble is too tired to " + order)
+              return TiredGolem
+
+
+          def cracked_kind():
+              # A real problem, not a polite refusal.
+              class CrackedGolem(need_class("Golem")):
+                  def obey(self, order):
+                      raise RuntimeError("Crack! Flint has split in two")
+              return CrackedGolem
+
+
+          @test('safe_int turns whole-number text into an int: safe_int(" -12 ", 0) is -12')
+          def _():
+              safe_int = need_function("safe_int", 2)
+              for text, want in (("42", 42), (" -12 ", -12), ("+7", 7), ("0", 0), ("1_000", 1000)):
+                  label = code("safe_int(" + short(text) + ", 99)")
+                  got = safe_int(text, 99)
+                  if got == 99:
+                      advice = ""
+                      if text != text.strip() or text.strip()[0] in "+-":
+                          advice = (" " + code("int()") + " understands signs and spaces around a number, so let it do the checking: call it inside "
+                                    + code("try:") + " instead of testing the text yourself.")
+                      elif "_" in text:
+                          advice = (" Python's " + code("int()") + " even accepts underscores between digits, a handy way to write big "
+                                    + "numbers. That's why it's best to let " + code("int()") + " decide: call it inside " + code("try:")
+                                    + " instead of testing the text yourself.")
+                      fail(label + " returned the default, 99, but " + short(text) + " is a whole number: " + code("int(" + short(text) + ")")
+                           + " is " + str(want) + "." + advice)
+                  expect_equal(got, want, label + " is wrong.")
+
+
+          @test("safe_int returns the default when the text isn't a whole number")
+          def _():
+              safe_int = need_function("safe_int", 2)
+              for text, default in (("twelvety", 0), ("", -1), ("4.5", 7), ("12 crates", None), ("--5", 3)):
+                  label = code("safe_int(" + short(text) + ", " + short(default) + ")")
+                  try:
+                      got = safe_int(text, default)
+                  except ValueError:
+                      fail(label + " let a ValueError escape. " + code("int()") + " raises ValueError for text that isn't a whole number: "
+                           + "catch it with " + code("except ValueError:") + " and return the default.")
+                  expect_equal(got, default, label + " should return the default it was given.")
+
+
+          @test("safe_int catches only ValueError, so other mistakes still show")
+          def _():
+              safe_int = need_function("safe_int", 2)
+              for bad in (None, ["4"]):
+                  try:
+                      got = safe_int(bad, 0)
+                  except Exception:
+                      continue      # good: the mistake is not hidden
+                  fail(code("safe_int(" + short(bad) + ", 0)") + " returned " + short(got) + ", hiding the TypeError that "
+                       + code("int(" + short(bad) + ")") + " raises. " + short(bad) + " isn't text at all: that's a bug somewhere else, "
+                       + "and it should be seen, not covered up. Catch only " + code("ValueError") + " (" + code("except ValueError:")
+                       + "): a bare " + code("except:") + ", " + code("except Exception:") + " or " + code("except TypeError:")
+                       + " hides it." + finally_note())
+
+
+          @test("Golem.obey() carries out known orders and raises ValueError for the rest")
+          def _():
+              Golem = need_class("Golem")
+              for name, skills, known, unknown in (("Clod", ["lift", "dig"], "dig", "dance"), ("Basalt", ["guard"], "guard", "lift")):
+                  golem = make(Golem, name, skills)
+                  expect_equal(need_attr(golem, "name"), name, "The golem's " + code("name") + " is wrong.")
+                  need_attr(golem, "skills")
+                  obey = need_method(golem, "obey")
+                  label = "Golem(" + short(name) + ", " + short(skills) + ").obey(" + short(known) + ")"
+                  expect_equal(call(obey, label, known), name + " begins to " + known + ".", code(label) + " is wrong.")
+                  err = expect_raises(ValueError, obey, unknown,
+                                      message=code("obey(" + short(unknown) + ")") + " should raise a ValueError: " + unknown
+                                      + " isn't one of " + name + "'s skills.")
+                  expect_equal(str(err), name + " doesn't know how to " + unknown,
+                               "The ValueError's message is wrong (the message goes in the brackets: "
+                               + code('raise ValueError("...")') + ").")
+
+
+          @test("command() returns obey()'s answer, or a polite refusal built from the error's message")
+          def _():
+              command = need_function("command", 2)
+              clod = make(need_class("Golem"), "Clod", ["lift", "dig"])
+              expect_equal(command(clod, "lift"), "Clod begins to lift.",
+                           code('command(clod, "lift")') + " should return what " + code('clod.obey("lift")') + " returns.")
+              try:
+                  refusal = command(clod, "dance")
+              except ValueError:
+                  fail(code('command(clod, "dance")') + " let the ValueError from " + code("obey()") + " escape. Call "
+                       + code("golem.obey(order)") + " inside " + code("try:") + " and catch the error with "
+                       + code("except ValueError as err:") + ".")
+              expect_equal(refusal, "Sorry, I can't: Clod doesn't know how to dance", code('command(clod, "dance")') + " is wrong.")
+              pebble = make(tired_kind(), "Pebble", ["dig"])
+              try:
+                  refusal = command(pebble, "dig")
+              except ValueError:
+                  fail("This trial's golem Pebble knows how to dig, but its " + code("obey()") + " refused anyway, with a ValueError "
+                       + "of its own: it's too tired. " + code("command()") + " let that ValueError escape. Don't check the order "
+                       + "yourself, because golems can refuse for reasons of their own: call " + code("golem.obey(order)")
+                       + " inside " + code("try:") + " and catch whatever ValueError it raises.")
+              expect_equal(refusal, "Sorry, I can't: Pebble is too tired to dig",
+                           "The refusal should pass on the error's own message, " + code("str(err)")
+                           + ": this trial's golem refused because it was too tired.")
+
+
+          @test("command() lets other kinds of errors through")
+          def _():
+              command = need_function("command", 2)
+              flint = make(cracked_kind(), "Flint", ["lift"])
+              try:
+                  result = command(flint, "lift")
+              except RuntimeError:
+                  return            # good: a real problem isn't hidden
+              fail("This trial's golem Flint cracked in two: its " + code("obey()") + " raised RuntimeError. That's not a polite "
+                   + "refusal but a real problem, and " + code("command()") + " must not hide it, yet it returned " + short(result)
+                   + ". Catch only " + code("ValueError") + ": write " + code("except ValueError as err:") + ", not a bare "
+                   + code("except:") + " or " + code("except Exception:") + "." + finally_note())
+        `,
+        scene: { icon: "✋", successIcon: "🙇", successText: "Clod shakes its great stone head, very politely: no cat-juggling today.", effect: "shake" }
+      },
+
+      // ------------------------------------------------------------------
+      // 7. Operator magic methods: __add__, __eq__, __lt__
       // ------------------------------------------------------------------
       {
         id: "workshop-potion-algebra",
@@ -2090,7 +2498,7 @@
       },
 
       // ------------------------------------------------------------------
-      // 7. A container class: composition, __len__/__contains__/__getitem__/__iter__,
+      // 8. A container class: composition, __len__/__contains__/__getitem__/__iter__,
       //    @property and validation with ValueError
       // ------------------------------------------------------------------
       {
