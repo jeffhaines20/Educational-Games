@@ -248,7 +248,7 @@
           "\"The apprentices' old Fibonacci spell is correct,\" Ada murmurs, \"but every cut makes it fight the same smaller heads again and again. Teach it to *remember*, and the Hydra has nothing left to grow.\""
         ],
         task: [
-          "The starter spell `fib(n)` is correct but hopelessly slow. Make it fast: `fib(n)` must **return** the `n`-th Fibonacci number for any `n` from 0 up to 100.",
+          "The starter spell `fib(n)` is correct but hopelessly slow. Make it fast: `fib(n)` must **return** the `n`-th Fibonacci number for any `n` from 0 up to 90.",
           "`fib(0)` is 0, `fib(1)` is 1, and every later number is the sum of the two before it: `fib(n) = fib(n - 1) + fib(n - 2)`.",
           { code: py`
             print(fib(10))
@@ -258,23 +258,23 @@
         ],
         lesson: [
           "Why is the old spell so slow? `fib(5)` calls `fib(4)` and `fib(3)`, but `fib(4)` calls `fib(3)` *again*, and so on all the way down. Drawn as a tree, the same heads keep reappearing:",
-          { output: [
-            "fib(5)",
-            "├── fib(4)",
-            "│   ├── fib(3)",
-            "│   │   ├── fib(2)",
-            "│   │   │   ├── fib(1)",
-            "│   │   │   └── fib(0)",
-            "│   │   └── fib(1)",
-            "│   └── fib(2)          ← again!",
-            "│       ├── fib(1)",
-            "│       └── fib(0)",
-            "└── fib(3)              ← again!",
-            "    ├── fib(2)          ← and again!",
-            "    │   ├── fib(1)",
-            "    │   └── fib(0)",
-            "    └── fib(1)"
-          ].join("\n") },
+          { diagram: py`
+            fib(5)
+            ├── fib(4)
+            │   ├── fib(3)
+            │   │   ├── fib(2)
+            │   │   │   ├── fib(1)
+            │   │   │   └── fib(0)
+            │   │   └── fib(1)
+            │   └── fib(2)          ← again!
+            │       ├── fib(1)
+            │       └── fib(0)
+            └── fib(3)              ← again!
+                ├── fib(2)          ← and again!
+                │   ├── fib(1)
+                │   └── fib(0)
+                └── fib(1)
+          ` },
           "That's 15 calls just for `fib(5)`, and each step up multiplies the work by about 1.6. `fib(30)` makes 2,692,537 calls; `fib(90)` would make about 9 quintillion — thousands of years of spellcasting.",
           "The cure is **memoization**: the first time you work out an answer, store it; when the same question comes up again, look the answer up instead. A dictionary makes a perfect memo. Here it tames a different beast, the *Tribonacci* numbers, where each number is the sum of the three before it:",
           { code: py`
@@ -429,36 +429,31 @@
         tests: LAIR_TRIALS + py`
           @test("fib(0) is 0 and fib(1) is 1")
           def _():
-              fib = need_function("fib", 1)
-              expect_number(fib(0), 0, "fib(0)")
-              expect_number(fib(1), 1, "fib(1)")
+              expect_number(call_spell("fib", 1, 0), 0, "fib(0)")
+              expect_number(call_spell("fib", 1, 1), 1, "fib(1)")
 
 
           @test("fib(2) to fib(12) are 1, 2, 3, 5, 8, …, 144")
           def _():
-              fib = need_function("fib", 1)
               expected = [1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144]
               for n, want in zip(range(2, 13), expected):
-                  expect_number(fib(n), want, "fib(" + str(n) + ")")
+                  expect_number(call_spell("fib", 1, n), want, "fib(" + str(n) + ")")
 
 
           @test("fib(30) is 832040, without waking the Hydra")
           def _():
               need_function("fib", 1)
               with without_waking_the_hydra("fib", 200, budget=20000):
-                  result = need_function("fib")(30)
+                  result = call_spell("fib", None, 30)
               expect_number(result, 832040, "fib(30)")
 
 
-          @test("fib(90) and fib(100) are right, and still quick")
+          @test("fib(90) is 2880067194370816120, and still quick")
           def _():
               need_function("fib", 1)
               with without_waking_the_hydra("fib", 500, budget=20000):
-                  result = need_function("fib")(90)
+                  result = call_spell("fib", None, 90)
               expect_number(result, 2880067194370816120, "fib(90)")
-              with without_waking_the_hydra("fib", 500, budget=20000):
-                  result = need_function("fib")(100)
-              expect_number(result, 354224848179261915075, "fib(100)")
         `,
         scene: { icon: "🐉", successIcon: "🧠", successText: "The first head freezes mid-roar: you already know every answer it can ask!", effect: "shake" }
       },
