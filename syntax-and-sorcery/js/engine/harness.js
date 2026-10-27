@@ -479,10 +479,13 @@ def explain(exc, line=None, namespace=None):
                 + code("0") + ", so convert it with " + code("int()") + " first.")
     if isinstance(exc, RecursionError):
         return ("Your function called itself too many times in a row (this realm allows about "
-                + format(sys.getrecursionlimit(), ",") + " nested calls). "
-                "Usually the base case is missing or never reached: every recursive function needs a "
-                "simple situation it answers directly, and each call must move closer to it. If the input "
-                "really is that big, solve it with a loop (bottom-up) instead of recursion.")
+                + format(sys.getrecursionlimit(), ",") + " nested calls). There are two usual causes. "
+                "Either the base case is missing or never reached (every recursive function needs a simple "
+                "situation it answers directly, and each call must move closer to it), or the input is so big "
+                "that even correct recursion goes too deep. If smaller cases work, it's the second: "
+                + code("@lru_cache") + " and generators inside " + code("sum()") + "/" + code("min()") + "/"
+                + code("max()") + " each use extra levels, so solve big inputs with a loop or a table "
+                "(bottom-up) instead.")
     if isinstance(exc, UnboundLocalError):
         m = re.search(r"variable '(\w+)'", msg) or re.search(r"'(\w+)'", msg)
         var = m.group(1) if m else "that variable"

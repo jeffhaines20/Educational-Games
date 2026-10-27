@@ -120,7 +120,7 @@
     order: 1,
     title: "The Apprentice's Tower",
     subtitle: "First words of power",
-    icon: "🗼",
+    icon: "🏰",
     concepts: ["print()", "strings", "comments", "variables", "arithmetic", "f-strings", "input()", "int()", "len()", ".upper()"],
     intro: [
       "Welcome to the Apprentice's Tower, the oldest part of Coilspire Academy. Every wizard who ever lived here began on this staircase, learning to speak in Python — the tongue that magic understands.",
@@ -334,6 +334,10 @@
           @test("The label shows exactly the four lines")
           def _():
               for line in output_lines:
+                  if "1230" in line or "3012" in line:
+                      fail("Your spell printed " + short(line) + ". Numbers in quotes are text, and " + code("+")
+                           + " glues two pieces of text together: " + code('"12" + "30"') + " makes " + code('"1230"')
+                           + ". Leave the quotes off the numbers: " + code("12 + 30") + ".")
                   if "12 + 30" in line or "12+30" in line:
                       fail("Your spell printed " + short(line) + ". Inside quotes, " + code("12 + 30")
                            + " is just text. Put the sum outside the quotes: " + code('print("Total:", 12 + 30)') + ".")
@@ -345,6 +349,9 @@
 
           @test("Python does the adding")
           def _():
+              if not any(line.lower().startswith("total") for line in output_lines):
+                  fail("There's no Total line yet. Add one, and let Python work out the sum: "
+                       + code('print("Total:", 12 + 30)') + ".")
               for node in ast.walk(ast.parse(source)):
                   if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
                       sides = [node.left, node.right]
@@ -352,7 +359,15 @@
                       sides = [node.value]
                   else:
                       continue
-                  if not any(isinstance(side, ast.Constant) and isinstance(side.value, str) for side in sides):
+                  texts = [side.value for side in sides if isinstance(side, ast.Constant) and isinstance(side.value, str)]
+                  if len(texts) == len(sides) and all(text.strip().isdigit() for text in texts):
+                      fail("Numbers in quotes are text, and " + code("+") + " glues two pieces of text together: "
+                           + code('"12" + "30"') + " makes " + code('"1230"') + ". Leave the quotes off the numbers: "
+                           + code("12 + 30") + ".")
+                  if texts:
+                      continue  # joining text, such as "Total: " + str(...)
+                  # A real sum of the supplies: the numbers 12 and 30, or variables holding them.
+                  if any(not isinstance(side, ast.Constant) or side.value in (12, 30) for side in sides):
                       return
               fail("It looks like you typed the total yourself. Let Python work it out: write the sum "
                    + code("12 + 30") + " in your spell, outside of any quotes.")
@@ -517,10 +532,18 @@
                   fail(label + ", your spell printed " + short(got) + ". The calculation is inside quotes, so Python "
                        "printed it as text. Leave calculations outside the quotes, like "
                        + code('print("Pepper needed:", pepper * students)') + ".")
-              if head == want_head and "." in want_value and value.strip().isdigit():
-                  fail(label + ", your spell printed " + short(got) + " where it should print " + short(want)
-                       + ". Divide with " + code("/") + ", which keeps the decimals (" + code("//")
-                       + " throws them away).")
+              if index == 2 and head == want_head:
+                  try:
+                      number = float(value)
+                  except ValueError:
+                      number = None
+                  if number is not None and abs(number - float(want_value) * 1000) < 1e-6:
+                      fail(label + ", your spell printed " + short(got) + " where it should print " + short(want)
+                           + ". That's millilitres: divide by 1000 to get litres.")
+                  if number is not None and value.strip().isdigit() and int(value) == int(float(want_value)):
+                      fail(label + ", your spell printed " + short(got) + " where it should print " + short(want)
+                           + ". Divide with " + code("/") + ", which keeps the decimals (" + code("//")
+                           + " throws them away).")
               fail(label + ", the " + WHICH[index] + " line should be " + short(want) + ", but your spell printed "
                    + short(got) + "." + near_miss(want, got))
 
@@ -585,7 +608,7 @@
         task: [
           "Using the three variables at the top of the spell, print exactly:",
           { output: "Pip the owl is 3 years old.\nIn 10 years, Pip will be 13." },
-          "Let Python work out the age in 10 years. The trials also register other familiars (such as Hex, a toad who is 7), so build the lines from the variables, not from Pip's details."
+          "Both lines end with a full stop (`.`). Let Python work out the age in 10 years. The trials also register other familiars (such as Hex, a toad who is 7), so build the lines from the variables, not from Pip's details."
         ],
         lesson: [
           "Sentences often mix fixed text with values from variables. An **f-string** does this neatly: put an `f` right before the opening quote, then write any variable, or even a calculation, inside curly braces `{ }`.",
@@ -890,7 +913,7 @@
             "`//` gives how many **whole** times one number fits into another: `20 // 6` is `3`.",
             "`%` (modulo) gives what's **left over**: `20 % 6` is `2`, because 3 × 6 = 18, and 20 − 18 = 2."
           ] },
-          { tip: "If you see a `TypeError` about a `str` and an `int`, you are doing arithmetic with text: wrap the `input()` in `int()`." }
+          { tip: "If you see a `TypeError` about a `str` and an `int`, you are doing arithmetic with text: wrap the `input()` in `int()`. And keep the result: `int(days)` on a line of its own makes a number and throws it away, so write `days = int(days)`." }
         ],
         inputs: ["17"],
         starter: py`
@@ -946,6 +969,16 @@
           `
         ],
         tests: TRIAL_HELPERS + py`
+          def fixed_prints():
+              """The text of every print() whose arguments are all typed-in values, like print("Weeks: 2")."""
+              found = set()
+              for node in _ast.walk(_ast.parse(source)):
+                  if (isinstance(node, _ast.Call) and isinstance(node.func, _ast.Name) and node.func.id == "print"
+                          and node.args and all(isinstance(arg, _ast.Constant) for arg in node.args)):
+                      found.add(" ".join(str(arg.value) for arg in node.args))
+              return found
+
+
           def check_days(days):
               run = run_again([str(days)])
               must_ask(run, "the number of days")
@@ -954,13 +987,24 @@
               want = ["Weeks: " + str(weeks), "Days: " + str(left)]
               lines = run.lines
               for line in lines[:2]:
+                  value = line.partition(":")[2]
+                  if "days" in value or "//" in value or "%" in value:
+                      fail(label + ", your spell printed " + short(line) + ". The calculation is inside the quotes, so "
+                           "Python printed it as text. Leave calculations outside the quotes, like "
+                           + code('print("Weeks:", days // 7)') + ".")
                   if "." in line and uses_call("float"):
                       fail(label + ", your spell printed " + short(line) + ". " + code("float()") + " makes decimal "
                            "numbers such as 17.0, but days are whole numbers: read them with " + code("int()") + ".")
                   if line.startswith("Weeks:") and "." in line:
                       fail(label + ", your spell printed " + short(line) + ". Count whole weeks with " + code("//")
                            + ": a single " + code("/") + " gives a decimal.")
-              if lines[:1] == ["Weeks: " + str(round(days / 7))] and round(days / 7) != weeks:
+              seventeen = ["Weeks: 2", "Days: 3"]
+              stale = [line for line in lines[:2] if line in seventeen and line not in want]
+              if days != 17 and stale and (lines[:2] == seventeen or any(line in fixed_prints() for line in stale)):
+                  fail(label + ", your spell still printed " + short(stale[0]) + ", the answer for 17 days. Work it "
+                       "out from the number " + code("input()") + " gives you: " + code("days // 7") + " and "
+                       + code("days % 7") + ".")
+              if uses_call("round") and lines[:1] == ["Weeks: " + str(round(days / 7))] and round(days / 7) != weeks:
                   fail(label + ", your spell printed " + short(lines[0]) + ". " + str(days) + " / 7 is about "
                        + str(round(days / 7, 2)) + ", and " + code("round()") + " rounds that up, but the calendar "
                        "only counts whole weeks. Use " + code("//") + ", which simply drops the leftover part.")
@@ -1109,6 +1153,13 @@
                       fail(label + ", your spell printed " + short(line) + ". The code is inside the quotes, so "
                            "Python printed it as text. Put calculations outside the quotes (or inside the curly "
                            "braces of an f-string).")
+              quoted = _re.search(r"len\(\s*([\"'])(\w*)\1\s*\)", source)
+              if quoted and lines[1:3] != want[1:3]:
+                  wrong = next((line for line, wanted in zip(lines[1:3], want[1:3]) if line != wanted), None)
+                  fail(label + ", your spell printed " + (short(wrong) if wrong else "too few lines")
+                       + ". " + code("len(" + quoted.group(1) + quoted.group(2) + quoted.group(1) + ")")
+                       + " has quotes, so it counts the letters of the word " + quoted.group(2) + " itself (always "
+                       + str(len(quoted.group(2))) + "). Leave the quotes off the variable: " + code("len(name)") + ".")
               if lines and lines[0] == "Carve: " + name and name != name.upper():
                   fail(label + ", your spell printed " + short(lines[0]) + ", but the stonemason only carves capitals. "
                        + code("name.upper()") + " gives you a new string in capitals; it doesn't change "
