@@ -20,31 +20,52 @@
 
   // Trial helpers shared by every challenge in this chapter (prepended to each `tests`).
   var LAIR_TRIALS = py`
-    import sys as _sys
+    import ast as _ast
     import contextlib as _contextlib
+    import sys as _sys
+    import time as _time
+    import traceback as _traceback
 
     _SPELL_FILE = "<spell>"   # the harness compiles every spell under this file name
     _CO_GENERATOR = 0x20      # generator frames resume many times: count real calls only
+    _CLOCK = {"left": 5.0}    # seconds that all hydra_watch blocks may use in one cast (limit: 8)
 
 
     @_contextlib.contextmanager
-    def hydra_watch(budget=200000):
+    def hydra_watch(budget=200000, note="", seconds=3):
         """Fail the trial once the spell has made more than budget calls to functions it
-        defines. Unlike count_calls, this also sees helpers nested inside other functions."""
-        state = {"calls": 0}
-        warning = ("The Hydra grew too many heads! Your spell made more than " + format(budget, ",")
-                   + " function calls during this trial (helper functions count too), so it is "
-                   "solving the same smaller problems again and again. Remember each answer the "
-                   "first time you find it, or fill a table from the smallest case up.")
+        defines (unlike count_calls, this also sees helpers nested inside other functions),
+        or once it has run for more than seconds (less if earlier blocks used up _CLOCK).
+        Correct spells take a tiny fraction of that; the time limit only catches work the
+        call count can't see, such as calls answered by a too-small @lru_cache."""
+        state = {"calls": 0, "checks": 0}
+        started = _time.perf_counter()
+        deadline = started + max(0.25, min(seconds, _CLOCK["left"]))
+        advice = (" Remember each answer the first time you find it, or fill a table from the "
+                  "smallest case up." + note)
+        too_many = ("The Hydra grew too many heads! Your spell made more than " + format(budget, ",")
+                    + " function calls during this trial (helper functions count too), so it is "
+                    "solving the same smaller problems again and again." + advice)
+        too_slow = ("The Hydra grew too many heads! This trial is taking far too long, so your "
+                    "spell must be repeating a great deal of work." + advice)
+
+        def stop(message):
+            _sys.setprofile(None)
+            raise SpellFailure(message)
 
         def watcher(frame, event, arg):
             if event == "call":
                 co = frame.f_code
-                if co.co_filename == _SPELL_FILE and not co.co_flags & _CO_GENERATOR:
-                    state["calls"] += 1
-                    if state["calls"] > budget:
-                        _sys.setprofile(None)
-                        raise SpellFailure(warning)
+                if co.co_filename != _SPELL_FILE or co.co_flags & _CO_GENERATOR:
+                    return
+                state["calls"] += 1
+                if state["calls"] > budget:
+                    stop(too_many)
+            elif event != "c_call":
+                return
+            state["checks"] += 1
+            if not state["checks"] & 255 and _time.perf_counter() > deadline:
+                stop(too_slow)
 
         previous = _sys.getprofile()
         _sys.setprofile(watcher)
@@ -52,22 +73,45 @@
             yield state
         finally:
             _sys.setprofile(previous)
+            _CLOCK["left"] -= _time.perf_counter() - started
+
+
+    def small_cache_note():
+        """Explain @lru_cache's size limit (128 by default) if the spell relies on it."""
+        try:
+            tree = _ast.parse(source)
+        except SyntaxError:
+            return ""
+        for node in _ast.walk(tree):
+            if not isinstance(node, (_ast.FunctionDef, _ast.AsyncFunctionDef)):
+                continue
+            for deco in node.decorator_list:
+                target = deco.func if isinstance(deco, _ast.Call) else deco
+                if (getattr(target, "id", None) or getattr(target, "attr", None)) != "lru_cache":
+                    continue
+                sizes = []
+                if isinstance(deco, _ast.Call):
+                    sizes = list(deco.args[:1]) + [k.value for k in deco.keywords if k.arg == "maxsize"]
+                if not any(isinstance(size, _ast.Constant) and size.value is None for size in sizes):
+                    return (" Your " + code("@lru_cache") + " on " + code(node.name) + " has a size "
+                            "limit (128 answers unless you set " + code("maxsize") + "), so it keeps "
+                            "forgetting old answers. Write " + code("@lru_cache(maxsize=None)")
+                            + ", or use " + code("@cache") + ", so it remembers them all.")
+        return ""
 
 
     @_contextlib.contextmanager
     def without_waking_the_hydra(name, limit, budget=200000):
         """count_calls on the named function, plus hydra_watch on every function."""
+        note = small_cache_note()
         message = ("The Hydra grew too many heads! " + code(name) + " was called more than "
                    + format(limit, ",") + " times during this trial, so it is solving the same "
                    "smaller problems again and again. Remember each answer the first time you find "
                    "it (a memo dictionary or " + code("@lru_cache") + "), or fill a table from the "
-                   "smallest case up.")
-        with hydra_watch(budget):
+                   "smallest case up." + note)
+        with hydra_watch(budget, note):
             with count_calls(name, limit=limit, message=message) as calls:
                 yield calls
-
-
-    import traceback as _traceback
 
 
     def call_spell(name, params, *args):
@@ -119,8 +163,9 @@
     def expect_number(result, expected, call, note=""):
         """The spell must return the whole number expected for call (shown as code)."""
         if result is None:
-            fail(code(call) + " returned " + code("None") + ". Make sure your function uses "
-                 + code("return") + " to hand back its answer (printing it isn't enough).")
+            fail(code(call) + " should be " + str(expected) + ", but it returned " + code("None")
+                 + ". Make sure your function uses " + code("return") + " to hand back its answer "
+                 "(printing it isn't enough).")
         if isinstance(result, bool) or not isinstance(result, int):
             fail(code(call) + " should return a whole number, but it returned " + short(result)
                  + " (" + type(result).__name__ + ").")
@@ -204,7 +249,7 @@
 
             print(trib(30))
           `, output: "15902591" },
-          "Python can even do the remembering for you. Put the decorator `@lru_cache(maxsize=None)` from the `functools` module on the line above a function, and every result is stored automatically (`@cache` does the same):",
+          "Python can even do the remembering for you. Put the decorator `@lru_cache(maxsize=None)` from the `functools` module on the line above a function, and every result is stored automatically:",
           { code: py`
             from functools import lru_cache
 
@@ -216,6 +261,7 @@
                     return 1
                 return trib(n - 1) + trib(n - 2) + trib(n - 3)
           ` },
+          { warning: "`maxsize=None` means \"no limit\". A bare `@lru_cache` keeps only the 128 most recent results, which is far too few for big problems. (`@cache` is the same as `@lru_cache(maxsize=None)`.)" },
           { tip: "With a memo, each head is fought only once, so `fib(90)` needs fewer than 200 calls. Another cure skips recursion altogether: build the numbers up in a loop, starting from the smallest." }
         ],
         starter: py`
@@ -773,7 +819,7 @@
               if limit is None:
                   result = call_spell("min_coins", None, list(coins), amount)
               else:
-                  with without_waking_the_hydra("min_coins", limit, budget=30000):
+                  with without_waking_the_hydra("min_coins", limit, budget=20000):
                       result = call_spell("min_coins", None, list(coins), amount)
               if isinstance(result, float) and result == float("inf"):
                   fail(code(call) + " returned " + code("inf") + ". When a fare can't be made, turn "
@@ -814,6 +860,7 @@
               check_coins([3, 7, 11, 13, 29], 300, 12, limit=10000)
               check_coins([6, 10, 15], 299, 23, limit=10000)
               check_coins([4, 6, 10], 301, -1, limit=10000)
+              check_coins([4, 6, 8, 10, 12, 14, 16, 18, 20, 22], 301, -1, limit=10000)
         `,
         scene: { icon: "🛶", successIcon: "💰", successText: "The Ferryman counts your coins, grunts in approval, and poles you across the black river.", effect: "sparkle" }
       },
@@ -1301,7 +1348,7 @@
               need_function("lcs_length", 2)
               a = "THEHYDRAOFOVERLAPPINGSUBPROBLEMSSLEEPSBENEATHTHELABYRINTH"
               b = "APPRENTICESWHOREMEMBEREVERYHEADNEVERFIGHTTHESAMEONETWICE"
-              with without_waking_the_hydra("lcs_length", 40000, budget=60000):
+              with without_waking_the_hydra("lcs_length", 40000, budget=40000):
                   result = need_function("lcs_length")(a, b)
               expect_number(result, 20, "lcs_length(" + repr(a) + ", " + repr(b) + ")")
         `,
@@ -1532,7 +1579,7 @@
           def _():
               need_function("best_value", 2)
               hoard = [(5 + (i * 37) % 41, 10 + (i * 53) % 67) for i in range(30)]
-              with without_waking_the_hydra("best_value", 50000, budget=150000):
+              with without_waking_the_hydra("best_value", 50000, budget=60000):
                   result = call_spell("best_value", None, hoard, 300)
               expect_number(result, 839, "best_value(hoard, 300)",
                             " (Here " + code("hoard = [(5 + (i * 37) % 41, 10 + (i * 53) % 67) for i in range(30)]")
@@ -1759,7 +1806,7 @@
               need_function("edit_distance", 2)
               a = "ABRACADABRAALAKAZAMHOCUSPOCUSPRESTOCHANGEOSHAZAM"
               b = "ALAKAZAMABRACADABRASHAZAMHOCUSPOCUSOPENSESAME"
-              with without_waking_the_hydra("edit_distance", 30000, budget=60000):
+              with without_waking_the_hydra("edit_distance", 30000, budget=30000):
                   result = need_function("edit_distance")(a, b)
               expect_number(result, 26, "edit_distance(" + repr(a) + ", " + repr(b) + ")")
         `,

@@ -81,13 +81,13 @@
     icon: "🌀",
     concepts: ["recursion", "stacks", "queues", "hash maps", "linked lists", "binary search", "merge sort", "DFS & BFS", "Big-O"],
     intro: [
-      "The golems of the Workshop bow as you pass — every one of them built from your own classes. But behind the last workbench a trapdoor hangs open, and a giggle drifts up from the dark. Glitch has fled into the **Labyrinth of Echoes**, the maze beneath the academy.",
-      "Archmage Ada lights her staff. \"Down here, brute force gets you lost. The Labyrinth rewards wizards who *organise* their magic: stacks, queues, chains and maps — and algorithms that find the way without trying every path.\"",
+      "The spiral stairs beneath the Golem Workshop wind down and down, until your lantern lights a maze of tunnels that seems to go on forever. This is the **Labyrinth of Echoes**: every footstep comes back to you twice, and somewhere ahead, Glitch's giggle bounces from wall to wall.",
+      "Archmage Ada raises her staff. \"Down here, brute force gets you lost. The Labyrinth rewards wizards who *organise* their magic: stacks, queues, chains and maps — and algorithms that find the way without trying every path.\"",
       "\"So count your steps, apprentice. In the Labyrinth, *how fast* a spell's work grows as the maze grows — its **Big-O** — matters as much as whether it works at all.\""
     ],
     outro: [
       "The last corridor opens and the echoes fall silent. You have flattened nested echoes, checked seals with a stack, kept a fair queue, spotted twins with a dictionary, forged and reversed a chain, halved a hall of doors, mended a mirror with merge sort, and searched the caverns depth-first and the maze breadth-first.",
-      "At the exit you finally corner Glitch — who squeaks, spins, and dives straight through a great door carved with seven serpent heads. A rumble. A roar. Then two more roars…",
+      "At the Labyrinth's deepest exit you finally corner Glitch — who squeaks, spins, and dives straight through a great door carved with seven serpent heads. A rumble. A roar. Then two more roars…",
       "Glitch tumbles back out, ears flat. \"I only poked it a *little*!\" Behind the door, the **Hydra of Overlapping Subproblems** is waking. Ada grips her staff. \"Cut off one head and two grow back — unless you *remember* every head you have already faced. Come, apprentice. To the Hydra's Lair.\""
     ],
     challenges: [
@@ -106,8 +106,11 @@
         task: [
           "Write a function `flatten(echoes)`. `echoes` is a list that may contain other lists, nested to any depth. **Return** a new, flat list of every item that isn't a list, in left-to-right order.",
           { code: py`
-            flatten([1, [2, 3], [[4], 5]])        # → [1, 2, 3, 4, 5]
-            flatten(["boo", [], [["hoo"]], 7])    # → ['boo', 'hoo', 7]
+            flatten([1, [2, 3], [[4], 5]])
+            # → [1, 2, 3, 4, 5]
+
+            flatten(["boo", [], [["hoo"]], 7])
+            # → ['boo', 'hoo', 7]
           ` },
           { list: [
             "Empty lists simply vanish: `flatten([[], [[]]])` returns `[]`.",
@@ -122,25 +125,28 @@
             def count_coins(pouch):
                 total = 0
                 for thing in pouch:
-                    if isinstance(thing, list):      # a smaller pouch: recursion opens it
+                    if isinstance(thing, list):
+                        # a smaller pouch: recursion opens it
                         total += count_coins(thing)
-                    else:                            # a plain coin
-                        total += thing
+                    else:
+                        total += thing      # a plain coin
                 return total
 
             print(count_coins([5, [10, 1], [[2], []]]))
           `, output: "18" },
           "Each call handles one pouch and trusts the inner calls with the rest. The base case needs no special code: a pouch without inner pouches never recurses, and an empty pouch just returns 0.",
-          { code: py`
-            count_coins([5, [10, 1], [[2], []]])        -> 5 + 11 + 2 = 18
-            ├── 5
-            ├── count_coins([10, 1])                    -> 11
-            └── count_coins([[2], []])                  -> 2
-                ├── count_coins([2])                    -> 2
-                └── count_coins([])                     -> 0
+          { diagram: py`
+            count_coins([5, [10, 1], [[2], []]])
+            ├── 5                           -> 5
+            ├── count_coins([10, 1])        -> 11
+            └── count_coins([[2], []])      -> 2
+                ├── count_coins([2])        -> 2
+                └── count_coins([])         -> 0
+            total: 5 + 11 + 2 = 18
           ` },
           { tip: "**Big-O** describes how a spell's work grows with the size of its input. `count_coins` looks at each item once, so twice as many items means twice the work: we say it is **O(n)** for n items." },
-          { warning: "To build a list instead of a total, create the list *inside* the function. A default value such as `def f(items, found=[])` is made only once and shared by every call, so old echoes leak into new answers." }
+          "To build a list instead of a total, start from `[]` and grow it: `items.append(x)` adds one item, while `items.extend(other)` (or `items += other`) adds every item of the list `other`.",
+          { warning: "Create that list *inside* the function. A default value such as `def f(items, found=[])` is made only once and shared by every call, so old echoes leak into new answers." }
         ],
         starter: py`
           def flatten(echoes):
@@ -340,11 +346,11 @@
             "All other characters (letters, spaces, runes…) are ignored. A seal with no brackets at all is balanced."
           ] },
           { code: py`
-            is_balanced("{[()()]}")    # True
-            is_balanced("a(b)c[d]")    # True
-            is_balanced("([)]")        # False: [ is still open when ) arrives
-            is_balanced("((")          # False: never closed
-            is_balanced("())(")        # False: the second ) has nothing to close
+            is_balanced("{[()()]}")  # True
+            is_balanced("a(b)c[d]")  # True
+            is_balanced("([)]")      # False: [ is still open
+            is_balanced("((")        # False: never closed
+            is_balanced("())(")      # False: ) closes nothing
           ` }
         ],
         lesson: [
@@ -356,16 +362,16 @@
             stack.append("green")
             stack.append("blue")
             print(stack[-1])         # peek at the top
-            print(stack.pop())       # pop: the LAST one pushed comes off FIRST
+            print(stack.pop())       # last in, first out!
             print(stack, len(stack))
           `, output: "blue\nblue\n['red', 'green'] 2" },
-          { code: py`
-                    after 3 pushes            after pop()
-                    ┌─────────┐
-            top →   │ "blue"  │              ┌─────────┐
-                    │ "green" │      top →   │ "green" │
-                    │ "red"   │              │ "red"   │
-                    └─────────┘              └─────────┘
+          { diagram: py`
+                  after 3 pushes      after pop()
+                  ┌─────────┐
+            top → │ "blue"  │         ┌─────────┐
+                  │ "green" │   top → │ "green" │
+                  │ "red"   │         │ "red"   │
+                  └─────────┘         └─────────┘
           ` },
           "Stacks shine whenever things **nest**: whatever was opened most recently must be finished first. Undo buttons, a browser's Back button, and Python itself (keeping track of functions called inside functions) all use stacks.",
           "Simply counting isn't always enough. To match different *kinds* of things, you must remember *which* kind was opened most recently — and that is exactly what sits on top of a stack.",
@@ -545,32 +551,34 @@
           "Write `rest_order(spirits)`. `spirits` is a list of `(name, needed)` tuples in line order, where `needed` (at least 1) is how many blessings that spirit needs.",
           "Until the line is empty: the spirit at the front receives **one** blessing. If it now has all it needs, it goes to rest; otherwise it goes to the **back** of the line. **Return** the names in the order the spirits went to rest.",
           { code: py`
-            rest_order([("Wisp", 2), ("Shade", 1), ("Moan", 3)])   # → ['Shade', 'Wisp', 'Moan']
+            spirits = [("Wisp", 2), ("Shade", 1), ("Moan", 3)]
+            rest_order(spirits)  # → ['Shade', 'Wisp', 'Moan']
 
-            # line: Wisp 2, Shade 1, Moan 3
-            # Wisp is blessed, needs 1 more -> back    line: Shade 1, Moan 3, Wisp 1
-            # Shade is blessed -> rests                line: Moan 3, Wisp 1
-            # Moan is blessed, needs 2 more -> back    line: Wisp 1, Moan 2
-            # Wisp is blessed -> rests                 line: Moan 2
-            # Moan is blessed twice more -> rests
+            # line (front first)       what happens
+            # Wisp 2, Shade 1, Moan 3  Wisp -> back (1 to go)
+            # Shade 1, Moan 3, Wisp 1  Shade rests
+            # Moan 3, Wisp 1           Moan -> back (2 to go)
+            # Wisp 1, Moan 2           Wisp rests
+            # Moan 2                   Moan -> back (1 to go)
+            # Moan 1                   Moan rests
           ` },
           "Use a `deque` from the `collections` module as the line (`popleft()` takes the spirit at the front, `append()` sends one to the back), and don't change the list you were given."
         ],
         lesson: [
           "A **queue** is a line: the first to join is the first to leave — *first in, first out* (FIFO). Newcomers join at the back, and you serve from the front.",
-          "A plain list *can* act as a queue, but `line.pop(0)` is slow: removing the first item makes Python shift every other item one place to the left. With 100,000 items in line that's 100,000 moves for every single pop: **O(n)**.",
+          "A plain list *can* act as a queue, but `line.pop(0)` is slow: removing the first item makes Python shift every other item one place to the left. With 100,000 items in line, that's about 100,000 moves for every single pop: **O(n)**.",
           "The `deque` (say \"deck\": a *double-ended queue*) from the `collections` module is built for this. Adding or removing at *either* end takes the same tiny time however long the line is: **O(1)**.",
           { code: py`
             from collections import deque
 
-            line = deque(["Ana", "Bo"])   # a new deque made from a list
+            line = deque(["Ana", "Bo"])   # made from a list
             line.append("Cy")             # join at the back
-            first = line.popleft()        # leave from the front
+            first = line.popleft()        # leave at the front
             print(first, list(line), len(line))
-            while line:                   # a deque is truthy while it has items
+            while line:                   # until it's empty
                 print("serving", line.popleft())
           `, output: "Ana ['Bo', 'Cy'] 2\nserving Bo\nserving Cy" },
-          { code: py`
+          { diagram: py`
               front                         back
                 ↓                             ↓
             popleft() ←  [ Bo | Cy | Di ]  ← append()
@@ -688,6 +696,7 @@
           `
         ],
         tests: LINE_BUDGET + py`
+          import ast as _ast
           from collections import deque as _deque
 
           _ADVICE = ("Is the line going round in circles? Each turn, the spirit at the front must get one blessing closer to "
@@ -763,9 +772,18 @@
               _check([("spirit" + str(k), 1 + (k * 7) % 5) for k in range(3000)], label=code("rest_order(line_of_3000_spirits)"))
 
 
+          def _deque_names():
+              """'deque', plus any alias from 'from collections import deque as ...'."""
+              names = {"deque"}
+              for node in _ast.walk(_ast.parse(source)):
+                  if isinstance(node, _ast.ImportFrom) and node.module == "collections":
+                      names.update(alias.asname for alias in node.names if alias.name == "deque" and alias.asname)
+              return names
+
+
           @test("The line is a deque, served from the front with popleft()")
           def _():
-              expect(uses_call("deque"), "Make the line a deque: " + code("from collections import deque") + ", then "
+              expect(any(uses_call(name) for name in _deque_names()), "Make the line a deque: " + code("from collections import deque") + ", then "
                      + code("line = deque(spirits)") + ". (A list gives the right answers, but " + code("list.pop(0)")
                      + " has to shuffle every other spirit forward; a deque's " + code("popleft()") + " is instant.)")
               expect(uses_call("popleft"), "Take the spirit at the front of the line with " + code("line.popleft()") + ".")
@@ -789,28 +807,34 @@
           "Write `find_twins(runes, target)`. `runes` is a list of whole numbers. **Return** a tuple `(i, j)` of two positions, with `i < j`, such that `runes[i] + runes[j] == target` — or `None` if there is no such pair.",
           "If several pairs work, choose precisely this one: read the runes from left to right and stop at the **first position `j`** that completes a pair. If `runes[j]` could pair with more than one earlier rune, choose the **earliest** of them.",
           { code: py`
-            find_twins([4, 9, 2, 7, 5], 9)   # → (2, 3): 2 + 7 completes a pair first
-                                             #   ((0, 4) also adds up to 9, but is completed later)
-            find_twins([3, 3, 4], 7)         # → (0, 2): 4 pairs with either 3; the earliest wins
-            find_twins([5, 1], 10)           # → None: a rune can't be its own twin
+            find_twins([4, 9, 2, 7, 5], 9)  # → (2, 3)
+            # 2 + 7 is the first pair to be completed;
+            # (0, 4) also adds up to 9, but later.
+
+            find_twins([3, 3, 4], 7)        # → (0, 2)
+            # 4 pairs with either 3: the earliest wins.
+
+            find_twins([5, 1], 10)          # → None
+            # A rune can't be its own twin.
           ` },
           "One trial gives your spell a row of 3,000 runes and counts every rune it reads: one walk along the row is fine, but checking every pair is not."
         ],
         lesson: [
           "A **dictionary** is a *hash map*. It files every key in a slot worked out from the key itself (its *hash*), so `key in d`, `d[key]` and `d[key] = value` take about the same tiny time whether the dict holds ten entries or ten million: **O(1)**.",
           "Lists are different: `x in my_list` checks the items one at a time, which is **O(n)**. Do that inside a loop over the list — or loop over every pair with a loop inside a loop — and the work grows with the *square* of the length, **O(n²)**:",
-          { code: py`
-            runes in the row:         1,000         10,000          100,000
-            pairs to check:         ~500,000     ~50,000,000     ~5,000,000,000
-            one walk with a dict:     1,000         10,000          100,000
+          { diagram: py`
+              runes      every pair    one walk
+              1,000        ~500,000       1,000
+             10,000     ~50,000,000      10,000
+            100,000  ~5,000,000,000     100,000
           ` },
           "The trick: walk the list **once**, keeping a dict of what you have already seen, so each new item only has to ask the dict a question. This spell finds the first rune that repeats an earlier one:",
           { code: py`
             def first_repeat(runes):
-                """(earlier position, position) of the first repeated rune, or None."""
-                seen = {}                          # rune value -> position where we saw it
+                """Positions of the first repeat, or None."""
+                seen = {}                # value -> position
                 for pos, rune in enumerate(runes):
-                    if rune in seen:               # O(1): have we met this value before?
+                    if rune in seen:     # an O(1) question
                         return (seen[rune], pos)
                     seen[rune] = pos
                 return None
@@ -1056,21 +1080,22 @@
             chain = LinkedList()
             for word in ["way", "the", "find"]:
                 chain.append(word)
-            print(len(chain), chain.to_list())   # 3 ['way', 'the', 'find']
+            print(len(chain))        # 3
+            print(chain.to_list())   # ['way', 'the', 'find']
             chain.reverse()
-            print(chain.to_list())               # ['find', 'the', 'way']
+            print(chain.to_list())   # ['find', 'the', 'way']
           ` }
         ],
         lesson: [
           "A Python list keeps its items side by side in one block of memory, so it can jump straight to `items[500]`. A **linked list** is a chain instead: each **node** holds a value plus a reference — an arrow — to the next node. The list itself only remembers the first node, its **head**.",
-          { code: py`
-              head
-               │
-               ▼
-             ┌────────┬───┐    ┌────────┬───┐    ┌────────┬──────┐
-             │ "way"  │ ●─┼───▶│ "the"  │ ●─┼───▶│ "find" │ None │
-             └────────┴───┘    └────────┴───┘    └────────┴──────┘
-                value   next
+          { diagram: py`
+            head
+             │
+             ▼
+            ┌─────┬─┐   ┌─────┬─┐   ┌──────┬─┐
+            │"way"│●┼──▶│"the"│●┼──▶│"find"│●┼──▶ None
+            └─────┴─┘   └─────┴─┘   └──────┴─┘
+             value next
           ` },
           "To visit every node, start at the head and follow the arrows until you reach `None`:",
           { code: py`
@@ -1079,14 +1104,14 @@
                 print(node.value)
                 node = node.next        # step along the arrow
           ` },
-          "Reaching the 500th node means following 500 arrows — **O(n)**, where a list takes O(1). But adding at the *front* of a chain is O(1) (just make a new head), where `items.insert(0, x)` is O(n). Every structure trades one strength for another.",
+          "To reach the 500th node you must follow 499 arrows, one after another: **O(n)**, where a list takes O(1). But adding at the *front* of a chain is O(1) (just make a new head), where `items.insert(0, x)` is O(n). Every structure trades one strength for another.",
           "Re-pointing arrows is the heart of linked lists, and the order matters: change `node.next` before saving where it pointed, and the rest of the chain is lost! Save first, then re-point. Here the first two nodes of a chain swap places:",
           { code: py`
             first = chain.head
             second = first.next
-            first.next = second.next    # first now skips over second...
-            second.next = first         # ...second points back at first...
-            chain.head = second         # ...and second becomes the new head
+            first.next = second.next   # first skips second,
+            second.next = first        # second points back,
+            chain.head = second        # and second leads.
           ` },
           { tip: "An extra `tail` attribute (the last node) makes `append` O(1) instead of a walk along the whole chain — but then `reverse()` must update `tail` too." }
         ],
@@ -1554,24 +1579,25 @@
         ],
         lesson: [
           "Checking items one by one — a *linear search* — can take as many looks as there are items: O(n). But when the items are **sorted**, you can do far better. Look at the middle item. If it's too small, everything to its left is too small as well, so throw that whole half away; if it's too big, throw away the right half. Every look halves what is left:",
-          { code: py`
-            doors left to search:  100,000 → 50,000 → 25,000 → 12,500 → … → 2 → 1
-            looks needed:          about 17, because 2 ** 17 = 131,072
+          { diagram: py`
+            doors left: 100,000 → 50,000 → 25,000
+                     → 12,500 → 6,250 → … → 2 → 1
+            about 17 looks, because 2 ** 17 = 131,072
           ` },
           "Halving n down to 1 takes about log₂ n steps, so binary search is **O(log n)**: a million doors need about 20 looks, and a billion only 30. The same idea wins the number-guessing game:",
           { code: py`
             secret = 73
-            low, high = 1, 100              # the secret is somewhere in low..high
+            low, high = 1, 100    # it's in low..high
             guesses = 0
             while True:
-                guess = (low + high) // 2   # always guess the middle
+                guess = (low + high) // 2    # the middle
                 guesses += 1
                 if guess == secret:
                     break
                 elif guess < secret:
-                    low = guess + 1         # too small: it's in the upper half
+                    low = guess + 1    # too small: go higher
                 else:
-                    high = guess - 1        # too big: it's in the lower half
+                    high = guess - 1   # too big: go lower
             print("Found", secret, "in", guesses, "guesses")
           `, output: "Found 73 in 6 guesses" },
           "In a list, `low` and `high` are *positions*, and the middle door is `doors[mid]`. Two details trip up every wizard: use `//` so that `mid` is a whole number, and always move `low` or `high` *past* `mid` (`mid + 1` or `mid - 1`), or the search can get stuck forever.",
@@ -1827,9 +1853,13 @@
         task: [
           "Write `merge_sort(items)` that **returns a new list** of the same items in ascending order, using merge sort. Don't use `sorted()` or `.sort()`, and don't change the list you were given.",
           { code: py`
-            merge_sort([38, 27, 43, 3, 9, 82, 10])   # → [3, 9, 10, 27, 38, 43, 82]
-            merge_sort(["mist", "ash", "echo"])       # → ['ash', 'echo', 'mist']
-            merge_sort([])                            # → []
+            merge_sort([38, 27, 43, 3, 9, 82, 10])
+            # → [3, 9, 10, 27, 38, 43, 82]
+
+            merge_sort(["mist", "ash", "echo"])
+            # → ['ash', 'echo', 'mist']
+
+            merge_sort([])   # → []
           ` },
           { list: [
             "The trials also sort *echoes*: objects that compare by loudness with `<`, `<=`, `>`, `>=` and `==`. Simply compare items; never look inside them.",
@@ -1840,27 +1870,27 @@
         lesson: [
           "**Divide and conquer**: split a big problem into smaller versions of itself, solve those (recursion!), and combine their answers.",
           "**Merge sort** splits the list in half, sorts each half by calling itself, then *merges* the two sorted halves into one. A list of 0 or 1 items is already sorted: that's the base case.",
-          { code: py`
-                         [38, 27, 43, 3, 9, 82, 10]
-                          /                      \
-                   [38, 27, 43]            [3, 9, 82, 10]        split in half...
-                    /        \               /          \
-                 [38]     [27, 43]        [3, 9]      [82, 10]   ...down to 0 or 1 items
-                    \        /               \          /
-                   [27, 38, 43]            [3, 9, 10, 82]        then merge back up
-                          \                      /
-                         [3, 9, 10, 27, 38, 43, 82]
+          { diagram: py`
+            split:  [38, 27, 43, 3, 9, 82, 10]
+                    [38, 27, 43]    [3, 9, 82, 10]
+                    [38] [27, 43]   [3, 9] [82, 10]
+                    [38] [27] [43]  [3] [9] [82] [10]
+            merge:  [38] [27, 43]   [3, 9] [10, 82]
+                    [27, 38, 43]    [3, 9, 10, 82]
+                    [3, 9, 10, 27, 38, 43, 82]
           ` },
           "**Merging** is the clever part. The smallest item left must be at the front of one half or the other, so compare the two fronts, take the smaller, and repeat. When one half runs out, the rest of the other is already in order:",
-          { code: py`
-            left = [27, 38, 43]    right = [3, 9, 10, 82]    merged:
-            27 vs 3   -> take 3                               [3]
-            27 vs 9   -> take 9                               [3, 9]
-            27 vs 10  -> take 10                              [3, 9, 10]
-            27 vs 82  -> take 27                              [3, 9, 10, 27]
-            38 vs 82  -> take 38                              [3, 9, 10, 27, 38]
-            43 vs 82  -> take 43                              [3, 9, 10, 27, 38, 43]
-            left is empty -> add the rest of right            [3, 9, 10, 27, 38, 43, 82]
+          { diagram: py`
+            left  = [27, 38, 43]
+            right = [3, 9, 10, 82]
+            27 vs 3    take 3     [3]
+            27 vs 9    take 9     [3, 9]
+            27 vs 10   take 10    [3, 9, 10]
+            27 vs 82   take 27    [3, 9, 10, 27]
+            38 vs 82   take 38    [3, 9, 10, 27, 38]
+            43 vs 82   take 43    [3, 9, 10, 27, 38, 43]
+            left is empty: add the rest of right
+                                  [3, 9, 10, 27, 38, 43, 82]
           ` },
           "Each level of splitting merges n items in total, and halving n down to 1 takes about log₂ n levels, so merge sort is **O(n log n)**. For 2,000 items that's about 20,000 comparisons; comparing every pair, as bubble sort does, takes about 2,000,000.",
           "A sort is **stable** if equal items keep their original order. Think carefully about which front to take when the two fronts are equal!"
@@ -2167,22 +2197,27 @@
             ]
             count_islands(cavern)   # → 5
           ` },
-          "A map with no rock (or no rows at all) has 0 islands. Don't change the map you were given. The trials stop any spell that explores far more than it needs to, for example one that forgets which squares it has already explored."
+          "A map with no rock (or no rows at all) has 0 islands. Don't change the map you were given. The trials stop any spell that does far more work than it needs to — for example, one that forgets which squares it has already visited."
         ],
         lesson: [
           "A grid map is really a **graph**: every square is a place, and neighbouring squares are connected. To find everything connected to one square, flood outward from it, like spilled ink spreading into every square it can reach. This is called **flood fill**.",
           "**Depth-first search (DFS)** floods by always pushing on to an unexplored neighbour, and only backs up when it's stuck. A stack drives it: pop a square, then push its unexplored neighbours. This spell measures one spill of ink across the open floor (`.`) of a map:",
           { code: py`
+            # up, down, left, right
+            STEPS = [(-1, 0), (1, 0), (0, -1), (0, 1)]
+
             def spill(grid, start):
-                """How many '.' squares can ink reach from start, moving up/down/left/right?"""
+                """Count the floor squares ink can reach."""
                 rows, cols = len(grid), len(grid[0])
-                seen = {start}                 # squares already reached
+                seen = {start}           # reached so far
                 stack = [start]
                 while stack:
                     row, col = stack.pop()
-                    for dr, dc in [(-1, 0), (1, 0), (0, -1), (0, 1)]:   # up, down, left, right
+                    for dr, dc in STEPS:
                         r, c = row + dr, col + dc
-                        if 0 <= r < rows and 0 <= c < cols and grid[r][c] == "." and (r, c) not in seen:
+                        if (0 <= r < rows and 0 <= c < cols
+                                and grid[r][c] == "."
+                                and (r, c) not in seen):
                             seen.add((r, c))
                             stack.append((r, c))
                 return len(seen)
@@ -2468,11 +2503,11 @@
             ]
             shortest_path(maze)   # → 9
           ` },
-          "Don't change the maze you were given. The trials stop any spell that explores far more than it needs to, such as one that tries every possible route."
+          "Don't change the maze you were given. The trials stop any spell that does far more work than it needs to — for example, one that tries every possible route."
         ],
         lesson: [
           "A depth-first search dives down one path as far as it can go. That's fine for exploring, but the first path it finds may be long and winding. **Breadth-first search (BFS)** explores in rings instead: first every square 1 step from the start, then every square 2 steps away, and so on, like ripples spreading on a pond.",
-          { code: py`
+          { diagram: py`
             maze        steps from S
             S . . #     0 1 2 #
             . # . .     1 # 3 4
@@ -2489,18 +2524,18 @@
                 "Crypt": ["Hall", "Well"],
                 "Vault": ["Well"],
             }
-            distance = {"Gate": 0}             # rooms reached so far -> tunnels from the Gate
+            distance = {"Gate": 0}   # room -> tunnels away
             queue = deque(["Gate"])
             while queue:
-                room = queue.popleft()         # the oldest discovery comes out first
+                room = queue.popleft()        # oldest first
                 for nxt in tunnels[room]:
-                    if nxt not in distance:    # first visit = shortest route
+                    if nxt not in distance:   # first visit
                         distance[nxt] = distance[room] + 1
                         queue.append(nxt)
             print(distance)
           `, output: "{'Gate': 0, 'Hall': 1, 'Well': 1, 'Crypt': 2, 'Vault': 2}" },
           "A grid is a graph whose neighbours you work out as you go, with the same four directions and edge checks as in the Flooded Caverns.",
-          { warning: "Trying every possible route and keeping the best is hopeless: an open 10 × 10 room has billions of routes. And mark a square as seen when you *add* it to the queue, not when you take it out, or it may be queued again and again." }
+          { warning: "Trying every possible route and keeping the best is hopeless: an open 10 × 10 room has billions of billions of routes. And mark a square as seen when you *add* it to the queue, not when you take it out, or it may be queued again and again." }
         ],
         starter: py`
           from collections import deque

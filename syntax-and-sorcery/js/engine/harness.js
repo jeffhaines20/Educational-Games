@@ -152,6 +152,15 @@ NoMoreInput.__name__ = NoMoreInput.__qualname__ = "EOFError"
 NoMoreInput.__module__ = "builtins"
 
 
+class TooManySteps(BaseException):
+    """The spell ran more loop iterations + function calls than a limit allows."""
+
+    def __init__(self, message, limit):
+        super().__init__(message)
+        self.message = message
+        self.limit = limit
+
+
 # ---------------------------------------------------------------------------
 # Output capture and input()
 # ---------------------------------------------------------------------------
@@ -216,6 +225,111 @@ def _spell_io(capture, inputs):
         yield
     finally:
         sys.stdout, sys.stderr, builtins.input = saved
+
+
+# ---------------------------------------------------------------------------
+# Step limits: stop runaway loops and recursion gracefully
+# ---------------------------------------------------------------------------
+
+DEFAULT_STEP_LIMIT = 2000000  # loop iterations + function calls in the spell, per run and per trial
+
+
+def _main_steps_message(limit):
+    return ("Your spell took more than " + format(limit, ",") + " steps without finishing, so the academy's "
+            "wards stopped it. Usually this means a loop that never ends (check that its condition eventually "
+            "becomes False), or a function that calls itself far too many times.")
+
+
+def _trial_steps_message(limit):
+    return ("Your spell took more than " + format(limit, ",") + " steps during this trial, so it was stopped. "
+            "Is a loop running forever, or is the approach far too slow for this input?")
+
+
+def _custom_steps_message(limit):
+    return ("Your spell needed more than " + format(limit, ",") + " steps here, which is too slow for this "
+            "trial. Look for a faster approach (for example, avoid a loop inside another loop).")
+
+
+class _StepBudget:
+    """One active step limit. .used is how many steps the spell took inside it."""
+
+    def __init__(self, counter, limit, message):
+        self._counter = counter
+        self.start = counter.count
+        self.limit = limit
+        self.message = message
+        self.end = None
+
+    @property
+    def used(self):
+        return (self.end if self.end is not None else self._counter.count) - self.start
+
+    def __repr__(self):
+        return "<steps used: " + str(self.used) + ">"
+
+
+class _StepCounter:
+    """Counts the spell's loop iterations and function calls with sys.monitoring.
+
+    Only code compiled from the spell is counted. Every other code location is
+    switched off after its first event, so the harness and the standard library
+    run at full speed. Without sys.monitoring (Python < 3.12) limits are ignored.
+    """
+
+    def __init__(self):
+        self.count = 0
+        self.active = []
+        self.trigger = None
+        self.tool = None
+        monitoring = getattr(sys, "monitoring", None)
+        if monitoring is None:
+            return
+        for tool in (4, 3, 5):
+            try:
+                owner = monitoring.get_tool(tool)
+                if owner is None:
+                    monitoring.use_tool_id(tool, "spellcheck")
+                elif owner != "spellcheck":
+                    continue
+                monitoring.register_callback(tool, monitoring.events.JUMP, self._event)
+                monitoring.register_callback(tool, monitoring.events.PY_START, self._event)
+                self.tool = tool
+                return
+            except Exception:
+                continue
+
+    def _event(self, code, *args):
+        if code.co_filename != SPELL_FILE:
+            return sys.monitoring.DISABLE
+        self.count += 1
+        if self.trigger is not None and self.count > self.trigger:
+            budget = min(self.active, key=lambda b: b.start + b.limit)
+            raise TooManySteps(budget.message, budget.limit)
+        return None
+
+    def _refresh(self):
+        self.trigger = min((b.start + b.limit for b in self.active), default=None)
+        if self.tool is not None:
+            events = (sys.monitoring.events.JUMP | sys.monitoring.events.PY_START) if self.active else 0
+            sys.monitoring.set_events(self.tool, events)
+
+    @contextlib.contextmanager
+    def limit(self, limit, message):
+        budget = _StepBudget(self, limit, message)
+        if self.tool is None or not limit:
+            yield budget
+            return
+        self.active.append(budget)
+        self._refresh()
+        try:
+            yield budget
+        finally:
+            budget.end = self.count
+            self.active.remove(budget)
+            self._refresh()
+
+
+_STEPS = _StepCounter()
 
 
 # ---------------------------------------------------------------------------
@@ -353,6 +467,8 @@ def explain(exc, line=None, namespace=None):
                 "the usual culprit: make sure its condition eventually becomes False.")
     if isinstance(exc, CallLimitExceeded):
         return exc.message
+    if isinstance(exc, TooManySteps):
+        return exc.message + ((" (It was busy on line " + str(line) + ".)") if line else "")
     if isinstance(exc, NoMoreInput):
         if exc.provided == 0:
             return ("This challenge doesn't send any input, so " + code("input()") + " has nothing to read. "
@@ -360,9 +476,10 @@ def explain(exc, line=None, namespace=None):
         return ("Your spell called " + code("input()") + " more times than the challenge provides ("
                 + _plural(exc.provided, "value") + ").")
     if isinstance(exc, RecursionError):
-        return ("Your function kept calling itself and never stopped. Every recursive function needs a "
-                "base case (a simple situation it answers directly), and each recursive call must move "
-                "closer to that base case.")
+        return ("Your function called itself too many times in a row (Python allows about 1,000 nested "
+                "calls). Usually the base case is missing or never reached: every recursive function needs a "
+                "simple situation it answers directly, and each call must move closer to it. If the input "
+                "really is that big, solve it with a loop (bottom-up) instead of recursion.")
     if isinstance(exc, UnboundLocalError):
         m = re.search(r"variable '(\w+)'", msg) or re.search(r"'(\w+)'", msg)
         var = m.group(1) if m else "that variable"
@@ -570,7 +687,8 @@ def _explain_type_error(msg, where):
     m = re.search(r"unhashable type: '(\w+)'", msg)
     if m:
         return (_a_type(m.group(1)).capitalize() + " can't be a dictionary key or a set member" + where + ", because it can change. "
-                "Use a tuple instead of a list.")
+                "Use a tuple instead of a list. (With " + code("@lru_cache") + " or " + code("@cache") + ", every "
+                "argument must be hashable in the same way.)")
     return "A value of the wrong type was used" + where + ": " + msg + "."
 
 
@@ -637,6 +755,10 @@ def describe_error(exc, phase, namespace=None):
         info["line"] = _spell_line(exc)
     elif isinstance(exc, CallLimitExceeded):
         info["message"] = exc.message
+        info["line"] = _spell_line(exc)
+    elif isinstance(exc, TooManySteps):
+        info["type"] = "TooManySteps"
+        info["message"] = "more than " + format(exc.limit, ",") + " steps"
         info["line"] = _spell_line(exc)
     else:
         info["line"] = _spell_line(exc)
@@ -809,7 +931,8 @@ _SYNTAX_KINDS = {
 class _Trials:
     """Collects and runs the trials registered by a challenge's test code."""
 
-    def __init__(self, source, compiled, spell, output, inputs, output_limit):
+    def __init__(self, source, compiled, spell, output, inputs, output_limit, step_limit=DEFAULT_STEP_LIMIT):
+        self.step_limit_per_trial = step_limit
         self.source = source
         self.compiled = compiled
         self.spell = spell
@@ -913,7 +1036,7 @@ class _Trials:
                 pass
             except TooMuchOutput:
                 raise SpellFailure(label + ", your spell printed far too much. Is a loop running forever?")
-            except CallLimitExceeded:
+            except (CallLimitExceeded, TooManySteps):
                 raise
             except BaseException as exc:
                 info = describe_error(exc, "trial", namespace)
@@ -943,6 +1066,14 @@ class _Trials:
             yield counter
         finally:
             self.spell[name] = original
+
+    def step_limit(self, limit, message=None):
+        """Context manager: fail the trial if the spell takes more than limit steps inside it.
+
+        A step is one loop iteration or one function call inside the spell.
+        with step_limit(20000) as steps: ...   then steps.used
+        """
+        return _STEPS.limit(int(limit), message or _custom_steps_message(int(limit)))
 
     # -- looking at the code itself ---------------------------------------
     def _ast(self):
@@ -1035,6 +1166,7 @@ class _Trials:
             "capture": self.capture,
             "run_program": self.run_program,
             "count_calls": self.count_calls,
+            "step_limit": self.step_limit,
             "uses_call": self.uses_call,
             "uses_syntax": self.uses_syntax,
             "is_recursive": self.is_recursive,
@@ -1055,6 +1187,8 @@ class _Trials:
                 return True
             if re.search(r"__\w+__", msg):  # e.g. "__str__ returned non-string"
                 return True
+            if "unhashable type" in msg:  # e.g. a list passed to an @lru_cache function
+                return True
         if isinstance(exc, (TypeError, AttributeError)):
             owner = getattr(exc, "obj", None)
             if owner is not None:
@@ -1071,11 +1205,16 @@ class _Trials:
         buffer = _Capture(self.output_limit)
         with _spell_io(buffer, self.inputs):
             try:
-                func()
+                with _STEPS.limit(self.step_limit_per_trial, _trial_steps_message(self.step_limit_per_trial or 0)):
+                    func()
             except SpellFailure as failure:
                 record["message"] = str(failure) or "This trial failed."
             except CallLimitExceeded as exc:
                 record["message"] = exc.message
+            except TooManySteps as exc:
+                record["line"] = _spell_line(exc)
+                record["message"] = exc.message + ((" (It was busy on line " + str(record["line"]) + ".)")
+                                                   if record["line"] else "")
             except TooMuchOutput:
                 record["message"] = "Your spell printed far too much during this trial. Is a loop running forever?"
             except BaseException as exc:
@@ -1111,8 +1250,13 @@ def _internal_error(result, exc, where):
     return result
 
 
-def run_spell(source, trials="", inputs=None, output_limit=DEFAULT_OUTPUT_LIMIT):
-    """Run a spell and its trials. Always returns a JSON-friendly dict."""
+def run_spell(source, trials="", inputs=None, output_limit=DEFAULT_OUTPUT_LIMIT, step_limit=DEFAULT_STEP_LIMIT):
+    """Run a spell and its trials. Always returns a JSON-friendly dict.
+
+    step_limit caps loop iterations + function calls in the spell's main run and
+    in each trial (0 or None = no cap), so runaway loops end with a helpful
+    message and a line number instead of a timeout.
+    """
     result = {
         "status": "ran",
         "stdout": "",
@@ -1142,7 +1286,8 @@ def run_spell(source, trials="", inputs=None, output_limit=DEFAULT_OUTPUT_LIMIT)
         problem = None
         with _spell_io(capture, inputs):
             try:
-                exec(compiled, spell)
+                with _STEPS.limit(step_limit, _main_steps_message(step_limit or 0)):
+                    exec(compiled, spell)
             except SystemExit:
                 pass
             except BaseException as exc:
@@ -1156,7 +1301,7 @@ def run_spell(source, trials="", inputs=None, output_limit=DEFAULT_OUTPUT_LIMIT)
         if not trials.strip():
             return result
 
-        runner = _Trials(source, compiled, spell, result["stdout"], inputs, output_limit)
+        runner = _Trials(source, compiled, spell, result["stdout"], inputs, output_limit, step_limit)
         _register_source(TRIALS_FILE, trials)
         try:
             exec(compile(trials, TRIALS_FILE, "exec"), runner.namespace())
@@ -1175,14 +1320,15 @@ def run_spell(source, trials="", inputs=None, output_limit=DEFAULT_OUTPUT_LIMIT)
         sys.setrecursionlimit(recursion_limit)
 
 
-def run_spell_json(source, trials="", inputs_json="[]", output_limit=DEFAULT_OUTPUT_LIMIT):
+def run_spell_json(source, trials="", inputs_json="[]", output_limit=DEFAULT_OUTPUT_LIMIT,
+                   step_limit=DEFAULT_STEP_LIMIT):
     """JSON-in/JSON-out wrapper used by the browser worker."""
     try:
         inputs = json.loads(inputs_json or "[]")
     except ValueError:
         inputs = []
     try:
-        result = run_spell(source, trials, inputs, int(output_limit))
+        result = run_spell(source, trials, inputs, int(output_limit), int(step_limit or 0))
     except BaseException as exc:  # last line of defence: always answer
         result = _internal_error({"status": "internal-error", "stdout": "", "truncated": False, "error": None,
                                   "tests": [], "passed": 0, "total": 0}, exc, "the harness itself failed")

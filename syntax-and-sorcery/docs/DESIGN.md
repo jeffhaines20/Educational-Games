@@ -361,6 +361,12 @@ Standard library only. Deterministic output (fixed zip timestamps).
 4. `status` is `"passed"` when every trial passes, else `"failed"`. Broken trial code
    (fails to load, or registers no trials) → `"internal-error"`.
 
+**Step limits.** The spell's main run and each trial may take at most 2,000,000 *steps*
+(loop iterations + function calls inside the spell, counted with `sys.monitoring`), so
+a runaway loop ends in about a second with a friendly `TooManySteps` error and the
+line it was stuck on — instead of hitting the runner's timeout. The heaviest reference
+solution uses ~55,000 steps. Trials can set tighter limits with `step_limit()`.
+
 ### 6.1 Writing trials — the helper API
 
 Inside trial code these names are available:
@@ -383,6 +389,7 @@ Inside trial code these names are available:
 | `need_method(obj_or_cls, name)`, `need_attr(obj, name)`, `has_own_method(cls, name)` | OOP checks. |
 | `capture(func, *args, **kwargs)` | Call and return `(result, printed_text)`. |
 | `run_program(inputs=[])` | Re-run the *whole spell* in a fresh namespace with other inputs; returns its printed text. Crashes become friendly failures. Use this to test several input cases for programs without functions. |
+| `step_limit(limit, message=None)` | Context manager. Fails the trial if the spell takes more than `limit` *steps* (loop iterations + function calls inside the spell) within the block — e.g. to tell an O(n) answer from an O(n²) one. `with step_limit(20000) as steps: …; steps.used` |
 | `count_calls(name, limit=None, message=None)` | Context manager. Replaces the spell's top-level function `name` with a counting wrapper (recursive calls go through it too). Exceeding `limit` fails the trial with `message` (a default memoization hint otherwise). `with count_calls("fib", limit=300) as calls: …; calls.count` |
 | `uses_call(name)` | The spell calls a function/method named `name` somewhere (e.g. forbid `sorted`). |
 | `uses_syntax(kind)` | `"for"`, `"while"`, `"if"`, `"def"`, `"class"`, `"lambda"`, `"listcomp"`, `"dictcomp"`, `"setcomp"`, `"genexp"`, `"comprehension"`, `"fstring"`, `"import"`, `"try"`, `"with"`, `"return"`, `"yield"`, `"augassign"`, `"slice"`, `"assert"`, `"raise"`, `"break"`, `"continue"`, `"global"`, `"dict"`, `"list"`, `"set"`, `"tuple"`. |
@@ -488,6 +495,7 @@ A **RichText** value is a string (one paragraph) or an array of blocks:
 | `{ code: py`…` }` | a read-only, highlighted Python example |
 | `{ code: py`…`, output: "…" }` | an example plus the output it prints |
 | `{ output: "…" }` | an "expected output" panel |
+| `{ diagram: py`…` }` | a monospace text picture or table (stack drawings, mazes, DP tables), shown exactly as written with no Python colouring |
 | `{ list: ["…", "…"] }` | bullet list |
 | `{ steps: ["…", "…"] }` | numbered list |
 | `{ tip: "…" }` | 💡 tip box |

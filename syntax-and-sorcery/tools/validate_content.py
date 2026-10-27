@@ -18,6 +18,7 @@ Requires Node.js (to read the JavaScript content files). Standard library only.
 """
 
 import argparse
+import ast
 import concurrent.futures
 import json
 import os
@@ -31,7 +32,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 GAME = os.path.dirname(HERE)
 
 ID_RE = re.compile(r"^[a-z][a-z0-9]*(-[a-z0-9]+)+$")
-RICH_BLOCK_KEYS = ({"code"}, {"code", "output"}, {"output"}, {"list"}, {"steps"}, {"tip"}, {"warning"})
+RICH_BLOCK_KEYS = ({"code"}, {"code", "output"}, {"output"}, {"diagram"}, {"list"}, {"steps"}, {"tip"}, {"warning"})
 RUN_TIMEOUT = 20  # seconds per run (CPython); the browser limit is set per challenge
 SLOW_SECONDS = 1.5
 
@@ -68,7 +69,7 @@ def check_inline(text, where, problems):
         problems.append(where + ": odd number of ** (unclosed bold)")
 
 
-def check_rich(value, where, problems, required=True):
+def check_rich(value, where, problems, required=True, warnings=None):
     if value is None or value == "" or value == []:
         if required:
             problems.append(where + ": missing")
@@ -96,9 +97,15 @@ def check_rich(value, where, problems, required=True):
                         problems.append(here + ": " + key + " must be a string")
                     else:
                         check_inline(block[key], here + "." + key, problems)
-            for key in ("code", "output"):
+            for key in ("code", "output", "diagram"):
                 if key in block and not isinstance(block[key], str):
                     problems.append(here + ": " + key + " must be a string")
+            if isinstance(block.get("code"), str) and warnings is not None:
+                try:
+                    ast.parse(block["code"])
+                except SyntaxError:
+                    warnings.append(here + ": this code block is not valid Python; use { diagram: ... } for "
+                                    "text pictures and tables (it is shown without Python colouring)")
         else:
             problems.append(here + ": blocks must be strings or objects")
 
@@ -136,15 +143,15 @@ def check_structure(data):
                 problems.append(w + ": bad difficulty")
             if not isinstance(ch.get("concepts"), list) or not ch["concepts"]:
                 problems.append(w + ": concepts must be a non-empty list")
-            check_rich(ch.get("story"), w + ".story", problems)
-            check_rich(ch.get("task"), w + ".task", problems)
-            check_rich(ch.get("lesson"), w + ".lesson", problems)
+            check_rich(ch.get("story"), w + ".story", problems, warnings=warnings)
+            check_rich(ch.get("task"), w + ".task", problems, warnings=warnings)
+            check_rich(ch.get("lesson"), w + ".lesson", problems, warnings=warnings)
             hints = ch.get("hints")
             if not isinstance(hints, list) or not 2 <= len(hints) <= 4:
                 problems.append(w + ": hints must be a list of 2-4 items")
             else:
                 for i, hint in enumerate(hints):
-                    check_rich(hint, w + ".hints[" + str(i) + "]", problems)
+                    check_rich(hint, w + ".hints[" + str(i) + "]", problems, warnings=warnings)
             for key in ("starter", "solution", "tests"):
                 if not isinstance(ch.get(key), str) or (key != "starter" and not ch[key].strip()):
                     problems.append(w + ": " + key + " must be a non-empty string")
