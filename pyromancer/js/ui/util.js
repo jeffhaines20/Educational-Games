@@ -90,12 +90,82 @@
     if (el && el.parentNode) el.parentNode.removeChild(el);
   }
 
-  /** A decorative emoji (hidden from screen readers) or, with a label, an accessible image. */
+  var hasOwn = Object.prototype.hasOwnProperty;
+
+  /**
+   * An icon (an inline game-icons.net <svg>, see js/ui/icons.js). `value` is a piece of
+   * interface (SS.Icons.UI key: "cast", "hint"…), an icon name ("owl"), or a content emoji
+   * ("📜", "icon:owl"). Decorative (aria-hidden) unless opts.label is given.
+   * opts: { label, className } or a label string.
+   */
+  function icon(value, opts) {
+    if (value === null || value === undefined || value === "") return null;
+    opts = typeof opts === "string" ? { label: opts } : (opts || {});
+    var I = SS.Icons;
+    var key = String(value);
+    var cls = "icon" + (opts.className ? " " + opts.className : "");
+    if (I && I.svg) {
+      var name = I.UI && hasOwn.call(I.UI, key) ? I.UI[key] : I.nameFor(key);
+      var el = name ? I.svg(name, { label: opts.label, className: cls }) : null;
+      if (el) return el;
+    }
+    // A UI key or icon name without its icon: show nothing rather than the word.
+    if (/^[a-z][a-zA-Z0-9-]*$/.test(key)) return null;
+    // A content character nobody has drawn yet: keep it, as text.
+    return opts.label
+      ? h("span", { class: "emoji " + cls, role: "img", "aria-label": opts.label }, key)
+      : h("span", { class: "emoji " + cls, "aria-hidden": "true" }, key);
+  }
+
+  /** Kept for older call sites: same as icon(). */
   function emoji(ch, label) {
-    if (!ch) return null;
-    return label
-      ? h("span", { class: "emoji", role: "img", "aria-label": label }, ch)
-      : h("span", { class: "emoji", "aria-hidden": "true" }, ch);
+    return icon(ch, label ? { label: label } : null);
+  }
+
+  /** A chapter's icon (chosen per chapter in icons.js; else the chapter file's emoji). */
+  function chapterIcon(chapter, opts) {
+    var I = SS.Icons;
+    var name = I && chapter ? I.chapter(chapter.id) : null;
+    return (name && icon(name, opts)) || icon((chapter && chapter.icon) || "spellbook", opts);
+  }
+
+  /** A character's icon (Ada, Pip, Glitch, the Hydra, the narrator). */
+  function characterIcon(id, fallback, opts) {
+    var I = SS.Icons;
+    var name = I && id ? I.character(id) : null;
+    var chars = SS.CHARACTERS || {};
+    return (name && icon(name, opts)) || icon(fallback || (chars[id] && chars[id].icon) || "story", opts);
+  }
+
+  /**
+   * A painting from SS.Art as a decorative <img>, or null when that slot has no painting.
+   * If the file can't be loaded the <img> removes itself (and `has-art` from its parent),
+   * so whatever icon sits underneath shows instead.
+   */
+  function artImg(slot, className, alt) {
+    var a = SS.Art && SS.Art.get ? safe(function () { return SS.Art.get(slot); }, null) : null;
+    if (!a || !a.src) return null;
+    var img = h("img", {
+      class: "art" + (className ? " " + className : ""),
+      src: a.src, alt: alt || "",
+      width: a.width ? String(a.width) : null, height: a.height ? String(a.height) : null,
+      loading: "lazy", decoding: "async", draggable: "false"
+    });
+    img.addEventListener("error", function () {
+      var parent = img.parentNode;
+      remove(img);
+      if (parent && parent.classList) parent.classList.remove("has-art");
+    });
+    return img;
+  }
+
+  /** A round portrait: the character's painting when there is one, else their icon. */
+  function portrait(id, className, fallback) {
+    var box = h("span", { class: "portrait" + (className ? " " + className : ""), "aria-hidden": "true", dataset: { who: id || "narrator" } },
+      characterIcon(id, fallback));
+    var img = artImg("portrait-" + id, "portrait-art");
+    if (img) { box.appendChild(img); box.classList.add("has-art"); }
+    return box;
   }
 
   /** A <button type="button">. opts: { kind, icon, size, title, on..., class, label } */
@@ -117,7 +187,7 @@
     if (opts.onClick) props.on = { click: opts.onClick };
     if (opts.dataset) props.dataset = opts.dataset;
     return h("button", props,
-      opts.icon ? emoji(opts.icon) : null,
+      opts.icon ? icon(opts.icon, { className: "btn-icon" }) : null,
       label ? h("span", { class: "btn-label" }, label) : null,
       opts.kbd ? h("kbd", { class: "btn-kbd" }, opts.kbd) : null);
   }
@@ -216,13 +286,13 @@
 
   function difficultyInfo(difficulty) {
     var info = SS.DIFFICULTIES && SS.DIFFICULTIES[difficulty];
-    return info || { label: difficulty ? String(difficulty) : "Unknown", icon: "✦", xp: 0 };
+    return info || { label: difficulty ? String(difficulty) : "Unknown", icon: "icon:sparkles", xp: 0 };
   }
 
   function difficultyBadge(difficulty) {
     var info = difficultyInfo(difficulty);
     return h("span", { class: "badge diff diff-" + String(difficulty || "unknown") },
-      emoji(info.icon), h("span", null, info.label));
+      icon(info.icon, { className: "badge-icon" }), h("span", null, info.label));
   }
 
   var PY_WORDS = {};
@@ -420,6 +490,11 @@
     clear: clear,
     remove: remove,
     emoji: emoji,
+    icon: icon,
+    chapterIcon: chapterIcon,
+    characterIcon: characterIcon,
+    artImg: artImg,
+    portrait: portrait,
     button: button,
     uid: uid,
     debounce: debounce,

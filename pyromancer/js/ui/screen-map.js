@@ -48,6 +48,22 @@
     return d;
   }
 
+  /**
+   * A station's medallion: the progress ring around a round face that shows the area's
+   * painting (gold frame, soft vignette) or, without one, its engraved icon. Locked areas
+   * are dimmed and carry a padlock badge; mastered ones a gold check.
+   */
+  function medallionFor(iconEl, artSlot, fraction, complete, status, isCurrent, extraClass) {
+    var art = u.artImg(artSlot, "medallion-art");
+    var face = h("span", { class: "medallion-face" + (art ? " has-art" : ""), "aria-hidden": "true" }, iconEl, art);
+    return h("span", { class: "medallion" + (extraClass ? " " + extraClass : "") },
+      isCurrent ? h("span", { class: "here-pin", "aria-hidden": "true" }, "You are here") : null,
+      ringSvg(fraction, complete),
+      face,
+      status === "locked" ? h("span", { class: "medallion-lock", "aria-hidden": "true" }, u.icon("lock")) : null,
+      status === "complete" ? h("span", { class: "medallion-check", "aria-hidden": "true" }, "✓") : null);
+  }
+
   UI.screens.map = function () {
     var p = u.profile();
     var destroyed = false;
@@ -57,7 +73,7 @@
     var onResize = null;
 
     var overall = P(function () { return SS.Progress.overallStats(p); }, null) || { completed: 0, total: 0, stars: 0, maxStars: 0, xp: 0, maxXp: 0, percent: 0 };
-    var rank = P(function () { return SS.Progress.rankFor(overall.xp); }, null) || { title: "Novice", icon: "🌱", fraction: 0 };
+    var rank = P(function () { return SS.Progress.rankFor(overall.xp); }, null) || { title: "Novice", icon: "icon:candle-flame", fraction: 0 };
     var unlockAll = !!P(function () { return SS.Progress.unlockAll(p); }, false);
     var allDone = overall.total > 0 && overall.completed >= overall.total;
     var target = continueTarget(p);
@@ -67,7 +83,7 @@
       ? Math.max(0, rank.nextXp - overall.xp) + " XP to " + rank.nextTitle
       : "You have reached the highest rank!";
     var wizardCard = h("section", { class: "wizard-card panel", "aria-label": "Your wizard" },
-      h("div", { class: "wizard-portrait", "aria-hidden": "true" }, h("span", null, rank.icon || "🌱")),
+      h("div", { class: "wizard-portrait", "aria-hidden": "true" }, u.icon(rank.icon || "rank")),
       h("div", { class: "wizard-info" },
         h("p", { class: "wizard-card-name" }, p.wizardName || "Apprentice"),
         h("p", { class: "wizard-card-rank" }, (rank.title || "") + " · " + overall.xp + " XP"),
@@ -85,10 +101,10 @@
         on: { click: function () { app().go("challenge", { id: target.id }); } }
       },
         h("span", { class: "btn-label" }, h("span", { class: "cta-arrow", "aria-hidden": "true" }, "▶\uFE0E"), overall.completed ? "Continue: " : "Begin: ", h("strong", null, target.title)),
-        tChapter ? h("span", { class: "btn-sub" }, (tChapter.icon || "") + " " + tChapter.title) : null);
+        tChapter ? h("span", { class: "btn-sub" }, u.chapterIcon(tChapter, { className: "btn-sub-icon" }), " " + tChapter.title) : null);
     } else if (allDone) {
       cta = h("button", { type: "button", class: "btn btn-primary btn-lg btn-continue map-continue", on: { click: function () { app().go("certificate"); } } },
-        h("span", { class: "btn-label" }, u.emoji("🎓"), " View your certificate"),
+        h("span", { class: "btn-label" }, u.icon("certificate"), " View your certificate"),
         h("span", { class: "btn-sub" }, "Every spell mastered!"));
     }
 
@@ -99,14 +115,14 @@
     var broken = app().contentLoadErrors();
     if (broken.length) {
       notices.appendChild(h("div", { class: "banner banner-info", role: "status" },
-        h("span", { class: "banner-icon", "aria-hidden": "true" }, "🌫️"),
+        h("span", { class: "banner-icon", "aria-hidden": "true" }, u.icon("fog")),
         h("div", { class: "banner-text" },
           h("p", null, "Part of the academy is hidden in fog: ", broken.map(function (e, i) {
             return [i ? ", " : "", h("code", { class: "inline-code" }, e.file)];
           }), " didn't load. Everything else works normally — please tell your instructor."))));
     }
     if (unlockAll) {
-      notices.appendChild(h("p", { class: "free-practice-note" }, u.emoji("🗝️"), " Free practice is on: every chapter is open."));
+      notices.appendChild(h("p", { class: "free-practice-note" }, u.icon("key"), " Free practice is on: every chapter is open."));
     }
 
     // ---- trail -----------------------------------------------------------------
@@ -136,12 +152,9 @@
       var label = "Chapter " + (i + 1) + ": " + chapter.title + ". " + stateText + ". " + detail +
         (status !== "locked" ? " " + stats.stars + " of " + stats.maxStars + " stars." : "") +
         (isCurrent ? " You are here." : "");
-      var medallion = h("span", { class: "medallion" },
-        isCurrent ? h("span", { class: "here-pin", "aria-hidden": "true" }, "You are here") : null,
-        ringSvg(stats.total ? stats.completed / stats.total : 0, stats.complete),
-        h("span", { class: "medallion-icon", "aria-hidden": "true" }, chapter.icon || "✦"),
-        status === "locked" ? h("span", { class: "medallion-lock", "aria-hidden": "true" }, "🔒") : null,
-        status === "complete" ? h("span", { class: "medallion-check", "aria-hidden": "true" }, "✓") : null);
+      var medallion = medallionFor(u.chapterIcon(chapter, { className: "medallion-icon" }), "location-" + chapter.id,
+        stats.total ? stats.completed / stats.total : 0, stats.complete, status, isCurrent);
+      var banner = u.artImg("location-" + chapter.id, "station-banner-img");
       var btn = h("button", {
         type: "button",
         class: "station-btn",
@@ -151,7 +164,7 @@
           click: function () {
             if (status === "locked") {
               UI.sound.play("fail");
-              UI.dialogs.toast(prev ? "Master every spell in " + prev.title + " first." : "This area is still locked.", { icon: "🔒" });
+              UI.dialogs.toast(prev ? "Master every spell in " + prev.title + " first." : "This area is still locked.", { icon: "lock" });
               return;
             }
             UI.sound.play("click");
@@ -160,7 +173,8 @@
         }
       },
         medallion,
-        h("span", { class: "station-card" },
+        h("span", { class: "station-card" + (banner ? " has-banner" : "") },
+          banner ? h("span", { class: "station-banner", "aria-hidden": "true" }, banner) : null,
           h("span", { class: "station-eyebrow" }, "Chapter " + u.roman(i + 1),
             h("span", { class: "station-state state-" + status }, stateText)),
           h("span", { class: "station-title" }, chapter.title),
@@ -177,10 +191,8 @@
     });
 
     // The final station: the certificate.
-    var sanctumMedallion = h("span", { class: "medallion medallion-sanctum" },
-      ringSvg(overall.total ? overall.completed / overall.total : 0, allDone),
-      h("span", { class: "medallion-icon", "aria-hidden": "true" }, "🎓"),
-      allDone ? null : h("span", { class: "medallion-lock", "aria-hidden": "true" }, "🔒"));
+    var sanctumMedallion = medallionFor(u.icon("certificate", { className: "medallion-icon" }), "ending",
+      overall.total ? overall.completed / overall.total : 0, allDone, allDone ? "complete" : "locked", false, "medallion-sanctum");
     var sanctum = h("li", { class: "station station-sanctum station-" + (allDone ? "complete" : "locked") },
       h("button", {
         type: "button", class: "station-btn",
@@ -188,7 +200,7 @@
         "aria-disabled": allDone ? null : "true",
         on: {
           click: function () {
-            if (!allDone) { UI.dialogs.toast("Master every spell in the academy to earn your certificate.", { icon: "🎓" }); return; }
+            if (!allDone) { UI.dialogs.toast("Master every spell in the academy to earn your certificate.", { icon: "certificate" }); return; }
             app().go("certificate");
           }
         }
@@ -202,10 +214,13 @@
     list.appendChild(sanctum);
     if (allDone) reachIndex = stations.length - 1;
 
-    var trail = h("div", { class: "trail" }, trailSvg, list);
+    // An optional painted map behind the path.
+    var mapArt = u.artImg("map", "trail-art-img");
+    var trail = h("div", { class: "trail" + (mapArt ? " has-art" : "") },
+      mapArt ? h("div", { class: "trail-art", "aria-hidden": "true" }, mapArt) : null, trailSvg, list);
     if (!chapters.length) {
       trail = h("div", { class: "panel empty-state" },
-        h("p", null, u.emoji("🌫️"), " No chapters could be loaded. Please tell your instructor."));
+        h("p", null, u.icon("fog"), " No chapters could be loaded. Please tell your instructor."));
     }
 
     function drawTrail() {

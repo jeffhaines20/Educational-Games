@@ -7,9 +7,10 @@
  *                               rise, shake, portal, lightning, bloom, frost)
  *   burst(el), celebrate()      sparkles for dialogs, a star shower for big moments
  *
- * Particles are short-lived spans animated by CSS (see "Effects" in style.css).
- * With reduced motion (OS setting or the in-game setting) no particles are made:
- * the success state simply fades in.
+ * Particles are short-lived spans animated by CSS (see "Effects" in style.css): small
+ * CSS shapes (sparkles, stars, motes, shards) and tinted icons (flowers, snowflakes) —
+ * no emoji, so they look the same everywhere. With reduced motion (OS setting or the
+ * in-game setting) no particles are made: the success state simply fades in.
  */
 (function (global) {
   "use strict";
@@ -28,6 +29,22 @@
     layer.appendChild(el);
     return el;
   }
+
+  /** A particle drawn by CSS: "star4" (sparkle), "star5", "dot", "diamond", "shard" or "square". */
+  function shape(layer, cls, kind, vars) {
+    return particle(layer, "fx-shape shape-" + kind + " " + cls, null, vars);
+  }
+
+  /** A particle that is a tinted icon (flowers, snowflakes). */
+  function iconParticle(layer, cls, name, vars) {
+    var el = particle(layer, "fx-iconp " + cls, null, vars);
+    var pic = SS.Icons && SS.Icons.svg ? SS.Icons.svg(name) : null;
+    if (pic) el.appendChild(pic);
+    else el.classList.add("fx-shape", "shape-star4");
+    return el;
+  }
+
+  var SPARKS = ["star4", "star4", "star5", "dot"];
 
   function px(n) { return n.toFixed(1) + "px"; }
   function ms(n) { return Math.round(n) + "ms"; }
@@ -119,7 +136,7 @@
         .filter(function (l) { return l.trim() !== ""; })
         .slice(0, 3)
         .map(function (l) { return l.length > 38 ? l.slice(0, 37) + "…" : l; });
-      if (!lines.length) lines = [opts.caption ? String(opts.caption).slice(0, 38) : "✨"];
+      if (!lines.length && opts.caption) lines = [String(opts.caption).slice(0, 38)];
       var box = h("div", { class: "fx-manifest", "aria-hidden": "true" });
       var n = 0;
       lines.forEach(function (line) {
@@ -130,7 +147,7 @@
         box.appendChild(row);
       });
       for (var i = 0; i < 12; i++) {
-        particle(layer, "fx-spark", pick(["✦", "✧", "⋆"]), {
+        shape(layer, "fx-spark", pick(SPARKS), {
           "--dx": px(rnd(-150, 150)), "--dy": px(rnd(-60, 60)), "--delay": ms(rnd(100, 700)), "--size": px(rnd(9, 16))
         });
       }
@@ -140,7 +157,7 @@
     sparkle: function (layer) {
       for (var i = 0; i < 32; i++) {
         var angle = Math.random() * Math.PI * 2, dist = rnd(45, 150);
-        particle(layer, "fx-spark " + pick(["gold", "teal", "violet", "white"]), pick(["✦", "✧", "⋆", "✶", "•"]), {
+        shape(layer, "fx-spark " + pick(["gold", "teal", "violet", "white"]), pick(SPARKS), {
           "--dx": px(Math.cos(angle) * dist), "--dy": px(Math.sin(angle) * dist * 0.65),
           "--delay": ms(rnd(0, 280)), "--size": px(rnd(9, 22))
         });
@@ -176,7 +193,7 @@
     rise: function (layer) {
       layer.appendChild(h("span", { class: "fx-aura", "aria-hidden": "true" }));
       for (var i = 0; i < 26; i++) {
-        particle(layer, "fx-updraft " + pick(["gold", "white", "teal"]), pick(["✦", "✧", "·", "⋆"]), {
+        shape(layer, "fx-updraft " + pick(["gold", "white", "teal"]), pick(["star4", "dot", "dot", "star5"]), {
           "--x": pct(rnd(30, 70)), "--delay": ms(rnd(0, 1100)), "--size": px(rnd(9, 17)),
           "--rise": px(rnd(70, 130)), "--sway": px(rnd(-26, 26))
         });
@@ -187,7 +204,7 @@
     shake: function (layer) {
       for (var i = 0; i < 24; i++) {
         var angle = rnd(Math.PI * 1.02, Math.PI * 1.98), dist = rnd(70, 175);
-        particle(layer, "fx-debris", pick(["◆", "▪", "⬥", "✦", "▴"]), {
+        shape(layer, "fx-debris", pick(["diamond", "square", "shard", "shard", "star4"]), {
           "--dx": px(Math.cos(angle) * dist), "--dy": px(Math.sin(angle) * dist * 0.75),
           "--rot": rnd(-300, 300).toFixed(0) + "deg", "--delay": ms(rnd(460, 600)), "--size": px(rnd(10, 21))
         });
@@ -199,7 +216,7 @@
       layer.appendChild(h("span", { class: "fx-portal-ring", "aria-hidden": "true" }));
       layer.appendChild(h("span", { class: "fx-portal-core", "aria-hidden": "true" }));
       for (var i = 0; i < 18; i++) {
-        particle(layer, "fx-swirl", "✦", {
+        shape(layer, "fx-swirl", pick(["star4", "dot"]), {
           "--a": rnd(0, 360).toFixed(0) + "deg", "--r": px(rnd(40, 80)), "--delay": ms(rnd(0, 700)), "--size": px(rnd(7, 13))
         });
       }
@@ -225,7 +242,7 @@
       layer.appendChild(h("span", { class: "fx-impact", "aria-hidden": "true" }));
       for (var i = 0; i < 22; i++) {
         var angle = Math.random() * Math.PI * 2, dist = rnd(40, 120);
-        particle(layer, "fx-spark " + pick(["teal", "white"]), pick(["✦", "⚡", "✧"]), {
+        shape(layer, "fx-spark " + pick(["teal", "white"]), pick(["star4", "star4", "shard", "dot"]), {
           "--dx": px(Math.cos(angle) * dist), "--dy": px(Math.sin(angle) * dist * 0.6),
           "--delay": ms(rnd(300, 650)), "--size": px(rnd(10, 18))
         });
@@ -235,12 +252,16 @@
 
     bloom: function (layer) {
       var garden = h("div", { class: "fx-garden", "aria-hidden": "true" });
-      var flowers = ["🌸", "🌼", "🌷", "🌺", "🌿", "🌻"];
+      var flowers = [["lotus-flower", "pink"], ["daisy", "white"], ["flower-twirl", "violet"], ["flower-emblem", "rose"], ["leaf-swirl", "green"], ["sunflower", "gold"]];
       for (var i = 0; i < 9; i++) {
         var x = 8 + i * 10.5 + rnd(-2.5, 2.5), height = rnd(24, 62);
         var vars = { "--x": pct(x), "--h": px(height), "--delay": ms(i * 90 + rnd(0, 60)) };
         garden.appendChild(h("span", { class: "fx-stem", style: vars }));
-        garden.appendChild(h("span", { class: "fx-flower", style: vars }, pick(flowers)));
+        var f = pick(flowers);
+        var bloom = h("span", { class: "fx-flower tint-" + f[1], style: vars });
+        var pic = SS.Icons && SS.Icons.svg ? SS.Icons.svg(f[0]) : null;
+        if (pic) bloom.appendChild(pic);
+        garden.appendChild(bloom);
       }
       for (var j = 0; j < 10; j++) {
         particle(layer, "fx-petal", "", {
@@ -253,10 +274,13 @@
     frost: function (layer) {
       layer.appendChild(h("span", { class: "fx-frost-veil", "aria-hidden": "true" }));
       for (var i = 0; i < 20; i++) {
-        particle(layer, "fx-crystal", pick(["❄", "❅", "❆", "✳", "✧"]), {
+        var flake = pick(["snowflake-1", "snowflake-2", "snowflake-2", null]);
+        var vars = {
           "--x": pct(rnd(4, 96)), "--y": pct(rnd(6, 90)), "--delay": ms(rnd(0, 800)),
           "--size": px(rnd(11, 26)), "--rot": rnd(-120, 120).toFixed(0) + "deg"
-        });
+        };
+        if (flake) iconParticle(layer, "fx-crystal", flake, vars);
+        else shape(layer, "fx-crystal", "star4", vars);
       }
       return { duration: 2000 };
     }
@@ -300,7 +324,7 @@
     }
     for (var j = 0; j < 8; j++) {
       var angle = rnd(Math.PI * 1.1, Math.PI * 1.9), dist = rnd(30, 70);
-      particle(layer, "fx-dud", "✦", { "--dx": px(Math.cos(angle) * dist), "--dy": px(Math.sin(angle) * dist), "--delay": ms(rnd(0, 150)), "--size": px(rnd(8, 13)) });
+      shape(layer, "fx-dud", pick(["star4", "dot"]), { "--dx": px(Math.cos(angle) * dist), "--dy": px(Math.sin(angle) * dist), "--delay": ms(rnd(0, 150)), "--size": px(rnd(7, 12)) });
     }
     setTimeout(function () { u.remove(layer); stageEl.classList.remove("fx-fizzle"); }, 1400);
   }
@@ -312,7 +336,7 @@
     el.appendChild(layer);
     for (var i = 0; i < (count || 18); i++) {
       var angle = Math.random() * Math.PI * 2, dist = rnd(40, 110);
-      particle(layer, "fx-spark " + pick(["gold", "teal", "white"]), pick(["✦", "✧", "⋆"]), {
+      shape(layer, "fx-spark " + pick(["gold", "teal", "white"]), pick(SPARKS), {
         "--dx": px(Math.cos(angle) * dist), "--dy": px(Math.sin(angle) * dist),
         "--delay": ms(rnd(0, 200)), "--size": px(rnd(9, 18))
       });
@@ -329,7 +353,7 @@
     var host = overlays.length ? overlays[overlays.length - 1] : document.body;
     host.insertBefore(layer, host.firstChild);
     for (var i = 0; i < 46; i++) {
-      particle(layer, "fx-falling " + pick(["gold", "teal", "violet", "white"]), pick(["✦", "✧", "★", "⋆"]), {
+      shape(layer, "fx-falling " + pick(["gold", "teal", "violet", "white"]), pick(["star4", "star5", "star5", "dot"]), {
         "--x": pct(rnd(0, 100)), "--delay": ms(rnd(0, 1300)), "--size": px(rnd(10, 22)),
         "--drift": px(rnd(-60, 60)), "--dur": ms(rnd(1800, 2800))
       });
@@ -341,28 +365,41 @@
   // A challenge's scene panel
   // --------------------------------------------------------------------------
 
-  function createStage(scene) {
+  /**
+   * A challenge's scene panel. opts.backdrop: an SS.Art slot (the chapter's location)
+   * shown, dimmed, behind the scene icon and its effects when that painting exists.
+   */
+  function createStage(scene, opts) {
     scene = scene || {};
+    opts = opts || {};
     var effect = EFFECT_NAMES.indexOf(scene.effect) >= 0 ? scene.effect : "sparkle";
-    var glyph = h("span", { class: "scene-glyph" }, scene.icon || "✨");
+    var glyph = h("span", { class: "scene-glyph" });
     var caption = h("p", { class: "scene-caption" });
-    var el = h("div", { class: "scene-stage scene-" + effect, "aria-hidden": "true" },
+    var backdrop = opts.backdrop ? u.artImg(opts.backdrop, "scene-backdrop-img") : null;
+    var el = h("div", { class: "scene-stage scene-" + effect + (backdrop ? " has-art" : ""), "aria-hidden": "true" },
+      backdrop ? h("div", { class: "scene-backdrop" }, backdrop) : null,
       h("div", { class: "scene-glow" }),
       h("div", { class: "scene-pedestal" }),
       h("div", { class: "scene-actor" }, h("div", { class: "scene-icon" }, glyph)),
       caption);
     var kept = null;
 
+    function setGlyph(value) {
+      u.clear(glyph);
+      glyph.appendChild(u.icon(value || "cast", { className: "scene-svg" }));
+    }
+    setGlyph(scene.icon);
+
     function reset() {
       el.classList.remove("is-success", "has-keep", "keep-" + effect);
-      glyph.textContent = scene.icon || "✨";
+      setGlyph(scene.icon);
       caption.textContent = "";
       if (kept) { u.remove(kept); kept = null; }
     }
 
     function showSuccess() {
       el.classList.add("is-success");
-      glyph.textContent = scene.successIcon || scene.icon || "✨";
+      setGlyph(scene.successIcon || scene.icon);
       caption.textContent = scene.successText || "";
     }
 

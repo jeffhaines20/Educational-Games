@@ -21,11 +21,15 @@
  *   drafts        a draft typed just before leaving the screen is kept
  *   damaged-slot  an unreadable save slot is shown as damaged and can be deleted
  *   scorm-missing the SCORM package can't reach its LMS → a lasting warning, title screen included
+ *   paintings     with paintings listed in SS.ART the map, chapter, scene and story show them
+ *                 (a painting that fails to load falls back to its icon); without, icons only
  */
 "use strict";
 const fs = require("fs");
 const path = require("path");
+const vm = require("vm");
 const { openGame, waitForPython } = require("./lib");
+const { GAME } = require("../dev_server");
 
 const args = process.argv.slice(2);
 const SHOTS = args.indexOf("--shots") >= 0 ? path.resolve(args[args.indexOf("--shots") + 1]) : null;
@@ -504,6 +508,81 @@ SCENARIOS["scorm-missing"] = async function () {
     await page.waitForSelector(".modal >> text=couldn't connect to your course");
     check(true, "the top bar warning explains the problem");
     await shot(page, "scorm-missing");
+  } finally { await game.close(); }
+};
+
+SCENARIOS.paintings = async function () {
+  const LOCATIONS = ["tower", "hall", "circle", "library", "workshop", "labyrinth", "hydra"];
+  // The repository's manifest only lists paintings that exist.
+  const sandbox = { window: {} };
+  vm.runInNewContext(fs.readFileSync(path.join(GAME, "js", "ui", "art-manifest.js"), "utf8"), sandbox);
+  const listed = Object.entries(sandbox.window.SS.ART || {});
+  const missing = listed.filter(([, entry]) => !fs.existsSync(path.join(GAME, entry.src)));
+  check(missing.length === 0, "every painting in js/ui/art-manifest.js exists (" + listed.length + " listed" +
+    (missing.length ? "; missing: " + missing.map(([slot]) => slot).join(", ") : "") + ")");
+
+  // Icons only: an empty manifest, whatever paintings the repository has.
+  let game = await openGame({ goto: false });
+  let page = game.page;
+  try {
+    await page.route("**/js/ui/art-manifest.js", (r) => r.fulfill({ contentType: "text/javascript",
+      body: "(function (g) { var SS = (g.SS = g.SS || {}); SS.ART = {}; })(window);" }));
+    await page.goto(game.url);
+    await newGame(page, "Ivy");
+    const plain = await page.evaluate(() => ({
+      stations: document.querySelectorAll(".trail-list .station").length,
+      paintings: document.querySelectorAll(".trail img").length,
+      icons: [...document.querySelectorAll(".medallion-face svg.gi")].filter((s) => getComputedStyle(s).visibility !== "hidden").length
+    }));
+    check(plain.paintings === 0 && plain.icons === plain.stations, "without paintings every map station shows its icon (" + JSON.stringify(plain) + ")");
+  } finally { await game.close(); }
+
+  // Painted: a manifest listing every location (the files are served from the title art);
+  // the Hall's file is missing, so it must fall back to its icon.
+  game = await openGame({ goto: false });
+  page = game.page;
+  try {
+    const entries = LOCATIONS.map((id) => '"location-' + id + '": { src: "assets/art/location-' + id + '.webp", width: 1024, height: 683 }');
+    const manifest = "(function (g) { var SS = (g.SS = g.SS || {}); SS.ART = {" + entries.join(", ") + "}; })(window);";
+    const picture = fs.readFileSync(path.join(GAME, "assets", "pyromancer-title-1024.webp"));
+    await page.route("**/js/ui/art-manifest.js", (r) => r.fulfill({ contentType: "text/javascript", body: manifest }));
+    await page.route("**/assets/art/*.webp", (r) => (/location-hall/.test(r.request().url())
+      ? r.fulfill({ status: 404, body: "missing" }) : r.fulfill({ contentType: "image/webp", body: picture })));
+    await page.goto(game.url);
+    await newGame(page, "Ivy");
+    await page.evaluate(async () => {   // lazy images: bring each station into view once
+      for (const st of document.querySelectorAll(".trail-list .station")) { st.scrollIntoView(); await new Promise((r) => setTimeout(r, 40)); }
+      window.scrollTo(0, 0);
+    });
+    await page.waitForFunction(() => [...document.querySelectorAll(".medallion-art")].every((i) => i.complete), null, { timeout: 10000 });
+    const painted = await page.evaluate(() => {
+      const imgs = [...document.querySelectorAll(".medallion-face .medallion-art")];
+      const hall = document.querySelector('.station[data-chapter="hall"] .medallion-face');
+      return {
+        medallions: imgs.length,
+        loaded: imgs.filter((i) => i.naturalWidth > 0).length,
+        decorative: imgs.every((i) => i.getAttribute("alt") === "" && i.getAttribute("loading") === "lazy" && i.getAttribute("width") && i.getAttribute("height")),
+        banners: document.querySelectorAll(".station-banner img").length,
+        hallIcon: !!hall && !hall.classList.contains("has-art") && !hall.querySelector("img") && getComputedStyle(hall.querySelector("svg.gi")).visibility !== "hidden"
+      };
+    });
+    check(painted.medallions === 6 && painted.loaded === 6, "the map shows the paintings in the station medallions (" + JSON.stringify(painted) + ")");
+    check(painted.decorative, "paintings are decorative images (alt=\"\", lazy, with width and height)");
+    check(painted.banners === 6, "painted stations get a painted banner on their card");
+    check(painted.hallIcon, "a painting that can't be loaded falls back to the station's icon");
+    await shot(page, "paintings-map");
+    await page.click(".trail-list .station:nth-child(1) .station-btn");
+    await page.waitForSelector(".chapter-screen");
+    await page.waitForSelector(".modal-dialogue .dlg-banner img", { timeout: 5000 }).catch(() => null);
+    check(!!(await page.$(".modal-dialogue .dlg-banner img")), "the chapter's story opens with the area's painting");
+    await page.click(".modal-dialogue .dlg-next");
+    await page.waitForFunction(() => !document.querySelector(".modal-overlay"));
+    check(!!(await page.$(".chapter-hero.has-art .chapter-hero-art img")), "the chapter header shows the area's painting");
+    await page.click(".challenge-card >> nth=0");
+    await page.waitForSelector(".challenge-screen");
+    check(!!(await page.$(".scene-stage.has-art .scene-backdrop img")), "the challenge scene uses the area's painting as its backdrop");
+    check(await page.evaluate(() => !!document.querySelector(".scene-stage .scene-icon svg.gi")), "…with the scene's icon in front of it");
+    check(game.errors.filter((e) => !/404|Failed to load resource/i.test(e)).length === 0, "no console errors with paintings (" + game.errors.join(" | ") + ")");
   } finally { await game.close(); }
 };
 

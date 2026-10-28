@@ -101,6 +101,39 @@ async function newGame(page, name) {
   await page.waitForSelector(".story-screen");
 }
 
+/**
+ * Pictures must be icons, not emoji: no pictorial emoji (Extended_Pictographic) in visible
+ * text — the typographic marks ★ ☆ ✓ ✗ ✕ → ← ▶ are allowed, and code is ignored — and some
+ * visible svg.gi icons.
+ */
+async function pictures(page) {
+  return page.evaluate(() => {
+    const ALLOWED = new Set(["★", "☆", "✓", "✗", "✕", "→", "←", "▶"]);
+    const roots = [document.querySelector(".topbar:not([hidden])"), document.getElementById("main"),
+      document.getElementById("modal-root"), document.getElementById("toast-root")].filter(Boolean);
+    const shown = (el) => el && (el.checkVisibility ? el.checkVisibility({ visibilityProperty: true }) : el.getClientRects().length > 0);
+    const emoji = new Set();
+    let icons = 0;
+    for (const root of roots) {
+      const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+      let n;
+      while ((n = walker.nextNode())) {
+        const el = n.parentElement;
+        if (!el || el.closest(".CodeMirror, pre, code, textarea, .sr-only") || !shown(el)) continue;
+        for (const m of n.textContent.matchAll(/\p{Extended_Pictographic}/gu)) if (!ALLOWED.has(m[0])) emoji.add(m[0]);
+      }
+      root.querySelectorAll("svg.gi").forEach((svg) => { if (shown(svg)) icons++; });
+    }
+    return { emoji: [...emoji], icons };
+  });
+}
+
+async function checkPictures(page, where) {
+  const r = await pictures(page);
+  check(r.emoji.length === 0, where + " shows no emoji (" + r.emoji.join(" ") + ")");
+  check(r.icons > 0, where + " draws its pictures as icons (" + r.icons + ")");
+}
+
 /** Click through a story dialog (chapter intro) until it closes. */
 async function closeStory(page) {
   for (let i = 0; i < 12 && (await page.$(".modal-dialogue")); i++) {
@@ -207,6 +240,7 @@ async function fullFlow() {
       check(/Master Python\. Unleash the Magic\./.test(await page.textContent(".title-screen")), "the tagline is in the page");
       check(await page.isVisible("text=I have a Save Scroll (save code or file)"), "a new player can bring a Save Scroll");
       await checkTitleArt(page, "1280x860");
+      await checkPictures(page, "the title screen");
       await shot(page, "flow-01-title");
     });
 
@@ -227,6 +261,8 @@ async function fullFlow() {
       check(lockedSecond === "true", "chapter 2 starts locked");
       check(await page.$eval(".trail-glow", (p) => (p.getAttribute("d") || "").length > 0), "the trail path is drawn");
       check(await page.isVisible(".topbar .wizard-chip"), "top bar shows the wizard");
+      await checkPictures(page, "the map");
+      check((await page.$$(".medallion-face svg.gi")).length === chapterCount + 1, "every map station shows its icon (no paintings in this build)");
       await shot(page, "flow-03-map");
       await page.click(".trail-list .station:nth-child(1) .station-btn");
       await page.waitForSelector(".chapter-screen");
@@ -234,9 +270,11 @@ async function fullFlow() {
 
     await step(page, "chapter intro and challenge list", async () => {
       await page.waitForSelector(".modal-dialogue .dlg-next", { timeout: 5000 });
+      await checkPictures(page, "the chapter's story dialog");
       await shot(page, "flow-04-chapter-intro");
       await page.click(".modal-dialogue .dlg-next");
       await waitForModalGone(page);
+      await checkPictures(page, "the chapter screen");
       const cards = await page.$$(".challenge-card");
       const total = await page.evaluate(() => SS.content.chapters[0].challenges.length);
       check(cards.length === total, "chapter lists all its challenges");
@@ -250,6 +288,7 @@ async function fullFlow() {
     await step(page, "first-time coach note", async () => {
       check(await page.isVisible(".coach"), "the very first challenge shows the how-to-cast note");
       check(await page.isVisible(".lesson[open]"), "the Spell Scroll is open on a first visit");
+      await checkPictures(page, "the challenge screen");
       await shot(page, "flow-05-challenge");
       await page.click(".coach-ok");
       check(!(await page.$(".coach")), "the coach note can be dismissed");
@@ -271,6 +310,7 @@ async function fullFlow() {
       check(marked === 1, "the error line is highlighted in the editor");
       await page.waitForFunction(() => /error/i.test(document.getElementById("sr-live").textContent));
       check(true, "the result is announced through aria-live");
+      await checkPictures(page, "an error result");
       await shot(page, "flow-06-error");
       // The line link jumps to the editor.
       await page.click(".results .line-link");
@@ -303,6 +343,7 @@ async function fullFlow() {
       check(stars === 2, "success dialog shows 2 stars after one hint (got " + stars + ")");
       check(/\+7 XP/.test(await page.textContent(".modal-success")), "success dialog shows the XP gained");
       check(await page.isVisible(".modal-success >> text=Next spell"), "success dialog offers the next spell");
+      await checkPictures(page, "the Spell Mastered dialog");
       await shot(page, "flow-08-success");
       await page.click(".modal-success >> text=Stay here");
       await waitForModalGone(page);
@@ -383,6 +424,7 @@ async function fullFlow() {
       await page.click(".practice-screen .btn-cast");
       await page.waitForSelector('.practice-screen .results[data-status="ran"]', { timeout: 30000 });
       check(/Welcome, Ada!/.test(await page.textContent(".practice-screen .pool-output")), "practice runs code with input()");
+      await checkPictures(page, "the Practice Chamber");
       await shot(page, "flow-09-practice");
     });
 
@@ -390,6 +432,7 @@ async function fullFlow() {
       await page.click('.tool-btn[data-tool="grimoire"]');
       await page.waitForSelector(".grimoire-screen");
       check(/1 \/ /.test(await page.textContent(".stat-tiles")), "the Grimoire shows the number of spells mastered");
+      await checkPictures(page, "the Grimoire");
       await page.click(".spell-row.done .spell-code summary");
       check(/Hello world/.test(await page.textContent(".spell-row.done .code-block")), "the Grimoire shows the player's spell");
       await page.click("text=Print Progress Report");
@@ -420,6 +463,9 @@ async function fullFlow() {
     await step(page, "Settings", async () => {
       await page.click('.tool-btn[data-tool="settings"]');
       await page.waitForSelector(".modal-settings");
+      await checkPictures(page, "the Settings dialog");
+      await page.click(".modal-settings .about summary");
+      check(/game-icons\.net/.test(await page.textContent(".modal-settings .credits")), "the credits name the icon set (CC BY 3.0)");
       await shot(page, "flow-11-settings");
       await page.click(".modal-settings .setting-row:has-text('Sound effects') .switch-input");
       check((await page.getAttribute(".topbar .sound-toggle", "aria-pressed")) === "false", "turning sound off updates the top bar toggle");
@@ -449,6 +495,7 @@ async function fullFlow() {
       await page.waitForSelector(".modal-savescroll");
       const code = await page.inputValue(".modal-savescroll textarea[readonly]");
       check(/^PYRO1\./.test(code), "the Save Scroll shows an export code (" + code.slice(0, 8) + "…)");
+      await checkPictures(page, "the Save Scroll dialog");
       const [download] = await Promise.all([
         page.waitForEvent("download", { timeout: 10000 }),
         page.click(".modal-savescroll >> text=Download save file")

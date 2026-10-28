@@ -30,7 +30,8 @@
     if (!panels.length) return Promise.resolve("empty");
     return UI.dialogs.story(panels, {
       title: "Chapter " + u.roman(u.chapterNumber(chapter)) + ": " + chapter.title,
-      finishLabel: "Let's begin"
+      finishLabel: "Let's begin",
+      banner: "location-" + chapter.id
     });
   }
 
@@ -42,7 +43,7 @@
     if (next) {
       panels.push({
         speaker: "narrator",
-        icon: next.icon || "✦",
+        icon: SS.Icons && SS.Icons.chapter(next.id) ? "icon:" + SS.Icons.chapter(next.id) : (next.icon || "spellbook"),
         name: "New area unlocked!",
         role: "Chapter " + u.roman(u.chapterNumber(next)),
         text: ["**" + next.title + "**" + (next.subtitle ? " — *" + next.subtitle + "*" : ""), "Its gates now stand open on the academy map."]
@@ -53,7 +54,8 @@
     UI.effects.celebrate();
     return UI.dialogs.story(panels, {
       title: "Chapter complete: " + chapter.title,
-      finishLabel: next ? "Onward!" : "Continue"
+      finishLabel: next ? "Onward!" : "Continue",
+      banner: "location-" + (next ? next.id : chapter.id)
     }).then(function () { return next; });
   }
 
@@ -83,18 +85,21 @@
     var destroyed = false;
 
     var storyBtn = u.button(stats.complete && chapter.outro ? "Read the chapter's story" : "Read Ada's welcome", {
-      kind: "ghost", size: "sm", icon: "📜",
+      kind: "ghost", size: "sm", icon: "story",
       onClick: function () {
         intro(chapter).then(function () {
           if (stats.complete && chapter.outro && !destroyed) {
-            UI.dialogs.story(UI.dialogs.toPanels(chapter.outro, "ada"), { title: "Chapter complete: " + chapter.title, finishLabel: "Close" });
+            UI.dialogs.story(UI.dialogs.toPanels(chapter.outro, "ada"), { title: "Chapter complete: " + chapter.title, finishLabel: "Close", banner: "location-" + chapter.id });
           }
         });
       }
     });
 
-    var hero = h("header", { class: "chapter-hero panel" },
-      h("div", { class: "chapter-medallion", "aria-hidden": "true" }, chapter.icon || "✦"),
+    // The area's painting (when there is one) glows behind the heading; the medallion keeps its icon.
+    var heroArt = u.artImg("location-" + chapter.id, "chapter-hero-img");
+    var hero = h("header", { class: "chapter-hero panel" + (heroArt ? " has-art" : "") },
+      heroArt ? h("div", { class: "chapter-hero-art", "aria-hidden": "true" }, heroArt) : null,
+      h("div", { class: "chapter-medallion", "aria-hidden": "true" }, u.chapterIcon(chapter)),
       h("div", { class: "chapter-hero-text" },
         h("p", { class: "eyebrow" }, "Chapter " + u.roman(number)),
         h("h1", { class: "screen-title chapter-title" }, chapter.title),
@@ -110,7 +115,7 @@
     var body;
     if (!unlocked) {
       body = h("div", { class: "panel locked-panel" },
-        h("p", { class: "locked-icon", "aria-hidden": "true" }, "🔒"),
+        h("p", { class: "locked-icon", "aria-hidden": "true" }, u.icon("lock")),
         h("h2", null, "This area is still sealed"),
         h("p", null, prev ? "Master every spell in " : "Finish the earlier chapters first.", prev ? h("strong", null, prev.title) : null, prev ? " to break the seal." : null),
         prev ? u.button("Go to " + prev.title, { kind: "primary", icon: prev.icon, onClick: function () { app().go("chapter", { id: prev.id }); } }) : null);
@@ -123,7 +128,7 @@
         var diff = u.difficultyInfo(c.difficulty);
         var side;
         if (status === "done") side = h("span", { class: "cc-status" }, u.stars(st.stars), h("span", { class: "cc-status-text" }, "Mastered"));
-        else if (status === "locked") side = h("span", { class: "cc-status" }, h("span", { class: "cc-lock", "aria-hidden": "true" }, "🔒"), h("span", { class: "cc-status-text" }, "Locked"));
+        else if (status === "locked") side = h("span", { class: "cc-status" }, h("span", { class: "cc-lock", "aria-hidden": "true" }, u.icon("lock")), h("span", { class: "cc-status-text" }, "Locked"));
         else if (status === "progress") side = h("span", { class: "cc-status" }, h("span", { class: "cc-dot", "aria-hidden": "true" }), h("span", { class: "cc-status-text" }, "In progress"));
         else side = h("span", { class: "cc-status" }, h("span", { class: "cc-new" }, "New"));
         var label = (i + 1) + ". " + c.title + ". " + diff.label + "." +
@@ -137,7 +142,7 @@
             on: {
               click: function () {
                 if (status === "locked") {
-                  UI.dialogs.toast("Master the spell before this one to unlock it.", { icon: "🔒" });
+                  UI.dialogs.toast("Master the spell before this one to unlock it.", { icon: "lock" });
                   return;
                 }
                 app().go("challenge", { id: c.id });
@@ -157,11 +162,11 @@
 
     var el = h("section", { class: "chapter-screen" },
       h("nav", { class: "crumbs", "aria-label": "Breadcrumb" },
-        h("button", { type: "button", class: "crumb", on: { click: function () { app().go("map"); } } }, u.emoji("🗺️"), " Academy map"),
+        h("button", { type: "button", class: "crumb", on: { click: function () { app().go("map"); } } }, u.icon("map"), " Academy map"),
         h("span", { class: "crumb-sep", "aria-hidden": "true" }, "›"),
         h("span", { class: "crumb-current", "aria-current": "page" }, chapter.title)),
       hero,
-      stats.complete ? h("p", { class: "chapter-complete-ribbon" }, u.emoji("🏆"), " Chapter mastered! Replay any spell to practise.") : null,
+      stats.complete ? h("p", { class: "chapter-complete-ribbon" }, u.icon("chapterDone"), " Chapter mastered! Replay any spell to practise.") : null,
       body);
 
     return {

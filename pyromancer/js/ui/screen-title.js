@@ -26,22 +26,28 @@
   function rankIconFor(title) {
     var ranks = (SS.Progress && SS.Progress.RANKS) || [];
     for (var i = 0; i < ranks.length; i++) if (ranks[i].title === title) return ranks[i].icon;
-    return "✦";
+    return "rank";
   }
 
-  function summaryLine(data) {
-    if (!data) return "";
+  /** "[rank icon] Apprentice · 5 of 51 spells" for a Continue button. */
+  function summaryLine(rankIcon, rankTitle, completed, total) {
     var parts = [];
-    if (data.rankTitle) parts.push((data.rankIcon || rankIconFor(data.rankTitle)) + " " + data.rankTitle);
-    if (typeof data.completed === "number" && typeof data.total === "number") parts.push(data.completed + " of " + data.total + " spells");
-    return parts.join(" · ");
+    if (rankTitle) parts.push(rankTitle);
+    if (typeof completed === "number" && typeof total === "number") parts.push(completed + " of " + total + " spells");
+    if (!parts.length) return null;
+    return [rankTitle ? u.icon(rankIcon || rankIconFor(rankTitle), { className: "btn-sub-icon" }) : null, (rankTitle ? " " : "") + parts.join(" · ")];
+  }
+
+  function slotSummary(data) {
+    return data ? summaryLine(data.rankIcon, data.rankTitle, data.completed, data.total) : null;
   }
 
   function soundToggle() {
     var btn = h("button", { type: "button", class: "icon-btn title-sound" });
     function sync() {
       var on = app().soundOn();
-      btn.textContent = on ? "🔊" : "🔇";
+      u.clear(btn);
+      btn.appendChild(u.icon(on ? "soundOn" : "soundOff"));
       btn.setAttribute("aria-label", "Sound");
       btn.setAttribute("aria-pressed", on ? "true" : "false");
       btn.title = on ? "Sound is on" : "Sound is off";
@@ -76,21 +82,21 @@
         var xp = u.safe(function () { return SS.Progress.totalXp(p); }, 0);
         var rank = u.safe(function () { return SS.Progress.rankFor(xp); }, null);
         var stats = u.safe(function () { return SS.Progress.overallStats(p); }, null);
-        var sub = (rank ? rank.icon + " " + rank.title : "") + (stats ? " · " + stats.completed + " of " + stats.total + " spells" : "");
+        var sub = summaryLine(rank && rank.icon, rank && rank.title, stats ? stats.completed : null, stats ? stats.total : null);
         actions.appendChild(continueButton(p.wizardName, sub, function () { app().enterGame(); }));
       } else {
-        actions.appendChild(u.button("Begin your apprenticeship", { kind: "primary", size: "lg", icon: "✨", onClick: function () { app().newGame(0); } }));
+        actions.appendChild(u.button("Begin your apprenticeship", { kind: "primary", size: "lg", icon: "newGame", onClick: function () { app().newGame(0); } }));
       }
     } else if (last) {
-      actions.appendChild(continueButton(last.data.wizardName || "Apprentice", summaryLine(last.data), function () { app().loadSlot(last.slot); }));
-      actions.appendChild(u.button("Choose another save", { kind: "ghost", icon: "📚", onClick: function () { app().go("slots"); } }));
+      actions.appendChild(continueButton(last.data.wizardName || "Apprentice", slotSummary(last.data), function () { app().loadSlot(last.slot); }));
+      actions.appendChild(u.button("Choose another save", { kind: "ghost", icon: "slots", onClick: function () { app().go("slots"); } }));
     } else if (anySaved) {
-      actions.appendChild(u.button("Choose your save", { kind: "primary", size: "lg", icon: "📚", onClick: function () { app().go("slots"); } }));
+      actions.appendChild(u.button("Choose your save", { kind: "primary", size: "lg", icon: "slots", onClick: function () { app().go("slots"); } }));
     } else {
       var first = slots[0] ? slots[0].slot : 0;
-      actions.appendChild(u.button("Begin your apprenticeship", { kind: "primary", size: "lg", icon: "✨", onClick: function () { app().newGame(first); } }));
+      actions.appendChild(u.button("Begin your apprenticeship", { kind: "primary", size: "lg", icon: "newGame", onClick: function () { app().newGame(first); } }));
       actions.appendChild(u.button("I have a Save Scroll (save code or file)", {
-        kind: "ghost", icon: "📜", class: "btn-savescroll",
+        kind: "ghost", icon: "saveScroll", class: "btn-savescroll",
         onClick: function () { UI.panels.saveScroll({ chooseSlot: true }); }
       }));
     }
@@ -136,7 +142,7 @@
   function aboutDialog() {
     var scorm = app().isScorm();
     UI.dialogs.open({
-      title: "About " + u.GAME_NAME, icon: "🔥", size: "md", body: h("div", { class: "about-standalone" },
+      title: "About " + u.GAME_NAME, icon: "brand", size: "md", body: h("div", { class: "about-standalone" },
         h("p", null, h("strong", null, u.GAME_NAME), " teaches Python, data structures & algorithms and object-oriented programming. You are an apprentice at Coilspire Academy; every spell is real Python code, checked by trials."),
         h("ul", { class: "about-list" },
           scorm
@@ -180,7 +186,7 @@
       var headingId = u.uid("slot");
       return h("article", { class: "slot-card filled panel", "aria-labelledby": headingId },
         h("p", { class: "slot-num" }, "Slot " + (entry.index + 1)),
-        h("div", { class: "slot-portrait", "aria-hidden": "true" }, d.rankIcon || rankIconFor(d.rankTitle)),
+        h("div", { class: "slot-portrait", "aria-hidden": "true" }, u.icon(d.rankIcon || rankIconFor(d.rankTitle) || "rank")),
         h("h2", { class: "slot-name", id: headingId }, d.wizardName || "Apprentice"),
         h("p", { class: "slot-rank" }, d.rankTitle || ""),
         u.progressBar(fraction, "Spells mastered"),
@@ -192,10 +198,10 @@
         h("div", { class: "slot-actions" },
           u.button("Continue ▸", { kind: "primary", ariaLabel: "Continue as " + (d.wizardName || "Apprentice"), onClick: function () { app().loadSlot(entry.slot); } }),
           u.button("Delete", {
-            kind: "danger-ghost", size: "sm", icon: "🗑️", ariaLabel: "Delete " + (d.wizardName || "this save"),
+            kind: "danger-ghost", size: "sm", icon: "remove", ariaLabel: "Delete " + (d.wizardName || "this save"),
             onClick: function () {
               UI.dialogs.confirm({
-                title: "Delete this save?", icon: "🗑️", danger: true, confirmLabel: "Delete forever",
+                title: "Delete this save?", icon: "remove", danger: true, confirmLabel: "Delete forever",
                 message: h("p", null, "All of ", h("strong", null, d.wizardName || "this wizard"), "'s progress in slot " + (entry.index + 1) + " will vanish. If you might want it later, export a Save Scroll first.")
               }).then(function (ok) {
                 if (!ok) return;
@@ -209,15 +215,15 @@
     function damagedCard(entry) {
       return h("article", { class: "slot-card damaged panel" },
         h("p", { class: "slot-num" }, "Slot " + (entry.index + 1)),
-        h("div", { class: "slot-portrait damaged", "aria-hidden": "true" }, "⚠️"),
+        h("div", { class: "slot-portrait damaged", "aria-hidden": "true" }, u.icon("warning")),
         h("h2", { class: "slot-name" }, "Damaged save"),
         h("p", { class: "slot-rank" }, "This save can't be read. Delete it to free the slot?"),
         h("div", { class: "slot-actions" },
           u.button("Delete it", {
-            kind: "danger-ghost", icon: "🗑️", ariaLabel: "Delete the damaged save in slot " + (entry.index + 1),
+            kind: "danger-ghost", icon: "remove", ariaLabel: "Delete the damaged save in slot " + (entry.index + 1),
             onClick: function () {
               UI.dialogs.confirm({
-                title: "Delete the damaged save?", icon: "🗑️", danger: true, confirmLabel: "Delete it",
+                title: "Delete the damaged save?", icon: "remove", danger: true, confirmLabel: "Delete it",
                 message: "Slot " + (entry.index + 1) + " holds a save that can't be read. Deleting it makes room for a new apprentice (or an imported Save Scroll)."
               }).then(function (ok) {
                 if (!ok) return;
@@ -231,11 +237,11 @@
     function emptyCard(entry) {
       return h("article", { class: "slot-card empty panel" },
         h("p", { class: "slot-num" }, "Slot " + (entry.index + 1)),
-        h("div", { class: "slot-portrait empty", "aria-hidden": "true" }, "✧"),
+        h("div", { class: "slot-portrait empty", "aria-hidden": "true" }, u.icon("candle")),
         h("h2", { class: "slot-name" }, "An empty slot"),
         h("p", { class: "slot-rank" }, "Room for a new apprentice"),
         h("div", { class: "slot-actions" },
-          u.button("New apprentice", { kind: "primary", icon: "✨", ariaLabel: "Start a new apprentice in slot " + (entry.index + 1), onClick: function () { app().newGame(entry.slot); } })));
+          u.button("New apprentice", { kind: "primary", icon: "newGame", ariaLabel: "Start a new apprentice in slot " + (entry.index + 1), onClick: function () { app().newGame(entry.slot); } })));
     }
 
     render();
@@ -249,7 +255,7 @@
       grid,
       h("div", { class: "slots-footer" },
         u.button("Import a Save Scroll (save code or file)", {
-          kind: "ghost", icon: "📥",
+          kind: "ghost", icon: "importSave",
           onClick: function () { UI.panels.saveScroll({ chooseSlot: true, onImported: function () { app().enterGame(); } }); }
         })));
     return { el: el, hideTopbar: true, title: "Save slots" };
@@ -285,6 +291,8 @@
       title: kind === "prologue" ? "Prologue" : "Epilogue",
       finishLabel: kind === "prologue" ? "Enter the academy" : "Receive your certificate",
       skipLabel: "Skip the story",
+      // The prologue arrives at the Apprentice's Tower; the epilogue returns to its top.
+      banner: kind === "epilogue" && SS.Art && SS.Art.has("ending") ? "ending" : "location-tower",
       onDone: finish
     });
     var el = h("section", { class: "story-screen story-" + kind },

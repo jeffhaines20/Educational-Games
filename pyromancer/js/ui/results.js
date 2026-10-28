@@ -58,25 +58,25 @@
     var where = err.line ? " on line " + err.line : "";
     switch (result.status) {
       case "passed":
-        return { tone: "passed", icon: "✨", headline: "Spell mastered!", detail: total ? "All " + u.plural(total, "trial") + " passed." : "It worked." };
+        return { tone: "passed", icon: "mastered", headline: "Spell mastered!", detail: total ? "All " + u.plural(total, "trial") + " passed." : "It worked." };
       case "failed":
-        return { tone: "failed", icon: "⚖️", headline: passed + " of " + u.plural(total, "trial") + " passed", detail: "Not quite yet. Here is the first trial that didn't pass:" };
+        return { tone: "failed", icon: "trials", headline: passed + " of " + u.plural(total, "trial") + " passed", detail: "Not quite yet. Here is the first trial that didn't pass:" };
       case "error":
         if (isStepLimit(result)) {
-          return { tone: "timeout", icon: "⏳", headline: "Your spell ran for too long", detail: "Step limit reached" + where + "." };
+          return { tone: "timeout", icon: "timeout", headline: "Your spell ran for too long", detail: "Step limit reached" + where + "." };
         }
         if (err.phase === "syntax") {
-          return { tone: "error", icon: "📜", headline: "Python couldn't read your spell", detail: (err.type || "SyntaxError") + where + ". Nothing ran yet." };
+          return { tone: "error", icon: "scroll-unfurled", headline: "Python couldn't read your spell", detail: (err.type || "SyntaxError") + where + ". Nothing ran yet." };
         }
-        return { tone: "error", icon: "💥", headline: "Your spell stopped with an error", detail: (err.type || "Error") + where + "." };
+        return { tone: "error", icon: "error", headline: "Your spell stopped with an error", detail: (err.type || "Error") + where + "." };
       case "timeout":
-        return { tone: "timeout", icon: "⏳", headline: "Your spell ran for too long", detail: "The academy's wards stopped it." };
+        return { tone: "timeout", icon: "timeout", headline: "Your spell ran for too long", detail: "The academy's wards stopped it." };
       case "internal-error":
-        return { tone: "internal", icon: "🌀", headline: "The academy's machinery hiccuped", detail: "This isn't a problem with your spell." };
+        return { tone: "internal", icon: "vortex", headline: "The academy's machinery hiccuped", detail: "This isn't a problem with your spell." };
       case "ran":
-        return { tone: "ran", icon: "✅", headline: "Your spell ran", detail: result.stdout ? "Here is what it printed." : "It ran without printing anything." };
+        return { tone: "ran", icon: "passed", headline: "Your spell ran", detail: result.stdout ? "Here is what it printed." : "It ran without printing anything." };
       default:
-        return { tone: "internal", icon: "🌀", headline: "Something unexpected happened", detail: "Try casting again." };
+        return { tone: "internal", icon: "vortex", headline: "Something unexpected happened", detail: "Try casting again." };
     }
   }
 
@@ -97,7 +97,7 @@
         h("pre", { class: "traceback-text", tabindex: "0" }, text));
     }
     return h("div", { class: "traceback" },
-      h("p", { class: "traceback-label" }, u.emoji("🐍"), " Python's own words:"),
+      h("p", { class: "traceback-label" }, u.icon("python"), " Python's own words:"),
       h("pre", { class: "traceback-text", tabindex: "0", "aria-label": "Python's error message" }, text));
   }
 
@@ -142,7 +142,7 @@
       role: problem ? "group" : null,
       "aria-label": problem ? "What went wrong" : null
     },
-      h("span", { class: "verdict-icon", "aria-hidden": "true" }, s.icon),
+      h("span", { class: "verdict-icon", "aria-hidden": "true" }, u.icon(s.icon)),
       text,
       result.total ? h("div", { class: "verdict-side" }, trialMeter(result.tests || [])) : null);
     if (problem) {
@@ -174,10 +174,10 @@
     }
     var inputs = (opts && opts.inputs) || [];
     return h("section", { class: "pool", "aria-label": "Scrying Pool: what your spell printed" },
-      h("h3", { class: "result-heading" }, u.emoji("🔮"), " Scrying Pool",
+      h("h3", { class: "result-heading" }, u.icon("output"), " Scrying Pool",
         h("span", { class: "result-sub" }, result.status === "error" && text ? "printed before the error" : "what your spell printed")),
       body,
-      result.truncated ? h("p", { class: "pool-note" }, "⚠️ The output was cut off: your spell printed far too much.") : null,
+      result.truncated ? h("p", { class: "pool-note" }, u.icon("warning"), " The output was cut off: your spell printed far too much.") : null,
       inputs.length ? h("p", { class: "pool-inputs" }, "Answers given to ", h("code", { class: "inline-code" }, "input()"), ": ",
         inputs.map(function (value, i) { return [i ? " " : "", h("code", { class: "inline-code input-chip" }, String(value))]; })) : null);
   }
@@ -185,7 +185,7 @@
   function trialsSection(result, opts) {
     var tests = result.tests || [];
     var section = h("section", { class: "trials", "aria-label": "Trials" },
-      h("h3", { class: "result-heading" }, u.emoji("⚖️"), " Trials",
+      h("h3", { class: "result-heading" }, u.icon("trials"), " Trials",
         h("span", { class: "result-sub" }, "automatic checks of your spell"),
         tests.length ? h("span", { class: "trial-count" }, result.passed + " / " + result.total + " passed") : null));
     if (!tests.length) {
@@ -239,7 +239,7 @@
     u.clear(container);
     container.setAttribute("data-status", "idle");
     container.appendChild(h("div", { class: "results-idle" },
-      h("span", { class: "idle-icon", "aria-hidden": "true" }, "🔮"),
+      h("span", { class: "idle-icon", "aria-hidden": "true" }, u.icon("output")),
       h("p", null, text || "Cast your spell to see what happens. The Scrying Pool shows what it prints, and the Trials show whether it worked.")));
   }
 

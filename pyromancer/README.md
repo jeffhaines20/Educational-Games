@@ -209,7 +209,7 @@ Everything is plain HTML, CSS and JavaScript — no build step is needed to play
 
 ```
 index.html            the game
-assets/               title art (originals in assets/source/)
+assets/               title art (originals in assets/source/), optional paintings in assets/art/
 css/style.css         styles
 js/config.js          settings (CDN URLs, time limits, answer scroll…)
 js/engine/            Python runner (Pyodide in a Web Worker), trial harness, saving, SCORM, progress rules
@@ -229,6 +229,11 @@ dist/                 ready-made single-file and SCORM builds
   open `http://localhost:8000/?localPyodide=1`.
 * **Rebuild the bundles:** `python3 tools/build.py` (writes `dist/`; `--answers off` for a
   package without the Answer Scroll).
+* **Artwork:** the pictures are icons from [game-icons.net](https://game-icons.net). To use
+  another one, add its name to `js/ui/icons.js` and run `node tools/build_icons.js`. Painted
+  artwork is optional and can be added one picture at a time:
+  [docs/ART-PROMPTS.md](docs/ART-PROMPTS.md) has prompts for generating paintings that match
+  the title art, and `python3 tools/art.py` adds them to the game.
 * **Tests:** `node tools/test_engine.js`, then the browser suites in `tools/e2e/`
   (`engine-runner.js`, `engine-bundle.js`, `ui-flow.js`, `ui-robustness.js`).
 
@@ -238,4 +243,8 @@ Requires Node.js 18+ and Python 3.10+ for the tools; Playwright for the browser 
 
 Python in the browser by [Pyodide](https://pyodide.org) (MPL-2.0). Code editor by
 [CodeMirror 5](https://codemirror.net/5/) (MIT). Fonts: Cinzel, Inter and JetBrains Mono (SIL Open
-Font License 1.1, in `assets/fonts/`). Title art supplied by the project owner (`assets/source/`).
+Font License 1.1, in `assets/fonts/`). Icons by Lorc, Delapouite and other contributors at
+[game-icons.net](https://game-icons.net), licensed under
+[CC BY 3.0](https://creativecommons.org/licenses/by/3.0/). Title art supplied by the project
+owner (`assets/source/`); any paintings are listed in
+[`assets/art/source/README.md`](assets/art/source/README.md).
