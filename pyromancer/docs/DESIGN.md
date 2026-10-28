@@ -45,7 +45,10 @@ and this document disagree, fix one of them.
 pyromancer/
   index.html                 UI       entry point; loads every script in order (§3)
   README.md                  lead     player + instructor guide (deployment, LMS)
+  assets/                    lead     title art (pyromancer-*.webp; originals in assets/source/),
+                                      self-hosted fonts (assets/fonts/, SIL OFL)
   css/style.css              UI       all styles (one file; sections with comments)
+  css/fonts.css              lead     @font-face rules for the self-hosted fonts
   js/config.js               engine   SS.config (defaults + SS_CONFIG + URL overrides)
   js/engine/harness.js       lead     SS.HARNESS_PY — Python "spellcheck" module (§6)
   js/engine/runner.js        engine   SS.PythonRunner — Pyodide in a Web Worker (§5.2)
@@ -98,8 +101,8 @@ when CodeMirror arrives. `?editor=plain` in the URL, or `SS_CONFIG.plainEditor =
 keeps the plain editor (useful for screen-reader users and locked-down networks).
 
 `tools/validate_content.py` fails if a `js/content/*.js` file is not referenced by
-`index.html`. Fonts come from Google Fonts with system fallbacks (the game must look
-fine if they are blocked).
+`index.html`. Fonts (Cinzel, Inter, JetBrains Mono) are self-hosted in `assets/fonts/`
+via `css/fonts.css` — no third-party font service — with system fallbacks.
 
 ---
 
@@ -108,8 +111,8 @@ fine if they are blocked).
 ### 4.1 Story bible
 
 * **Setting:** *Coilspire Academy*, a wizard school built around a tower shaped like a
-  coiled serpent. Magic is cast by speaking **Python**, "the serpent's tongue":
-  magic does *exactly* what you say.
+  coiled serpent. The player is a young **pyromancer**; magic is cast by speaking
+  **Python**, "the serpent's tongue": magic does *exactly* what you say.
 * **Archmage Ada** 🧙‍♀️ (she/her) — headmistress and your mentor. Warm, witty, precise.
   Tells the story of each challenge. Likes the word "precisely".
 * **Pip** 🦉 — your owl familiar. Eager, kind, a little punny. Delivers hints
@@ -130,13 +133,13 @@ fine if they are blocked).
 
 | # | id | Title | Icon | Difficulty | Concepts introduced |
 |---|----|-------|------|------------|---------------------|
-| 1 | `tower` | The Apprentice's Tower | 🗼 | easy | `print`, strings, comments, variables, numbers & arithmetic (`+ - * / // % **`), f-strings, `input()`, `int()`/`float()`/`str()`, `len()`, `.upper()/.lower()` |
-| 2 | `hall` | The Hall of Forking Paths | 🚪 | easy → medium | booleans, comparisons, `if/elif/else`, `and/or/not`, `while`, `for` + `range`, `break`, accumulator patterns, nested loops |
+| 1 | `tower` | The Apprentice's Tower | 🏰 | easy | `print`, strings, comments, variables, numbers & arithmetic (`+ - * / // % **`), f-strings, `input()`, `int()`/`float()`/`str()`, `len()`, `.upper()/.lower()` |
+| 2 | `hall` | The Hall of Forking Paths | 🚪 | easy → medium | booleans, comparisons, `if/elif/else`, `and/or/not`, `while`, `for` + `range`, `break`/`continue`, accumulator patterns, nested loops |
 | 3 | `circle` | The Summoning Circle | 🔮 | easy → medium | `def`, parameters, `return` vs `print`, default & keyword arguments, scope, calling functions from functions, docstrings, first recursion |
-| 4 | `library` | The Library of Infinite Shelves | 📚 | easy → hard | lists, indexing/slicing, list methods, tuples & unpacking, dicts, sets, `in`, comprehensions, `enumerate`/`zip`, `sorted(key=…)`, `lambda` |
-| 5 | `workshop` | The Golem Workshop | 🗿 | medium → hard | classes, `__init__`, attributes, methods, `__str__`/`__repr__`, class attributes, inheritance & `super()`, overriding, polymorphism, `@property`, raising exceptions, magic methods (`__eq__`, `__lt__`, `__add__`, `__len__`, `__iter__`, `__contains__`), composition |
+| 4 | `library` | The Library of Infinite Shelves | 📚 | easy → hard | lists, indexing/slicing, list methods, `str.split()`, tuples & unpacking, dicts (`.items()`/`.values()`), sets, `in`, empty-collection truthiness, comprehensions, `enumerate`/`zip`, `sorted(key=…)`, `lambda` |
+| 5 | `workshop` | The Golem Workshop | 🗿 | medium → hard | classes, `__init__`, attributes, methods, `__str__`/`__repr__`, class attributes, inheritance & `super()`, overriding, polymorphism, `@property`, raising and handling exceptions (`try`/`except`), magic methods (`__eq__`, `__lt__`, `__add__`, `__len__`, `__iter__`, `__contains__`), composition |
 | 6 | `labyrinth` | The Labyrinth of Echoes | 🌀 | medium → hard | recursion on nested data, stacks, queues (`collections.deque`), linked lists, binary search, merge sort, hash-map tricks, BFS on grids/graphs, DFS / flood fill, Big-O intuition |
-| 7 | `hydra` | The Hydra's Lair | 🐉 | hard | dynamic programming: memoization (`functools.lru_cache`, dict memo), tabulation, 1-D and 2-D DP (stairs, coins, grid paths, LCS, knapsack, edit distance, word break) |
+| 7 | `hydra` | The Hydra's Lair | 🐉 | hard | dynamic programming: memoization (`functools.lru_cache`, dict memo), tabulation, nested helper functions (closures), DP running time, 1-D and 2-D DP (stairs, coins, grid paths, LCS, knapsack, edit distance, word break) |
 
 A challenge may only *require* concepts from earlier chapters plus whatever its own
 lesson teaches. Each chapter ends with its hardest challenge.
@@ -185,14 +188,18 @@ SS.config = {
     "https://cdn.jsdelivr.net/pyodide/v0.29.5/full/",
     "https://unpkg.com/pyodide@0.29.5/"
   ],
+  pyodideLoadTimeoutMs: 180000,           // give up on one base URL after this long
   defaultTimeLimitMs: 8000,               // per cast; a challenge may set timeLimitMs
   outputLimitChars: 50000,
+  stepLimit: 2000000,                     // loop iterations + calls per run / trial (§6)
+  recursionLimit: 1000,                   // as desktop CPython; see the measurements in config.js
   saveSlots: 3,
-  storageKey: "pyromancer",       // localStorage key prefix
+  storageKey: "pyromancer",               // localStorage key prefix
   allowAnswerScroll: true,
   answerScrollAfterFailedCasts: 3,
   unlockAll: false,
-  scorm: { enabled: true, completionThreshold: 1.0 }   // share of challenges for "completed"
+  scorm: { enabled: true, completionThreshold: 1.0, allowImport: false },
+  scormRequired: false                    // true in the SCORM package (set by tools/build.py)
 };
 ```
 
@@ -270,7 +277,8 @@ SS.Save.recordCompletion(challengeId, { code }) // → { firstTime, previousStar
 SS.Save.markSeen(key) / SS.Save.hasSeen(key)    // "prologue", "chapter:tower", "outro:tower", "epilogue", "tutorial"…
 SS.Save.getSettings() / SS.Save.updateSettings(partial)
 SS.Save.getPracticeCode() / SS.Save.savePracticeCode(code)
-SS.Save.exportCode()                 // → "SNS1." + base64url(JSON) — compact: no drafts/code
+SS.Save.exportCode()                 // → "PYRO1." + base64url(JSON) — compact: no drafts/code ("SNS1." still imports)
+SS.Save.canImport()                  // → false in SCORM mode unless config.scorm.allowImport
 SS.Save.exportFile()                 // download JSON (everything); → false if downloads are blocked
 SS.Save.importData(textOrCode, slot) // accepts a save code or file contents; → Profile; throws Error(friendly message)
 SS.Save.onChange(cb)                 // → unsubscribe
@@ -338,10 +346,15 @@ SS.Scorm.commit() / SS.Scorm.finish()           // finish on pagehide
 
 `python3 tools/build.py` writes:
 
-* `dist/pyromancer.html` — single file: `index.html` with every local CSS/JS
-  file inlined (CDN links stay as links). Must work when opened from disk.
-* `dist/pyromancer-scorm.zip` — SCORM 1.2 package: `imsmanifest.xml` +
-  `index.html` (the single-file build) at the zip root.
+* `dist/pyromancer.html` — single file: `index.html` with every local CSS/JS file
+  inlined, and local images and fonts inlined as data URIs (from `<img>`/`<source>`
+  src and srcset, CSS `url(…)` resolved against that CSS file, and asset paths written
+  out in full in scripts). CDN links stay as links. Works when opened from disk.
+* `dist/pyromancer-scorm.zip` — SCORM 1.2 package: `imsmanifest.xml` + `index.html`
+  (the single-file build with `scormRequired: true`, so a missing LMS connection is
+  reported to the player) at the zip root.
+* `--answers off` bakes `allowAnswerScroll: false` into both bundles (URL parameters
+  can't reach an uploaded file).
 
 Standard library only. Deterministic output (fixed zip timestamps).
 

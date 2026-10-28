@@ -45,9 +45,9 @@ Pip the owl, and trials that check the spell.
 **From a file:** download [`dist/pyromancer.html`](dist/pyromancer.html) and double-click it.
 
 **Requirements:** a current Chrome, Edge, Firefox or Safari, and internet access to
-`cdn.jsdelivr.net` (the Python engine: about 12 MB on the first visit, then cached). The code
-editor (`cdnjs.cloudflare.com`) and fonts (Google Fonts) are optional — if they're blocked the
-game uses a plain editor and system fonts.
+`cdn.jsdelivr.net` (the Python engine: about 12 MB on the first visit, then cached). The
+highlighting code editor comes from `cdnjs.cloudflare.com` and is optional — if it's blocked
+the game uses a plain editor. Fonts and artwork are included with the game.
 
 ### How a challenge works
 
@@ -172,8 +172,7 @@ SCORM package or HTML file. Defaults live in [`js/config.js`](js/config.js).
 
 * **The Python engine never loads:** the browser must reach `cdn.jsdelivr.net` (with
   `unpkg.com` as a fallback). Some school networks block CDNs — ask IT to allow these hosts:
-  `cdn.jsdelivr.net`, `unpkg.com`, `cdnjs.cloudflare.com`, `fonts.googleapis.com`,
-  `fonts.gstatic.com`.
+  `cdn.jsdelivr.net`, `unpkg.com` and (for the code editor) `cdnjs.cloudflare.com`.
 * **Sites with a Content-Security-Policy** (some LMS portals) must allow scripts and connections
   to those hosts, `'wasm-unsafe-eval'` (WebAssembly), and `worker-src blob: data:` (Python runs in
   a Web Worker). The single-file and SCORM builds also need `'unsafe-inline'` for `script-src`
@@ -194,8 +193,9 @@ Any static web host also works — just upload this folder.
 ### Privacy and accessibility
 
 No accounts, analytics or tracking: nothing a student types is sent anywhere (except the progress
-an LMS stores through SCORM). The browser downloads the Python engine, editor and fonts from public
-CDNs, so those services see students' IP addresses (as with any web page using them). Progress is
+an LMS stores through SCORM). The browser downloads the Python engine and the code editor from
+public CDNs (jsDelivr/unpkg and cdnjs), so those services see students' IP addresses, as with any web
+page that uses them. Fonts and artwork are self-hosted. Progress is
 kept in the browser's local storage, so on shared computers each student should use their own slot.
 
 The game is keyboard-playable (in the code editor, **Tab** indents; press **Esc** then **Tab** to
@@ -237,5 +237,5 @@ Requires Node.js 18+ and Python 3.10+ for the tools; Playwright for the browser 
 ### Credits
 
 Python in the browser by [Pyodide](https://pyodide.org) (MPL-2.0). Code editor by
-[CodeMirror 5](https://codemirror.net/5/) (MIT). Fonts from Google Fonts (OFL). Title art supplied
-by the project owner (`assets/source/`).
+[CodeMirror 5](https://codemirror.net/5/) (MIT). Fonts: Cinzel, Inter and JetBrains Mono (SIL Open
+Font License 1.1, in `assets/fonts/`). Title art supplied by the project owner (`assets/source/`).
