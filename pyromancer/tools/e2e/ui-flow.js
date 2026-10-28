@@ -28,7 +28,7 @@ const { openGame, waitForPython } = require("./lib");
 const args = process.argv.slice(2);
 const SHOTS = args.indexOf("--shots") >= 0 ? path.resolve(args[args.indexOf("--shots") + 1]) : null;
 const QUICK = args.indexOf("--quick") >= 0;
-const SIZES = [[1440, 900], [1366, 650], [1280, 800], [1024, 768], [800, 700], [390, 844]];
+const SIZES = [[1920, 969], [1440, 900], [1366, 650], [1280, 800], [1024, 768], [800, 700], [390, 844]];
 
 let failures = 0;
 let checks = 0;
@@ -152,8 +152,9 @@ async function passRankUp(page) {
 
 /**
  * Where the title painting's important parts are on screen, and whether the panel covers
- * them. Regions are fractions of the 1536×1024 painting: painted title + tagline, and the
- * witch's face. In portrait the painting is replaced by a crop without painted text.
+ * them. Regions are fractions of the 1536×1024 painting: painted title + tagline, the
+ * witch's face and the top of her hat. In portrait the painting is replaced by a crop
+ * without painted text.
  */
 async function titleArt(page) {
   return page.evaluate(() => {
@@ -171,9 +172,10 @@ async function titleArt(page) {
     let x = r.left, y = r.top, w = r.width, hgt = r.height;
     if (getComputedStyle(img).objectFit === "cover") {
       const scale = Math.max(r.width / 1536, r.height / 1024);
+      const pos = getComputedStyle(img).objectPosition.split(" ").map((v) => parseFloat(v) / 100);
       w = 1536 * scale; hgt = 1024 * scale;
-      x = r.left + (r.width - w);            // object-position: right
-      y = r.top + (r.height - hgt) / 2;
+      x = r.left + (r.width - w) * pos[0];
+      y = r.top + (r.height - hgt) * pos[1];
     }
     const box = (x0, y0, x1, y1) => ({ left: x + w * x0, top: y + hgt * y0, right: x + w * x1, bottom: y + hgt * y1 });
     const hit = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
@@ -182,6 +184,7 @@ async function titleArt(page) {
     out.titleInView = title.left >= -1 && title.top >= -1 && title.right <= innerWidth + 1 && title.bottom <= innerHeight + 1;
     out.coversTitle = hit(panel, title);
     out.coversFace = hit(panel, face);
+    out.hatInView = y + hgt * 0.04 >= -1;   // the hat's crown is 4.4% down the painting
     return out;
   });
 }
@@ -194,6 +197,7 @@ async function checkTitleArt(page, tag) {
   } else {
     check(art.loaded, "the title painting loads at " + tag);
     check(art.titleInView, "the painted title is not cropped at " + tag);
+    check(art.hatInView, "the witch's hat is not cut off at the top at " + tag);
     check(!art.coversTitle && !art.coversFace, "the buttons don't cover the painted title or the witch's face at " + tag + " " + JSON.stringify(art));
   }
   const begin = await page.$eval(".title-actions .btn", (b) => { const r = b.getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight; });

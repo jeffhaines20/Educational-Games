@@ -639,8 +639,8 @@ h1[tabindex="-1"]:focus, h2[tabindex="-1"]:focus, main:focus, .results:focus, .h
 /* The title screen shows the painting (assets/pyromancer-title*.webp), which carries the
    painted title and tagline. Layouts:
      default    "stacked": the whole painting, then the panel below it (e.g. 800×700)
-     overlay    wide landscape: the painting fills the screen without cropping the painted
-                title; the panel sits on the dark area under the painted tagline
+     overlay    wide landscape: the whole painting (the witch's hat included) as large as
+                fits; the panel sits on the dark area under the painted tagline
      split      short landscape (phones on their side): painting left, panel right
      portrait   the portrait crop (no painted text) as a banner, then an HTML title */
 .title-screen {
@@ -712,7 +712,7 @@ h1[tabindex="-1"]:focus, h2[tabindex="-1"]:focus, main:focus, .results:focus, .h
     display: block;
     width: 100%;
     height: min(62vh, 123vw);
-    background: url("../assets/pyromancer-art-portrait.webp") 50% 30% / cover no-repeat;
+    background: url("../assets/pyromancer-art-portrait.webp") 50% 3% / cover no-repeat;
     -webkit-mask-image: linear-gradient(to bottom, #000 58%, rgba(0, 0, 0, 0.35) 84%, transparent);
     mask-image: linear-gradient(to bottom, #000 58%, rgba(0, 0, 0, 0.35) 84%, transparent);
   }
@@ -733,16 +733,31 @@ h1[tabindex="-1"]:focus, h2[tabindex="-1"]:focus, main:focus, .results:focus, .h
   .title-canvas {
     --vw: 100vw;
     --vh: 100vh;
-    --h: min(var(--vw) * 0.66667, var(--vh) * 1.515);
-    --top: min(clamp(var(--vh) - var(--h), var(--vh) * 0.5 - var(--h) * 0.57, 0px), (var(--vh) - var(--h)) / 2);
+    /* Room under the painted tagline for the panel: its usual height plus a margin. */
+    --panel-room: 292px;
+    /* The painting is as big as the screen allows while its full width shows and the panel
+       fits under the tagline. */
+    --h: min(var(--vw) * 0.66667, (var(--vh) - var(--panel-room)) / 0.595);
+    /* Centred when there is room. Otherwise it moves up just enough for the panel, but never by
+       more than the dark strip above the witch's hat (1.5% of the painting); the bottom of the
+       desk is what gets cut. */
+    --top: max(var(--h) * -0.015, min((var(--vh) - var(--h)) / 2, var(--vh) - var(--panel-room) - var(--h) * 0.61));
     position: absolute; left: 50%; top: var(--top);
     width: calc(var(--h) * 1.5); max-width: none; height: var(--h);
     margin: 0 0 0 calc(var(--h) * -0.75);
   }
-  .title-img { width: 100%; height: 100%; -webkit-mask-image: none; mask-image: none; }
+  /* Soft edges, for when the screen is wider or taller than the painting. */
+  .title-img {
+    width: 100%; height: 100%;
+    -webkit-mask-image: linear-gradient(to right, transparent, #000 5%, #000 95%, transparent), linear-gradient(to bottom, transparent, #000 3%, #000 97%, transparent);
+    -webkit-mask-composite: source-in;
+    mask-image: linear-gradient(to right, transparent, #000 5%, #000 95%, transparent), linear-gradient(to bottom, transparent, #000 3%, #000 97%, transparent);
+    mask-composite: intersect;
+  }
   .title-panel {
-    position: absolute; top: 61%; left: calc(77% - min(20%, 250px));
-    width: min(40%, 500px);
+    --panel-w: max(min(40%, 500px), 380px);
+    position: absolute; top: 61%; left: calc(77% - var(--panel-w) / 2);
+    width: var(--panel-w);
     max-height: calc(var(--vh) - var(--top) - var(--h) * 0.61 - 12px);
     overflow-y: auto;
     margin: 0;
@@ -755,20 +770,6 @@ h1[tabindex="-1"]:focus, h2[tabindex="-1"]:focus, main:focus, .results:focus, .h
     .title-canvas { --vw: 100cqw; --vh: 100cqh; }
   }
 }
-/* A screen much wider than the painting: soften its left and right edges. */
-@media (min-width: 1000px) and (min-aspect-ratio: 227/100) and (min-height: 600px) {
-  .title-img {
-    -webkit-mask-image: linear-gradient(to right, transparent, #000 6%, #000 94%, transparent);
-    mask-image: linear-gradient(to right, transparent, #000 6%, #000 94%, transparent);
-  }
-}
-/* A screen taller than the painting (e.g. 1024×768): soften its top and bottom edges. */
-@media (min-width: 1000px) and (min-aspect-ratio: 5/4) and (max-aspect-ratio: 3/2) and (min-height: 600px) {
-  .title-img {
-    -webkit-mask-image: linear-gradient(to bottom, transparent, #000 5%, #000 95%, transparent);
-    mask-image: linear-gradient(to bottom, transparent, #000 5%, #000 95%, transparent);
-  }
-}
 /* Short landscape screens (phones on their side): the painting on the left, the panel on the right. */
 @media (min-aspect-ratio: 5/4) and (max-height: 599px) {
   .title-screen { height: 100vh; min-height: 0; overflow: hidden; }
@@ -778,7 +779,7 @@ h1[tabindex="-1"]:focus, h2[tabindex="-1"]:focus, main:focus, .results:focus, .h
   .title-img {
     flex: 1 1 auto; min-width: 0;
     width: auto; height: 100%;
-    object-fit: cover; object-position: 100% 50%;
+    object-fit: cover; object-position: 100% 6%;
     -webkit-mask-image: linear-gradient(to left, #000 88%, transparent);
     mask-image: linear-gradient(to left, #000 88%, transparent);
   }
