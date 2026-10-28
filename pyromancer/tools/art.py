@@ -16,9 +16,10 @@ then run
 Each image is cropped to its slot's shape around a focus point (the centre, or a
 bit above it for portraits). To move the crop, add assets/art/source/focus.json:
 
-    { "portrait-ada": [0.5, 0.35], "location-hall": [0.4, 0.5] }
+    { "portrait-ada": [0.5, 0.35, 1.4], "location-hall": [0.4, 0.5] }
 
-(x and y as fractions of the width and height). The tool rewrites
+(x and y as fractions of the width and height; an optional third number zooms in,
+so 1.4 keeps the middle 1/1.4 of the largest crop). The tool rewrites
 js/ui/art-manifest.js, which tells the game which paintings exist; any slot
 without a painting keeps its icon. Needs Pillow:  pip install pillow
 See docs/ART-PROMPTS.md for what each picture should show.
@@ -74,8 +75,8 @@ def find_sources(source_dir):
     return found, unknown
 
 
-def crop_box(width, height, target_w, target_h, focus):
-    """The largest box with the target aspect ratio, centred on focus, kept inside the image."""
+def crop_box(width, height, target_w, target_h, focus, zoom=1.0):
+    """The largest box with the target aspect ratio (shrunk by zoom), centred on focus, kept inside the image."""
     target_ratio = target_w / target_h
     if width / height > target_ratio:
         box_h = height
@@ -83,6 +84,8 @@ def crop_box(width, height, target_w, target_h, focus):
     else:
         box_w = width
         box_h = round(width / target_ratio)
+    zoom = max(1.0, float(zoom))
+    box_w, box_h = round(box_w / zoom), round(box_h / zoom)
     cx, cy = focus[0] * width, focus[1] * height
     left = min(max(0, round(cx - box_w / 2)), width - box_w)
     top = min(max(0, round(cy - box_h / 2)), height - box_h)
@@ -94,9 +97,10 @@ def process(slot, path, out_dir, focus_overrides):
 
     target_w, target_h, quality, focus = SLOTS[slot]
     focus = tuple(focus_overrides.get(slot, focus))
+    zoom = focus[2] if len(focus) > 2 else 1.0
     with Image.open(path) as image:
         image = image.convert("RGB")
-        box = crop_box(image.width, image.height, target_w, target_h, focus)
+        box = crop_box(image.width, image.height, target_w, target_h, focus[:2], zoom)
         cropped = image.crop(box)
         note = ""
         if cropped.width < target_w:

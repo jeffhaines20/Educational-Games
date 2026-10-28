@@ -291,11 +291,13 @@ Before you keep a picture, check it:
 
 `python3 tools/art.py --check` lists which slots are filled.
 
-**If a crop cuts off something important,** add `assets/art/source/focus.json`, giving the point
-to centre the crop on (x and y as fractions of the width and height), and run the tool again:
+**If a crop cuts off something important,** edit `assets/art/source/focus.json`, giving the point
+to centre the crop on (x and y as fractions of the width and height), and run the tool again.
+An optional third number zooms in. Portraits are shown small, so a zoom of about 1.3 frames
+the face more closely:
 
 ```json
-{ "location-tower": [0.5, 0.35], "portrait-ada": [0.45, 0.4] }
+{ "location-tower": [0.5, 0.35], "portrait-ada": [0.5, 0.37, 1.35] }
 ```
 
 **To replace a picture,** upload a new file with the same name and run the tool again. **To
