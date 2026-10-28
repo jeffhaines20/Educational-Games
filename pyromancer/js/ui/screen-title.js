@@ -26,7 +26,7 @@
   function rankIconFor(title) {
     var ranks = (SS.Progress && SS.Progress.RANKS) || [];
     for (var i = 0; i < ranks.length; i++) if (ranks[i].title === title) return ranks[i].icon;
-    return "✦";
+    return "rank";
   }
 
   /** "[rank icon] Apprentice · 5 of 51 spells" for a Continue button. */
@@ -186,7 +186,7 @@
       var headingId = u.uid("slot");
       return h("article", { class: "slot-card filled panel", "aria-labelledby": headingId },
         h("p", { class: "slot-num" }, "Slot " + (entry.index + 1)),
-        h("div", { class: "slot-portrait", "aria-hidden": "true" }, d.rankIcon || rankIconFor(d.rankTitle)),
+        h("div", { class: "slot-portrait", "aria-hidden": "true" }, u.icon(d.rankIcon || rankIconFor(d.rankTitle) || "rank")),
         h("h2", { class: "slot-name", id: headingId }, d.wizardName || "Apprentice"),
         h("p", { class: "slot-rank" }, d.rankTitle || ""),
         u.progressBar(fraction, "Spells mastered"),
@@ -237,7 +237,7 @@
     function emptyCard(entry) {
       return h("article", { class: "slot-card empty panel" },
         h("p", { class: "slot-num" }, "Slot " + (entry.index + 1)),
-        h("div", { class: "slot-portrait empty", "aria-hidden": "true" }, "✧"),
+        h("div", { class: "slot-portrait empty", "aria-hidden": "true" }, u.icon("candle")),
         h("h2", { class: "slot-name" }, "An empty slot"),
         h("p", { class: "slot-rank" }, "Room for a new apprentice"),
         h("div", { class: "slot-actions" },
@@ -291,6 +291,7 @@
       title: kind === "prologue" ? "Prologue" : "Epilogue",
       finishLabel: kind === "prologue" ? "Enter the academy" : "Receive your certificate",
       skipLabel: "Skip the story",
+      banner: kind === "epilogue" ? "ending" : null,
       onDone: finish
     });
     var el = h("section", { class: "story-screen story-" + kind },
