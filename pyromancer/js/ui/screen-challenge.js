@@ -70,7 +70,7 @@
 
   /** The rank-up moment: its own dialog, then `then()`. */
   function showRankUp(rank, xp, returnFocus, then) {
-    var icon = h("div", { class: "rankup-icon" }, h("span", { "aria-hidden": "true" }, rank.icon || "✦"));
+    var icon = h("div", { class: "rankup-icon" }, u.icon(rank.icon || "rank", { className: "rankup-svg" }));
     var next = rank.nextTitle && typeof rank.nextXp === "number"
       ? "Next rank: " + rank.nextTitle + " at " + rank.nextXp + " XP (" + Math.max(0, rank.nextXp - xp) + " to go)."
       : "This is the highest rank in the academy!";
@@ -96,7 +96,7 @@
     var chapter = u.chapterById(ch.chapterId) || { id: ch.chapterId, title: "", challenges: [ch] };
     if (!P(function () { return SS.Progress.isChallengeUnlocked(p, ch.id); }, true)) {
       setTimeout(function () {
-        UI.dialogs.toast("That spell is still locked. Master the ones before it first.", { icon: "🔒" });
+        UI.dialogs.toast("That spell is still locked. Master the ones before it first.", { icon: "lock" });
         app().go("chapter", { id: chapter.id });
       }, 0);
       return { el: h("section", null, h("h1", { class: "sr-only" }, "Locked")) };
@@ -120,7 +120,7 @@
     var mq = null, onMq = null;
     var tabbed = false;
     var currentTab = "task";
-    var ada = (SS.CHARACTERS && SS.CHARACTERS.ada) || { name: "Archmage Ada", icon: "🧙‍♀️" };
+    var ada = (SS.CHARACTERS && SS.CHARACTERS.ada) || { name: "Archmage Ada", icon: "icon:witch-face" };
     var MOD = UI.Editor.modKey;
 
     function later(fn, ms) {
@@ -154,7 +154,7 @@
         ariaLabel: (dir === "prev" ? "Previous spell: " : "Next spell: ") + target.title,
         onClick: function () {
           if (dir === "next" && !P(function () { return SS.Progress.isChallengeUnlocked(u.profile(), target.id); }, false)) {
-            UI.dialogs.toast("Master this spell to unlock the next one.", { icon: "🔒" });
+            UI.dialogs.toast("Master this spell to unlock the next one.", { icon: "lock" });
             return;
           }
           app().go("challenge", { id: target.id });
@@ -174,10 +174,10 @@
 
     var bar = h("div", { class: "challenge-bar" },
       h("nav", { class: "crumbs", "aria-label": "Breadcrumb" },
-        h("button", { type: "button", class: "crumb", on: { click: function () { app().go("map"); } } }, u.emoji("🗺️"), h("span", { class: "crumb-text" }, " Map")),
+        h("button", { type: "button", class: "crumb", on: { click: function () { app().go("map"); } } }, u.icon("map"), h("span", { class: "crumb-text" }, " Map")),
         h("span", { class: "crumb-sep", "aria-hidden": "true" }, "›"),
         h("button", { type: "button", class: "crumb", on: { click: function () { app().go("chapter", { id: chapter.id }); } } },
-          u.emoji(chapter.icon || "✦"), h("span", { class: "crumb-text" }, " " + chapter.title)),
+          u.chapterIcon(chapter), h("span", { class: "crumb-text" }, " " + chapter.title)),
         h("span", { class: "crumb-sep", "aria-hidden": "true" }, "›"),
         h("span", { class: "crumb-current", "aria-current": "page" }, "Spell " + (index + 1) + " of " + siblings.length)),
       h("div", { class: "challenge-heading" },
@@ -188,9 +188,9 @@
     // ------------------------------------------------------------------------
     // The brief: scene, story, then Task / Spell Scroll / Hints (tabs when narrow)
     // ------------------------------------------------------------------------
-    var stage = UI.effects.createStage(scene);
+    var stage = UI.effects.createStage(scene, { backdrop: "location-" + ch.chapterId });
     var story = ch.story ? h("div", { class: "story-block" },
-      h("div", { class: "story-portrait", "aria-hidden": "true" }, ada.icon || "🧙‍♀️"),
+      u.portrait("ada", "story-portrait", ada.icon),
       h("div", { class: "story-bubble" },
         h("p", { class: "story-speaker" }, ada.name || "Archmage Ada"),
         UI.rich.block(ch.story, "story-text"))) : null;
@@ -198,10 +198,10 @@
     var workRef = {};
     var taskId = u.uid("task");
     var task = h("section", { class: "task-card", "aria-labelledby": taskId },
-      h("h2", { class: "card-title", id: taskId }, u.emoji("🎯"), " Your Task"),
+      h("h2", { class: "card-title", id: taskId }, u.icon("task"), " Your Task"),
       UI.rich.block(ch.task, "task-text"),
       u.button("Jump to your spell", {
-        kind: "link", icon: "✒️", class: "jump-to-editor",
+        kind: "link", icon: "editor", class: "jump-to-editor",
         onClick: function () {
           u.safe(function () { workRef.editorPanel.scrollIntoView({ behavior: smooth(), block: "start" }); });
           if (editor) editor.focus();
@@ -209,7 +209,7 @@
       }));
 
     var inputsNote = inputs.length ? h("section", { class: "inputs-note", "aria-label": "Input for this spell" },
-      h("p", { class: "inputs-title" }, u.emoji("📥"), " This spell receives input"),
+      h("p", { class: "inputs-title" }, u.icon("inputs"), " This spell receives input"),
       h("p", { class: "inputs-help" }, "Each time your spell calls ", h("code", { class: "inline-code" }, "input()"), ", it gets the next answer:"),
       h("ol", { class: "input-list" }, inputs.map(function (v) {
         return h("li", null, h("code", { class: "inline-code input-chip" }, v === "" ? "(empty)" : v));
@@ -218,7 +218,7 @@
     var lessonHeadingId = u.uid("lesson");
     var lesson = ch.lesson ? h("details", { class: "lesson", open: !entry().completed },
       h("summary", { class: "lesson-summary" },
-        h("h2", { class: "lesson-summary-title", id: lessonHeadingId }, u.emoji("📖"), " Spell Scroll"),
+        h("h2", { class: "lesson-summary-title", id: lessonHeadingId }, u.icon("lesson"), " Spell Scroll"),
         h("span", { class: "lesson-summary-sub" }, "the lesson for this spell")),
       UI.rich.block(ch.lesson, "lesson-body")) : null;
 
@@ -226,11 +226,11 @@
     var hintsTitleId = u.uid("hints");
     var hintList = h("ol", { class: "hint-list" });
     var hintCost = h("p", { class: "hint-cost" });
-    var hintBtn = u.button("Ask Pip for a hint", { kind: "ghost", icon: "🦉", class: "hint-btn" });
+    var hintBtn = u.button("Ask Pip for a hint", { kind: "ghost", icon: "hint", class: "hint-btn" });
     var maxStars = h("p", { class: "max-stars" });
     var hintsPanel = hints.length ? h("section", { class: "hints-panel", "aria-labelledby": hintsTitleId },
       h("div", { class: "hints-head" },
-        h("h2", { class: "card-title", id: hintsTitleId, tabindex: "-1" }, u.emoji("🦉"), " Pip's hints"),
+        h("h2", { class: "card-title", id: hintsTitleId, tabindex: "-1" }, u.icon("hint"), " Pip's hints"),
         maxStars),
       hintList,
       h("div", { class: "hint-actions" }, hintBtn, hintCost)) : null;
@@ -249,7 +249,7 @@
       u.clear(hintList);
       hints.slice(0, used).forEach(function (hint, i) {
         hintList.appendChild(h("li", { class: "hint", tabindex: "-1" },
-          h("p", { class: "hint-label" }, "🦉 Pip whispers… ", h("span", { class: "hint-num" }, "(hint " + (i + 1) + " of " + hints.length + ")")),
+          h("p", { class: "hint-label" }, u.portrait("pip", "hint-portrait"), " Pip whispers… ", h("span", { class: "hint-num" }, "(hint " + (i + 1) + " of " + hints.length + ")")),
           UI.rich.block(hint, "hint-text")));
       });
       var nowStars = starsFor(e.hintsUsed || 0, !!e.answerRevealed);
@@ -284,9 +284,9 @@
     });
 
     // Tabs (only active below 1000px; above that every section is simply shown)
-    var tabDefs = [{ id: "task", icon: "🎯", label: "Task", content: [task, inputsNote] }];
-    if (lesson) tabDefs.push({ id: "lesson", icon: "📖", label: "Spell Scroll", content: [lesson] });
-    if (hintsPanel) tabDefs.push({ id: "hints", icon: "🦉", label: "Hints", content: [hintsPanel], extra: hintTabCount });
+    var tabDefs = [{ id: "task", icon: "task", label: "Task", content: [task, inputsNote] }];
+    if (lesson) tabDefs.push({ id: "lesson", icon: "lesson", label: "Spell Scroll", content: [lesson] });
+    if (hintsPanel) tabDefs.push({ id: "hints", icon: "hint", label: "Hints", content: [hintsPanel], extra: hintTabCount });
     var tabs = {};
     var tablist = h("div", { class: "brief-tabs", role: "tablist", "aria-label": "About this spell" });
     tabDefs.forEach(function (t) {
@@ -294,7 +294,7 @@
       var btn = h("button", {
         type: "button", class: "brief-tab", role: "tab", id: tabId, "aria-controls": panelId,
         "aria-selected": "false", tabindex: "-1", on: { click: function () { selectTab(t.id, true); } }
-      }, u.emoji(t.icon), h("span", { class: "brief-tab-label" }, t.label), t.extra || null);
+      }, u.icon(t.icon, { className: "tab-icon" }), h("span", { class: "brief-tab-label" }, t.label), t.extra || null);
       var panel = h("div", { class: "brief-panel", id: panelId, dataset: { tab: t.id } }, t.content);
       tabs[t.id] = { btn: btn, panel: panel };
       tablist.appendChild(btn);
@@ -362,11 +362,11 @@
     if (!app().hasSeen("tutorial")) {
       var coachId = u.uid("coach");
       coach = h("aside", { class: "coach", "aria-labelledby": coachId },
-        h("p", { class: "coach-title", id: coachId }, u.emoji("✨"), " How to cast a spell"),
+        h("p", { class: "coach-title", id: coachId }, u.icon("cast"), " How to cast a spell"),
         h("ol", { class: "coach-steps" },
           h("li", null, "Read ", h("strong", null, "Your Task"), ". The ", h("strong", null, "Spell Scroll"), " lesson teaches what you need."),
           h("li", null, "Write Python in the editor above."),
-          h("li", null, "Press ", h("strong", null, "✨ Cast Spell"), " (or ", h("kbd", null, MOD + "+Enter"), "). Right here, the ", h("strong", null, "Scrying Pool"), " shows what your spell printed and the ", h("strong", null, "Trials"), " (automatic checks) show whether it worked."),
+          h("li", null, "Press ", h("strong", null, u.icon("cast", { className: "inline-icon" }), " Cast Spell"), " (or ", h("kbd", null, MOD + "+Enter"), "). Right here, the ", h("strong", null, "Scrying Pool"), " shows what your spell printed and the ", h("strong", null, "Trials"), " (automatic checks) show whether it worked."),
           h("li", null, "Something went wrong? Read the explanation, fix the highlighted line and cast again. Pip the owl has hints too.")),
         u.button("Got it!", {
           kind: "primary", size: "sm", class: "coach-ok",
@@ -386,7 +386,7 @@
       if (st.state !== "error") { engineBanner.hidden = true; return; }
       engineBanner.hidden = false;
       u.append(engineBanner, [
-        h("span", { class: "banner-icon", "aria-hidden": "true" }, "⚠️"),
+        h("span", { class: "banner-icon", "aria-hidden": "true" }, u.icon("warning")),
         h("div", { class: "banner-text" },
           h("p", { class: "banner-title" }, "Python couldn't be loaded"),
           h("p", null, st.message || "The Python engine isn't available."),
@@ -429,7 +429,7 @@
     }
     var editorPanel = h("section", { class: "editor-panel", "aria-labelledby": edTitleId },
       h("div", { class: "panel-head" },
-        h("h2", { class: "card-title", id: edTitleId }, u.emoji("✒️"), " Your spell"),
+        h("h2", { class: "card-title", id: edTitleId }, u.icon("editor"), " Your spell"),
         h("div", { class: "panel-tools" },
           expandBtn,
           fontButton(-1, "Smaller editor text", "A−"),
@@ -440,10 +440,10 @@
     var castLabel = h("span", { class: "btn-label" }, "Cast Spell");
     var castReasonId = u.uid("cast-reason");
     var castBtn = h("button", { type: "button", class: "btn btn-cast btn-lg", "aria-describedby": castReasonId },
-      h("span", { class: "cast-icon", "aria-hidden": "true" }, "✨"), castLabel, h("kbd", { class: "btn-kbd" }, MOD + "+Enter"));
+      h("span", { class: "cast-icon", "aria-hidden": "true" }, u.icon("cast")), castLabel, h("kbd", { class: "btn-kbd" }, MOD + "+Enter"));
     var castReason = h("p", { class: "cast-reason", id: castReasonId, hidden: true });
-    var answerBtn = u.button("Answer Scroll", { kind: "ghost", size: "sm", icon: "📜", class: "answer-btn" });
-    var hintQuick = hintsPanel ? u.button("Hint", { kind: "ghost", size: "sm", icon: "🦉", ariaLabel: "Go to Pip's hints" }) : null;
+    var answerBtn = u.button("Answer Scroll", { kind: "ghost", size: "sm", icon: "answer", class: "answer-btn" });
+    var hintQuick = hintsPanel ? u.button("Hint", { kind: "ghost", size: "sm", icon: "hint", ariaLabel: "Go to Pip's hints" }) : null;
     var resetBtn = u.button("Reset", { kind: "ghost", size: "sm", icon: "↺", ariaLabel: "Reset your spell to the starting code" });
     var castBar = h("div", { class: "cast-bar" },
       castBtn,
@@ -511,18 +511,19 @@
     function updateCast() {
       var st = app().state.engine;
       var ready = st.state === "ready";
-      var reason = "";
+      var reason = null;
       if (!casting) {
-        if (st.state === "loading" || st.state === "idle") reason = "⏳ Python is still waking up (the first visit can take a minute). Read the lesson while you wait!";
-        else if (st.state === "busy") reason = "⏳ Python is finishing another spell…";
-        else if (st.state === "error") reason = "⚠️ Spells can't be cast until Python loads. See the message above.";
+        if (st.state === "loading" || st.state === "idle") reason = ["timeout", "Python is still waking up (the first visit can take a minute). Read the lesson while you wait!"];
+        else if (st.state === "busy") reason = ["timeout", "Python is finishing another spell…"];
+        else if (st.state === "error") reason = ["warning", "Spells can't be cast until Python loads. See the message above."];
       }
       var disabled = casting || !ready;
       castBtn.setAttribute("aria-disabled", disabled ? "true" : "false");
       castBtn.classList.toggle("is-disabled", disabled && !casting);
       castBtn.classList.toggle("is-casting", casting);
       castLabel.textContent = casting ? "Casting…" : "Cast Spell";
-      castReason.textContent = reason;
+      u.clear(castReason);
+      if (reason) u.append(castReason, [u.icon(reason[0], { className: "reason-icon" }), " " + reason[1]]);
       castReason.hidden = !reason;
     }
 
@@ -580,8 +581,8 @@
       app().refreshTopbar();
       if (!info) return;
       UI.sound.play("success");
-      UI.dialogs.toast("✨ " + ch.title + " mastered! " + starText(info.completion.stars) +
-        (info.completion.xpGained > 0 ? " +" + info.completion.xpGained + " XP" : ""), { kind: "ok" });
+      UI.dialogs.toast(ch.title + " mastered! " + starText(info.completion.stars) +
+        (info.completion.xpGained > 0 ? " +" + info.completion.xpGained + " XP" : ""), { kind: "ok", icon: "mastered" });
       var cur = app().current();
       var name = app().state.screen;
       if (cur && cur.refresh && (name === "chapter" || name === "map") && !UI.dialogs.isOpen()) cur.refresh();
@@ -611,7 +612,7 @@
       if (!nudged && failStreak >= 2 && (e.hintsUsed || 0) < hints.length) {
         nudged = true;
         later(function () {
-          if (!casting && !UI.dialogs.isOpen()) UI.dialogs.toast("Pip hoots softly: a hint is ready whenever you want one.", { icon: "🦉" });
+          if (!casting && !UI.dialogs.isOpen()) UI.dialogs.toast("Pip hoots softly: a hint is ready whenever you want one.", { icon: "hint" });
         }, 1200);
       }
     }
@@ -630,7 +631,7 @@
       var repeat = !c.firstTime && !(c.xpGained > 0) && !info.chapterDone && !info.gameDone && !info.rankUp;
       if (repeat) {
         // Mastered again with no new stars: a quiet toast instead of the big dialog.
-        UI.dialogs.toast("✨ Mastered again! This cast " + starText(c.stars) + " · Best " + starText(Math.max(c.stars || 0, c.previousStars || 0)), { kind: "ok" });
+        UI.dialogs.toast("Mastered again! This cast " + starText(c.stars) + " · Best " + starText(Math.max(c.stars || 0, c.previousStars || 0)), { kind: "ok", icon: "mastered" });
         return;
       }
       later(function () { showSuccess(info); }, u.reducedMotion() ? 150 : 1150);
@@ -639,7 +640,7 @@
     function showSuccess(info) {
       var c = info.completion || {};
       var earned = Math.max(0, Math.min(3, c.stars || 0));
-      var icon = h("div", { class: "success-icon" }, h("span", { class: "success-emoji", "aria-hidden": "true" }, scene.successIcon || "✨"));
+      var icon = h("div", { class: "success-icon" }, h("span", { class: "success-emoji", "aria-hidden": "true" }, u.icon(scene.successIcon || scene.icon || "cast", { className: "success-svg" })));
       var starEls = [0, 1, 2].map(function () { return h("span", { class: "success-star", "aria-hidden": "true" }, "★"); });
       var lines = h("div", { class: "success-lines" });
       if (scene.successText) lines.appendChild(h("p", { class: "success-text" }, scene.successText));
@@ -652,12 +653,12 @@
       var nextChapter = UI.chapterStory.nextChapter(chapter);
       if (info.chapterDone) {
         lines.appendChild(h("div", { class: "success-banner chapter" },
-          h("span", { class: "success-banner-icon", "aria-hidden": "true" }, "🏆"),
+          h("span", { class: "success-banner-icon", "aria-hidden": "true" }, u.icon("chapterDone")),
           h("div", null, h("p", { class: "success-banner-title" }, "Chapter mastered!"),
             h("p", { class: "success-banner-sub" }, info.gameDone ? "You've mastered every spell in the academy!" : nextChapter ? "A new area has opened: " + nextChapter.title : "Every area is mastered!"))));
       }
       if (info.rankUp) {
-        lines.appendChild(h("p", { class: "success-rank-tease" }, u.emoji("🎉"), " You've earned a new rank…"));
+        lines.appendChild(h("p", { class: "success-rank-tease" }, u.icon("celebrate"), " You've earned a new rank…"));
       }
       // Any choice first shows the rank-up moment (if there is one), then does its job.
       function then(fn) {
@@ -678,9 +679,9 @@
             else app().go("challenge", { id: next.id });
           })
         });
-        actions.push({ label: "Map", kind: "ghost", icon: "🗺️", onClick: then(function () { app().go("map"); }) });
+        actions.push({ label: "Map", kind: "ghost", icon: "map", onClick: then(function () { app().go("map"); }) });
       } else {
-        actions.push({ label: "Back to the map", kind: "primary", icon: "🗺️", onClick: then(function () { app().go("map"); }) });
+        actions.push({ label: "Back to the map", kind: "primary", icon: "map", onClick: then(function () { app().go("map"); }) });
       }
       actions.push({ label: "Stay here", kind: "ghost", value: "stay", onClick: then(function () {}) });
       UI.dialogs.open({
@@ -720,18 +721,18 @@
 
     function showAnswer() {
       UI.dialogs.open({
-        title: "The Answer Scroll", icon: "📜", size: "lg", className: "modal-answer",
+        title: "The Answer Scroll", icon: "answer", size: "lg", className: "modal-answer",
         body: h("div", { class: "answer-body" },
           h("p", null, "Here is one way to cast this spell. There are often others!"),
           UI.rich.codeBlock(ch.solution, undefined, { title: "Reference spell" }),
-          h("p", { class: "answer-tip" }, u.emoji("💡"), " Understanding beats copying: read it line by line, then change something small and predict what will happen before you cast.")),
+          h("p", { class: "answer-tip" }, u.icon("tip"), " Understanding beats copying: read it line by line, then change something small and predict what will happen before you cast.")),
         actions: [
           {
-            label: "Put it in my editor", kind: "ghost", icon: "✒️",
+            label: "Put it in my editor", kind: "ghost", icon: "editor",
             onClick: function () {
               editor.replaceAll(ch.solution);
               u.safe(function () { SS.Save.saveDraft(ch.id, editor.getValue()); });
-              UI.dialogs.toast("The reference spell is in your editor (" + MOD + "+Z undoes it).", { icon: "📜" });
+              UI.dialogs.toast("The reference spell is in your editor (" + MOD + "+Z undoes it).", { icon: "answer" });
             }
           },
           { label: "Close", kind: "primary" }
@@ -743,7 +744,7 @@
       var e = entry();
       if (e.answerRevealed) { showAnswer(); return; }
       UI.dialogs.confirm({
-        title: "Unroll the Answer Scroll?", icon: "📜", confirmLabel: "Show me the answer",
+        title: "Unroll the Answer Scroll?", icon: "answer", confirmLabel: "Show me the answer",
         message: h("div", null,
           h("p", null, "The Answer Scroll shows a complete, working spell."),
           h("p", null, "After reading it, this spell can earn at most ", u.stars(1), " (1 star)", e.completed ? ". Stars you've already earned are kept." : "."),

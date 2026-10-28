@@ -108,7 +108,7 @@
       if (ok) return true;
       var msg = "Printing is blocked here. Use “Download report” instead (open the file, then print it).";
       if (statusEl) statusEl.textContent = msg;
-      UI.dialogs.toast(msg, { icon: "⚠️", kind: "warn" });
+      UI.dialogs.toast(msg, { icon: "warning", kind: "warn" });
       return false;
     });
   }
@@ -120,7 +120,7 @@
   UI.screens.grimoire = function () {
     var p = u.profile();
     var overall = overallOf(p);
-    var rank = P(function () { return SS.Progress.rankFor(overall.xp); }, null) || { title: "Novice", icon: "🌱", fraction: 0 };
+    var rank = P(function () { return SS.Progress.rankFor(overall.xp); }, null) || { title: "Novice", icon: "rank", fraction: 0 };
     var allDone = overall.total > 0 && overall.completed >= overall.total;
     var hintsUsed = 0, casts = 0;
     Object.keys(p.challenges || {}).forEach(function (id) {
@@ -131,28 +131,28 @@
 
     function stat(icon, label, value, sub) {
       return h("div", { class: "stat-tile panel" },
-        h("span", { class: "stat-icon", "aria-hidden": "true" }, icon),
+        h("span", { class: "stat-icon", "aria-hidden": "true" }, u.icon(icon)),
         h("p", { class: "stat-value" }, value),
         h("p", { class: "stat-label" }, label),
         sub ? h("p", { class: "stat-sub" }, sub) : null);
     }
 
     var tiles = h("div", { class: "stat-tiles" },
-      stat(rank.icon || "✦", "Rank", rank.title || "", overall.xp + " / " + overall.maxXp + " XP"),
-      stat("📜", "Spells mastered", overall.completed + " / " + overall.total, Math.round(overall.total ? 100 * overall.completed / overall.total : 0) + "% of the academy"),
+      stat(rank.icon || "rank", "Rank", rank.title || "", overall.xp + " / " + overall.maxXp + " XP"),
+      stat("spellbook", "Spells mastered", overall.completed + " / " + overall.total, Math.round(overall.total ? 100 * overall.completed / overall.total : 0) + "% of the academy"),
       stat("★", "Stars", overall.stars + " / " + overall.maxStars, "★★★ = no hints needed"),
-      stat("✨", "Spells cast", String(casts), u.plural(hintsUsed, "hint") + " from Pip"));
+      stat("cast", "Spells cast", String(casts), u.plural(hintsUsed, "hint") + " from Pip"));
 
     var reportStatus = h("p", { class: "field-status", role: "status" });
     var actions = h("div", { class: "grimoire-actions" },
-      u.button("Print Progress Report", { kind: "primary", icon: "🖨️", onClick: function () { printReport(p, reportStatus); } }),
+      u.button("Print Progress Report", { kind: "primary", icon: "print", onClick: function () { printReport(p, reportStatus); } }),
       u.button("Download report", {
-        kind: "ghost", icon: "⬇️", onClick: function () {
+        kind: "ghost", icon: "download", onClick: function () {
           var ok = downloadReport(p);
           reportStatus.textContent = ok ? "Your report is downloading (open it in a browser to print or save as PDF)." : "Downloads are blocked here. Try Print instead.";
         }
       }),
-      allDone ? u.button("Your certificate", { kind: "ghost", icon: "🎓", onClick: function () { app().go("certificate"); } }) : null,
+      allDone ? u.button("Your certificate", { kind: "ghost", icon: "certificate", onClick: function () { app().go("certificate"); } }) : null,
       reportStatus);
 
     var chaptersEl = h("div", { class: "grimoire-chapters" });
@@ -184,7 +184,7 @@
       });
       chaptersEl.appendChild(h("section", { class: "grimoire-chapter panel", "aria-labelledby": "gc-" + chapter.id },
         h("header", { class: "grimoire-chapter-head" },
-          h("span", { class: "gc-icon", "aria-hidden": "true" }, chapter.icon || "✦"),
+          h("span", { class: "gc-icon", "aria-hidden": "true" }, u.chapterIcon(chapter)),
           h("div", null,
             h("p", { class: "eyebrow" }, "Chapter " + u.roman(ci + 1)),
             h("h2", { id: "gc-" + chapter.id }, chapter.title)),
@@ -194,11 +194,11 @@
 
     var el = h("section", { class: "grimoire-screen" },
       h("nav", { class: "crumbs", "aria-label": "Breadcrumb" },
-        h("button", { type: "button", class: "crumb", on: { click: function () { app().go("map"); } } }, u.emoji("🗺️"), " Academy map"),
+        h("button", { type: "button", class: "crumb", on: { click: function () { app().go("map"); } } }, u.icon("map"), " Academy map"),
         h("span", { class: "crumb-sep", "aria-hidden": "true" }, "›"),
         h("span", { class: "crumb-current", "aria-current": "page" }, "Grimoire")),
       h("header", { class: "screen-head-block" },
-        h("p", { class: "eyebrow" }, "📖 The Grimoire of"),
+        h("p", { class: "eyebrow" }, u.icon("grimoire"), " The Grimoire of"),
         h("h1", { class: "screen-title grimoire-name" }, p.wizardName || "Apprentice"),
         h("p", { class: "screen-lead" }, "Every spell you have mastered, in your own words. Teachers: the Progress Report can be printed or saved as a PDF.")),
       tiles,
@@ -295,8 +295,9 @@
       runBtn.classList.toggle("is-casting", running);
       runLabel.textContent = running ? "Running…" : "Run";
       var text = "";
-      if (!running && !ready) text = st.state === "error" ? "⚠️ Python couldn't be loaded. " + (st.message || "") : "⏳ Python is still waking up…";
-      reason.textContent = text;
+      if (!running && !ready) text = st.state === "error" ? "Python couldn't be loaded. " + (st.message || "") : "Python is still waking up…";
+      u.clear(reason);
+      if (text) u.append(reason, [u.icon(st.state === "error" ? "warning" : "timeout", { className: "reason-icon" }), " " + text]);
       reason.hidden = !text;
     }
 
@@ -338,26 +339,26 @@
 
     var el = h("section", { class: "practice-screen" },
       h("nav", { class: "crumbs", "aria-label": "Breadcrumb" },
-        h("button", { type: "button", class: "crumb", on: { click: function () { app().go("map"); } } }, u.emoji("🗺️"), " Academy map"),
+        h("button", { type: "button", class: "crumb", on: { click: function () { app().go("map"); } } }, u.icon("map"), " Academy map"),
         h("span", { class: "crumb-sep", "aria-hidden": "true" }, "›"),
         h("span", { class: "crumb-current", "aria-current": "page" }, "Practice Chamber")),
       h("header", { class: "screen-head-block" },
-        h("h1", { class: "screen-title" }, u.emoji("🧪"), " The Practice Chamber"),
+        h("h1", { class: "screen-title" }, u.icon("practice"), " The Practice Chamber"),
         h("p", { class: "screen-lead" }, "A quiet room for experiments. Nothing here is graded: try anything, break things, learn.")),
       h("div", { class: "practice-layout" },
         h("section", { class: "editor-panel", "aria-label": "Practice editor" },
           h("div", { class: "panel-head" },
-            h("h2", { class: "card-title" }, u.emoji("✒️"), " Scratch spell"),
+            h("h2", { class: "card-title" }, u.icon("editor"), " Scratch spell"),
             h("div", { class: "panel-tools" }, exampleSelect)),
           editorHost,
           h("div", { class: "cast-bar" },
             runBtn,
             h("div", { class: "cast-tools" },
-              u.button("Clear output", { kind: "ghost", size: "sm", icon: "🧹", onClick: function () { UI.results.idle(output, "Output cleared."); editor.clearMarks(); } })),
+              u.button("Clear output", { kind: "ghost", size: "sm", icon: "clear", onClick: function () { UI.results.idle(output, "Output cleared."); editor.clearMarks(); } })),
             reason)),
         h("div", { class: "practice-side" },
           h("section", { class: "inputs-panel panel" },
-            h("label", { class: "field-label", for: inputsId }, u.emoji("📥"), " Answers for ", h("code", { class: "inline-code" }, "input()")),
+            h("label", { class: "field-label", for: inputsId }, u.icon("inputs"), " Answers for ", h("code", { class: "inline-code" }, "input()")),
             h("p", { class: "field-help" }, "One answer per line, given to your spell in order."),
             inputsBox),
           h("section", { class: "results-panel", "aria-label": "Output" }, output))));
@@ -399,13 +400,13 @@
           ": Python from the very first ", h("code", null, "print()"),
           ", through data structures, algorithms and the art of objects, to taming the Hydra of Overlapping Subproblems with dynamic programming."),
         h("dl", { class: "cert-stats" },
-          h("div", null, h("dt", null, "Rank"), h("dd", null, (rank.icon ? rank.icon + " " : "") + (rank.title || ""))),
+          h("div", null, h("dt", null, "Rank"), h("dd", null, u.icon(rank.icon || "rank", { className: "cert-rank-icon" }), " " + (rank.title || ""))),
           h("div", null, h("dt", null, "Spells"), h("dd", null, overall.completed + " / " + overall.total)),
           h("div", null, h("dt", null, "Stars"), h("dd", null, "★ " + overall.stars + " / " + overall.maxStars)),
           h("div", null, h("dt", null, "XP"), h("dd", null, String(overall.xp)))),
         h("div", { class: "cert-foot" },
           h("div", { class: "cert-sign" }, h("span", { class: "cert-signature" }, "Ada"), h("span", { class: "cert-sign-line" }, "Archmage Ada, Headmistress")),
-          h("div", { class: "cert-seal", "aria-hidden": "true" }, h("span", null, "🐉")),
+          h("div", { class: "cert-seal", "aria-hidden": "true" }, u.icon("seal")),
           h("div", { class: "cert-sign" }, h("span", { class: "cert-date" }, u.formatDate(lastDate || Date.now())), h("span", { class: "cert-sign-line" }, "Date")))));
   }
 
@@ -416,25 +417,27 @@
     var body;
     if (!allDone) {
       body = h("div", { class: "panel locked-panel" },
-        h("p", { class: "locked-icon", "aria-hidden": "true" }, "🎓"),
+        h("p", { class: "locked-icon", "aria-hidden": "true" }, u.icon("certificate")),
         h("h2", null, "Your certificate awaits"),
         h("p", null, "Master every spell in the academy to earn it. So far: " + overall.completed + " of " + overall.total + "."),
         u.progressBar(overall.total ? overall.completed / overall.total : 0, "Spells mastered"),
-        u.button("Back to the map", { kind: "primary", icon: "🗺️", onClick: function () { app().go("map"); } }));
+        u.button("Back to the map", { kind: "primary", icon: "map", onClick: function () { app().go("map"); } }));
     } else {
+      var endingArt = u.artImg("ending", "cert-art-img");
       body = h("div", { class: "certificate-wrap" },
+        endingArt ? h("div", { class: "cert-art", "aria-hidden": "true" }, endingArt) : null,
         certificateNode(p),
         h("div", { class: "button-row cert-actions" },
-          u.button("Print certificate", { kind: "primary", icon: "🖨️", onClick: function () {
+          u.button("Print certificate", { kind: "primary", icon: "print", onClick: function () {
             Promise.resolve(UI.dialogs.printNode(certificateNode(p), "certificate")).then(function (ok) {
-              if (!ok) UI.dialogs.toast("Printing is blocked here. Try opening the game in its own browser tab, then print.", { icon: "⚠️", kind: "warn" });
+              if (!ok) UI.dialogs.toast("Printing is blocked here. Try opening the game in its own browser tab, then print.", { icon: "warning", kind: "warn" });
             });
           } }),
-          app().hasStory("epilogue") ? u.button("Replay the epilogue", { kind: "ghost", icon: "📜", onClick: function () { app().go("story", { kind: "epilogue" }); } }) : null,
-          u.button("Back to the map", { kind: "ghost", icon: "🗺️", onClick: function () { app().go("map"); } })));
+          app().hasStory("epilogue") ? u.button("Replay the epilogue", { kind: "ghost", icon: "story", onClick: function () { app().go("story", { kind: "epilogue" }); } }) : null,
+          u.button("Back to the map", { kind: "ghost", icon: "map", onClick: function () { app().go("map"); } })));
     }
     var el = h("section", { class: "certificate-screen" },
-      h("h1", { class: "screen-title" }, allDone ? "🎓 Archmage of Coilspire" : "🎓 The Archmage's Sanctum"),
+      h("h1", { class: "screen-title" }, u.icon("certificate"), allDone ? " Archmage of Coilspire" : " The Archmage's Sanctum"),
       body);
     return {
       el: el,

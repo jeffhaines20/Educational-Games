@@ -324,7 +324,7 @@
     }
     for (var j = 0; j < 8; j++) {
       var angle = rnd(Math.PI * 1.1, Math.PI * 1.9), dist = rnd(30, 70);
-      particle(layer, "fx-dud", "✦", { "--dx": px(Math.cos(angle) * dist), "--dy": px(Math.sin(angle) * dist), "--delay": ms(rnd(0, 150)), "--size": px(rnd(8, 13)) });
+      shape(layer, "fx-dud", pick(["star4", "dot"]), { "--dx": px(Math.cos(angle) * dist), "--dy": px(Math.sin(angle) * dist), "--delay": ms(rnd(0, 150)), "--size": px(rnd(7, 12)) });
     }
     setTimeout(function () { u.remove(layer); stageEl.classList.remove("fx-fizzle"); }, 1400);
   }
@@ -336,7 +336,7 @@
     el.appendChild(layer);
     for (var i = 0; i < (count || 18); i++) {
       var angle = Math.random() * Math.PI * 2, dist = rnd(40, 110);
-      particle(layer, "fx-spark " + pick(["gold", "teal", "white"]), pick(["✦", "✧", "⋆"]), {
+      shape(layer, "fx-spark " + pick(["gold", "teal", "white"]), pick(SPARKS), {
         "--dx": px(Math.cos(angle) * dist), "--dy": px(Math.sin(angle) * dist),
         "--delay": ms(rnd(0, 200)), "--size": px(rnd(9, 18))
       });
@@ -353,7 +353,7 @@
     var host = overlays.length ? overlays[overlays.length - 1] : document.body;
     host.insertBefore(layer, host.firstChild);
     for (var i = 0; i < 46; i++) {
-      particle(layer, "fx-falling " + pick(["gold", "teal", "violet", "white"]), pick(["✦", "✧", "★", "⋆"]), {
+      shape(layer, "fx-falling " + pick(["gold", "teal", "violet", "white"]), pick(["star4", "star5", "star5", "dot"]), {
         "--x": pct(rnd(0, 100)), "--delay": ms(rnd(0, 1300)), "--size": px(rnd(10, 22)),
         "--drift": px(rnd(-60, 60)), "--dur": ms(rnd(1800, 2800))
       });
@@ -365,28 +365,41 @@
   // A challenge's scene panel
   // --------------------------------------------------------------------------
 
-  function createStage(scene) {
+  /**
+   * A challenge's scene panel. opts.backdrop: an SS.Art slot (the chapter's location)
+   * shown, dimmed, behind the scene icon and its effects when that painting exists.
+   */
+  function createStage(scene, opts) {
     scene = scene || {};
+    opts = opts || {};
     var effect = EFFECT_NAMES.indexOf(scene.effect) >= 0 ? scene.effect : "sparkle";
-    var glyph = h("span", { class: "scene-glyph" }, scene.icon || "✨");
+    var glyph = h("span", { class: "scene-glyph" });
     var caption = h("p", { class: "scene-caption" });
-    var el = h("div", { class: "scene-stage scene-" + effect, "aria-hidden": "true" },
+    var backdrop = opts.backdrop ? u.artImg(opts.backdrop, "scene-backdrop-img") : null;
+    var el = h("div", { class: "scene-stage scene-" + effect + (backdrop ? " has-art" : ""), "aria-hidden": "true" },
+      backdrop ? h("div", { class: "scene-backdrop" }, backdrop) : null,
       h("div", { class: "scene-glow" }),
       h("div", { class: "scene-pedestal" }),
       h("div", { class: "scene-actor" }, h("div", { class: "scene-icon" }, glyph)),
       caption);
     var kept = null;
 
+    function setGlyph(value) {
+      u.clear(glyph);
+      glyph.appendChild(u.icon(value || "cast", { className: "scene-svg" }));
+    }
+    setGlyph(scene.icon);
+
     function reset() {
       el.classList.remove("is-success", "has-keep", "keep-" + effect);
-      glyph.textContent = scene.icon || "✨";
+      setGlyph(scene.icon);
       caption.textContent = "";
       if (kept) { u.remove(kept); kept = null; }
     }
 
     function showSuccess() {
       el.classList.add("is-success");
-      glyph.textContent = scene.successIcon || scene.icon || "✨";
+      setGlyph(scene.successIcon || scene.icon);
       caption.textContent = scene.successText || "";
     }
 

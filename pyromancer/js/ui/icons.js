@@ -63,7 +63,7 @@
 
   /** Interface pieces → icon. */
   var UI = {
-    brand: "fire-spell-cast", cast: "sparkles", hint: "owl", grimoire: "spell-book",
+    brand: "flame", cast: "sparkles", hint: "owl", grimoire: "spell-book",
     practice: "test-tubes", saveScroll: "scroll-unfurled", settings: "cog",
     soundOn: "speaker", soundOff: "speaker-off", map: "treasure-map", lock: "padlock",
     unlock: "padlock-open", task: "archery-target", lesson: "open-book", output: "crystal-ball",
