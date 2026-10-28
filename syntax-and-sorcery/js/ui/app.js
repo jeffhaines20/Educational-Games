@@ -545,6 +545,18 @@
     else global.addEventListener("load", idle, { once: true });
   }
 
+  // Another tab of the game saved the same wizard: its progress was merged in, so show it.
+  var syncTimer = null;
+  function onSaveChange(profile, info) {
+    refreshTopbar();
+    if (!info || info.type !== "sync") return;
+    clearTimeout(syncTimer);
+    syncTimer = setTimeout(function () {
+      applySettings();
+      if (current && current.refresh && !UI.dialogs.isOpen()) u.safe(function () { current.refresh(); });
+    }, 0);
+  }
+
   function boot() {
     buildShell();
     UI.effects.initSky(document.getElementById("sky"));
@@ -571,7 +583,7 @@
       if (global.console) console.warn("[Pyromancer] SS.Save.init failed", err);
       state.bootInfo = { storage: "memory", scorm: false, learnerName: null };
     }).then(function () {
-      u.safe(function () { SS.Save.onChange(function () { refreshTopbar(); }); });
+      u.safe(function () { SS.Save.onChange(onSaveChange); });
       var p = u.profile();
       if (p) state.slot = u.safe(function () { return SS.Save.getLastSlot(); }, null);
       applySettings();

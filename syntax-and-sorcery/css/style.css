@@ -1911,10 +1911,20 @@ html.modal-open .toast { pointer-events: none; }
   .brief-tab { flex: 1 1 0; min-width: 0; gap: 4px; padding: 6px 6px; font-size: 0.86rem; text-align: center; }
   .brief-tab .emoji { display: none; }
 }
+/* Short screens: a story dialog taller than the window scrolls instead of being cut off. */
+@media (max-height: 700px) {
+  .modal-dialogue { overflow-y: auto; overscroll-behavior: contain; }
+}
 /* Very short screens: the top bar scrolls away instead of covering a third of the view. */
 @media (max-height: 520px) {
   :root { --sticky-offset: 0px; }
   .topbar { position: relative; }
+  .modal-overlay { padding: 8px; }
+  .modal { max-height: calc(100vh - 16px); max-height: calc(100dvh - 16px); padding: 14px 16px; }
+  .modal-dialogue { padding: 0; }
+  .dlg-card { padding: 14px 16px; gap: 10px; }
+  .dlg-portrait { width: 48px; height: 48px; font-size: 26px; }
+  .dlg-bubble { padding: 10px 14px; font-size: 0.98rem; line-height: 1.55; }
 }
 @media (max-width: 640px) {
   .challenge-bar { grid-template-columns: minmax(0, 1fr); grid-template-areas: "crumbs" "heading" "nav"; }

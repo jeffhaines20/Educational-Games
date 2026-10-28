@@ -20,6 +20,7 @@
  *   leave-casting leaving the challenge mid-cast still records the mastered spell
  *   drafts        a draft typed just before leaving the screen is kept
  *   damaged-slot  an unreadable save slot is shown as damaged and can be deleted
+ *   scorm-missing the SCORM package can't reach its LMS → a lasting warning, title screen included
  */
 "use strict";
 const fs = require("fs");
@@ -483,10 +484,26 @@ SCENARIOS["damaged-slot"] = async function () {
     await page.waitForSelector(".slots-screen");
     check(await page.isVisible(".slot-card.damaged >> text=Damaged save"), "the damaged slot is shown as “Damaged save”");
     await shot(page, "damaged-slot");
-    await page.click(".slot-card.damaged >> text=Delete it");
+    await page.click(".slot-card.damaged button:has-text(\"Delete it\")");
     await page.click(".modal-confirm .btn-danger");
     await page.waitForFunction(() => !document.querySelector(".slot-card.damaged"));
     check(await page.evaluate(() => localStorage.getItem("pyromancer:slot:1") === null), "deleting it frees the slot");
+  } finally { await game.close(); }
+};
+
+SCENARIOS["scorm-missing"] = async function () {
+  const game = await openGame({ config: { scormRequired: true } });
+  const { page } = game;
+  try {
+    await page.waitForSelector(".title-screen", { timeout: 15000 });
+    const banner = await page.waitForSelector(".title-screen .banner-warn", { timeout: 8000 }).catch(() => null);
+    check(!!banner && /couldn't connect to your course/.test(await banner.textContent()), "the title says the course couldn't be reached");
+    await newGame(page, "Bram");
+    check(await page.isVisible(".topbar .warn-chip"), "the warning stays reachable from the top bar");
+    await page.click(".topbar .warn-chip");
+    await page.waitForSelector(".modal >> text=couldn't connect to your course");
+    check(true, "the top bar warning explains the problem");
+    await shot(page, "scorm-missing");
   } finally { await game.close(); }
 };
 

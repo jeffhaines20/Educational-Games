@@ -818,7 +818,8 @@
       onSettings: function (s) {
         if (editor) editor.setFontSize(Number(s.editorFontSize) || 15);
       },
-      refresh: function () { renderNextLock(); renderHints(); },
+      // Progress changed elsewhere (e.g. merged in from another tab): update what depends on it.
+      refresh: function () { if (destroyed) return; renderBest(); renderNextLock(); renderHints(); refreshAnswer(); },
       destroy: function () {
         destroyed = true;
         timers.forEach(clearTimeout);

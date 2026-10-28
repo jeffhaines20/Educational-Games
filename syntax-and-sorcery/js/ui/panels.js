@@ -196,7 +196,9 @@
     var scorm = app().isScorm();
     var framed = u.isFramed();
     var scormConf = (u.config().scorm || {});
-    var allowImport = !scorm || scormConf.allowImport === true;
+    var allowImport = SS.Save && SS.Save.canImport
+      ? !!u.safe(function () { return SS.Save.canImport(); }, !scorm)
+      : !scorm || scormConf.allowImport === true;
     var body = h("div", { class: "savescroll" });
     var m;
 
