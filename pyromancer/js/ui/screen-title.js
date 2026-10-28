@@ -291,7 +291,8 @@
       title: kind === "prologue" ? "Prologue" : "Epilogue",
       finishLabel: kind === "prologue" ? "Enter the academy" : "Receive your certificate",
       skipLabel: "Skip the story",
-      banner: kind === "epilogue" ? "ending" : null,
+      // The prologue arrives at the Apprentice's Tower; the epilogue returns to its top.
+      banner: kind === "epilogue" && SS.Art && SS.Art.has("ending") ? "ending" : "location-tower",
       onDone: finish
     });
     var el = h("section", { class: "story-screen story-" + kind },

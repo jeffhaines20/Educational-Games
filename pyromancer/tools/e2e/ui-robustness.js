@@ -27,6 +27,7 @@
 "use strict";
 const fs = require("fs");
 const path = require("path");
+const vm = require("vm");
 const { openGame, waitForPython } = require("./lib");
 const { GAME } = require("../dev_server");
 
@@ -512,10 +513,21 @@ SCENARIOS["scorm-missing"] = async function () {
 
 SCENARIOS.paintings = async function () {
   const LOCATIONS = ["tower", "hall", "circle", "library", "workshop", "labyrinth", "hydra"];
-  // Icons only: the repository's art manifest is empty.
-  let game = await openGame();
+  // The repository's manifest only lists paintings that exist.
+  const sandbox = { window: {} };
+  vm.runInNewContext(fs.readFileSync(path.join(GAME, "js", "ui", "art-manifest.js"), "utf8"), sandbox);
+  const listed = Object.entries(sandbox.window.SS.ART || {});
+  const missing = listed.filter(([, entry]) => !fs.existsSync(path.join(GAME, entry.src)));
+  check(missing.length === 0, "every painting in js/ui/art-manifest.js exists (" + listed.length + " listed" +
+    (missing.length ? "; missing: " + missing.map(([slot]) => slot).join(", ") : "") + ")");
+
+  // Icons only: an empty manifest, whatever paintings the repository has.
+  let game = await openGame({ goto: false });
   let page = game.page;
   try {
+    await page.route("**/js/ui/art-manifest.js", (r) => r.fulfill({ contentType: "text/javascript",
+      body: "(function (g) { var SS = (g.SS = g.SS || {}); SS.ART = {}; })(window);" }));
+    await page.goto(game.url);
     await newGame(page, "Ivy");
     const plain = await page.evaluate(() => ({
       stations: document.querySelectorAll(".trail-list .station").length,
