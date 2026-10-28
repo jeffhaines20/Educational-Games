@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /*
- * Engine tests: SS.config, SS.Progress, SS.Save, SS.Scorm (and the parts of
+ * Pyromancer engine tests: SS.config, SS.Progress, SS.Save, SS.Scorm (and the parts of
  * SS.PythonRunner that work without a browser). Dependency-free: every scenario
  * loads the real engine files into a fresh Node `vm` sandbox with a fake window,
  * fake localStorage, fake timers, fake SCORM LMS APIs and a small fake content set,
@@ -1496,24 +1496,37 @@ function python() {
 }
 
 function fakeGame(files) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ss-build-test-"));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "pyro-build-test-"));
   const all = Object.assign({
     "scorm/imsmanifest.xml": source("scorm/imsmanifest.xml"),
     "index.html": [
       "<!DOCTYPE html>", "<html><head><meta charset=\"utf-8\"><title>T</title>",
       "<link rel=\"stylesheet\" href=\"https://cdn.example.invalid/x.css\">",
+      "<link rel=\"preload\" href=\"assets/fonts/body.woff2\" as=\"font\" crossorigin>",
+      "<link rel=\"stylesheet\" href=\"css/fonts.css\">",
       "<link rel=\"stylesheet\" href=\"css/style.css\">",
+      "<link rel=\"icon\" href=\"assets/icon.svg\">",
       "<!-- <script src=\"js/old.js\"></script> -->",
       "<script>window.order = ['inline'];</script>",
       "<script src=\"https://cdn.example.invalid/lib.js\"></script>",
       "</head><body>",
+      "<img id=\"art\" src=\"assets/art.webp\" srcset=\"assets/art-small.webp 512w, assets/art.webp 1024w\" alt=\"\">",
+      "<picture><source srcset=\"assets/art.webp\" type=\"image/webp\"><img src=\"https://cdn.example.invalid/x.png\" alt=\"\"></picture>",
+      "<script src=\"js/config.js\"></script>",
       "<script src=\"js/a.js\"></script>",
       "<script src=\"js/b.js\"></script>",
       "</body></html>", "",
     ].join("\n"),
-    "css/style.css": "body { color: red; background: url(img/dot.svg); }\n",
+    "css/style.css": "body { color: red; background: url(img/dot.svg); }\n.x { background: url(\"../assets/art.webp\"); }\n",
+    "css/fonts.css": "@font-face { font-family: Body; src: url(\"../assets/fonts/body.woff2\") format(\"woff2\"); }\n",
     "css/img/dot.svg": "<svg xmlns=\"http://www.w3.org/2000/svg\"/>\n",
-    "js/a.js": "window.order.push('a');\n",
+    "assets/icon.svg": "<svg xmlns=\"http://www.w3.org/2000/svg\"/>\n",
+    "assets/art.webp": "RIFF-fake-webp",
+    "assets/art-small.webp": "RIFF-fake-small",
+    "assets/fonts/body.woff2": "wOF2-fake-font",
+    "js/config.js": "window.SS = { config: window.SS_CONFIG || {} };\n",
+    "js/a.js": "window.order.push('a');\nvar art = { src: \"assets/art.webp\", srcset: \"assets/art-small.webp 512w, assets/art.webp 1024w\" };\n" +
+      "var notAnAsset = \"assets/art.webp is lovely\";\nvar missing = 'assets/missing.webp';\n",
     "js/b.js": "window.order.push('b'); var s = '<\\/script>';\n",
   }, files || {});
   for (const [rel, text] of Object.entries(all)) {
@@ -1524,8 +1537,8 @@ function fakeGame(files) {
   return dir;
 }
 
-function build(py, dir, out) {
-  return spawnSync(py, [path.join(ROOT, "tools", "build.py"), "--root", dir, "--out", out], { encoding: "utf8" });
+function build(py, dir, out, extra) {
+  return spawnSync(py, [path.join(ROOT, "tools", "build.py"), "--root", dir, "--out", out].concat(extra || []), { encoding: "utf8" });
 }
 
 function zipListing(py, zipPath) {
@@ -1536,35 +1549,61 @@ function zipListing(py, zipPath) {
   return JSON.parse(r.stdout);
 }
 
-test("build: inlines local CSS/JS, keeps CDN tags and comments, deterministic SCORM zip", () => {
+const b64 = (text) => Buffer.from(text).toString("base64");
+
+test("build: inlines local CSS/JS/images/fonts, keeps CDN tags and comments, deterministic SCORM zip", () => {
   const py = python();
   if (!py) { console.log("       (skipped: python3 not found)"); return; }
   const dir = fakeGame();
   try {
     let r = build(py, dir, path.join(dir, "out1"));
     assert.strictEqual(r.status, 0, r.stderr);
+    assert.match(r.stderr, /'assets\/missing\.webp' is not a file/, "a JS string naming a missing asset is reported");
     r = build(py, dir, path.join(dir, "out2"));
     assert.strictEqual(r.status, 0, r.stderr);
     const read = (p) => fs.readFileSync(path.join(dir, p));
-    const page = read("out1/syntax-and-sorcery.html").toString("utf8");
-    assert.ok(read("out1/syntax-and-sorcery.html").equals(read("out2/syntax-and-sorcery.html")), "deterministic HTML");
-    assert.ok(read("out1/syntax-and-sorcery-scorm.zip").equals(read("out2/syntax-and-sorcery-scorm.zip")), "deterministic zip");
-    assert.ok(page.startsWith("<!DOCTYPE html>\n<!-- Single-file build"), "doctype stays first");
+    const page = read("out1/pyromancer.html").toString("utf8");
+    assert.ok(read("out1/pyromancer.html").equals(read("out2/pyromancer.html")), "deterministic HTML");
+    assert.ok(read("out1/pyromancer-scorm.zip").equals(read("out2/pyromancer-scorm.zip")), "deterministic zip");
+    assert.ok(page.startsWith("<!DOCTYPE html>\n<!-- Single-file build of Pyromancer"), "doctype stays first");
     assert.ok(!/<script[^>]*src="js\//.test(page.replace(/<!--[\s\S]*?-->/g, "")), "no local script tags left");
     assert.ok(page.includes("<!-- <script src=\"js/old.js\"></script> -->"), "comments untouched");
     assert.ok(page.includes("<script src=\"https://cdn.example.invalid/lib.js\"></script>"));
     assert.ok(page.includes("<link rel=\"stylesheet\" href=\"https://cdn.example.invalid/x.css\">"));
-    assert.ok(page.includes("<script data-inlined=\"js/a.js\">\nwindow.order.push('a');\n</script>"));
-    assert.ok(page.includes("<style data-inlined=\"css/style.css\">"));
-    assert.ok(page.includes("url(\"data:image/svg+xml;base64,"));
+    assert.ok(page.includes("<img src=\"https://cdn.example.invalid/x.png\" alt=\"\">"), "remote images stay");
+    assert.ok(page.includes("<script data-inlined=\"js/a.js\">\nwindow.order.push('a');"));
     assert.ok(page.indexOf("js/a.js") < page.indexOf("js/b.js"), "order kept");
-    const entries = zipListing(py, path.join(dir, "out1", "syntax-and-sorcery-scorm.zip"));
+    assert.ok(page.includes("<style data-inlined=\"css/style.css\">"));
+    const art = "data:image/webp;base64," + b64("RIFF-fake-webp");
+    const small = "data:image/webp;base64," + b64("RIFF-fake-small");
+    assert.ok(page.includes("src: \"" + art + "\""), "an asset path in a script string");
+    assert.ok(page.includes("srcset: \"" + small + " 512w, " + art + " 1024w\""), "a srcset list in a script string");
+    assert.ok(page.includes("\"assets/art.webp is lovely\""), "other strings are left alone");
+    assert.ok(page.includes("<img id=\"art\" src=\"" + art + "\" srcset=\"" + small + " 512w, " + art + " 1024w\" alt=\"\">"));
+    assert.ok(page.includes("<source srcset=\"" + art + "\" type=\"image/webp\">"));
+    assert.ok(page.includes("url(\"data:font/woff2;base64," + b64("wOF2-fake-font") + "\")"), "fonts.css url() resolved against css/");
+    assert.ok(page.includes("url(\"" + art + "\")"), "../assets from css/style.css");
+    assert.ok(page.includes("url(\"data:image/svg+xml;base64,"));
+    assert.ok(page.includes("<link rel=\"icon\" href=\"data:image/svg+xml;base64,"));
+    assert.ok(!/rel="preload"/.test(page), "preload links for inlined files are dropped");
+    assert.ok(!page.includes("window.SS_CONFIG = Object.assign("), "nothing baked into the plain build");
+    const entries = zipListing(py, path.join(dir, "out1", "pyromancer-scorm.zip"));
     assert.deepStrictEqual(entries.map((e) => e[0]), ["imsmanifest.xml", "index.html"]);
     assert.ok(entries.every((e) => e[1].join() === "1980,1,1,0,0,0" && e[2] === 0o100644));
-    assert.strictEqual(entries[1][3], page);
-    assert.match(entries[0][3], /<title>Syntax &amp; Sorcery<\/title>/);
+    const inject = "<script>window.SS_CONFIG = Object.assign({\"scormRequired\":true}, window.SS_CONFIG || {});</script>\n";
+    assert.ok(entries[1][3].includes(inject + "<script data-inlined=\"js/config.js\">"), "the SCORM build requires an LMS");
+    assert.strictEqual(entries[1][3].replace(inject, ""), page, "otherwise the same page");
+    assert.match(entries[0][3], /<title>Pyromancer<\/title>/);
     assert.match(entries[0][3], /adlcp:scormtype="sco" href="index.html"/);
     assert.match(entries[0][3], /<schemaversion>1\.2<\/schemaversion>/);
+    assert.ok(!/\sxsi:schemaLocation\s*=/.test(entries[0][3]), "no xsi:schemaLocation attribute (the XSDs aren't bundled)");
+
+    // --answers off bakes allowAnswerScroll: false into both bundles.
+    r = build(py, dir, path.join(dir, "out3"), ["--answers", "off"]);
+    assert.strictEqual(r.status, 0, r.stderr);
+    assert.ok(read("out3/pyromancer.html").toString("utf8").includes("<script>window.SS_CONFIG = Object.assign({\"allowAnswerScroll\":false}, window.SS_CONFIG || {});</script>"));
+    const zipped = zipListing(py, path.join(dir, "out3", "pyromancer-scorm.zip"))[1][3];
+    assert.ok(zipped.includes("Object.assign({\"allowAnswerScroll\":false,\"scormRequired\":true}, window.SS_CONFIG || {})"));
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
@@ -1578,10 +1617,13 @@ test("build: refuses unsafe or broken input with a clear message", () => {
     [{ "js/b.js": "var a = '<!--';\nvar b = '<script>';\n" }, /js\/b\.js contains "<!--"/],
     [{ "css/style.css": "/* </style> */\n" }, /css\/style\.css contains "<\/style"/],
     [{ "js/a.js": null }, /'js\/a\.js' was not found/],
+    [{ "assets/art-small.webp": null }, /'assets\/art-small\.webp' was not found/],
+    [{ "assets/fonts/body.woff2": null }, /css\/fonts\.css: '\.\.\/assets\/fonts\/body\.woff2' was not found/],
     [{ "scorm/imsmanifest.xml": null }, /imsmanifest\.xml was not found/],
     [{ "scorm/imsmanifest.xml": "<manifest><oops></manifest>" }, /not valid XML/],
     [{ "index.html": "<!DOCTYPE html><script type=\"module\" src=\"js/a.js\"></script>" }, /module script/],
     [{ "index.html": "<!DOCTYPE html><script src=\"../outside.js\"></script>" }, /outside the game folder/],
+    [{ "index.html": "<!DOCTYPE html><script src=\"js/a.js\"></script>" }, /doesn't load js\/config\.js/],
     [{ "index.html": null }, /index\.html was not found/],
   ];
   for (const [files, message] of cases) {
@@ -1592,7 +1634,7 @@ test("build: refuses unsafe or broken input with a clear message", () => {
       assert.strictEqual(r.status, 1, "expected a failure for " + message + "\n" + r.stdout + r.stderr);
       assert.match(r.stderr, /^build\.py: error: /);
       assert.match(r.stderr, message);
-      assert.ok(!fs.existsSync(path.join(out, "syntax-and-sorcery.html")), "nothing is written on failure");
+      assert.ok(!fs.existsSync(path.join(out, "pyromancer.html")), "nothing is written on failure");
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
     }

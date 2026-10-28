@@ -688,7 +688,7 @@ h1[tabindex="-1"]:focus, h2[tabindex="-1"]:focus, main:focus, .results:focus, .h
   color: transparent;
   filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.85)) drop-shadow(0 0 22px rgba(255, 130, 40, 0.55));
 }
-.title-tagline { margin: 6px 0 0; font: 600 1.08rem/1.35 var(--font-display); letter-spacing: 0.05em; color: #ffe4b5; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9); }
+.title-tagline { margin: 6px 0 0; font: 500 1.12rem/1.35 Georgia, "Times New Roman", serif; letter-spacing: 0.02em; color: #ffe4b5; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9); }
 .title-pitch { margin: 8px auto 0; max-width: 30em; font-size: 0.95rem; color: var(--ink-2); }
 .title-actions { display: flex; flex-direction: column; align-items: stretch; gap: 10px; margin: 0; }
 .title-actions .btn { width: 100%; white-space: normal; }
@@ -1004,7 +1004,7 @@ h1[tabindex="-1"]:focus, h2[tabindex="-1"]:focus, main:focus, .results:focus, .h
   grid-template-areas: "crumbs nav" "heading heading";
   gap: 2px 16px;
   align-items: center;
-  margin-bottom: 14px;
+  min-width: 0;
 }
 .challenge-bar .crumbs { grid-area: crumbs; }
 .challenge-nav { grid-area: nav; display: flex; gap: 8px; }
@@ -1830,10 +1830,14 @@ html.modal-open .toast { pointer-events: none; }
   .station:nth-child(even) .station-meta { justify-content: flex-end; }
 }
 @media (min-width: 1000px) {
-  .challenge-layout { grid-template-columns: minmax(300px, 4fr) minmax(0, 7fr); align-items: start; }
+  .challenge-layout { grid-template-columns: minmax(300px, 4fr) minmax(0, 7fr); grid-template-rows: auto 1fr; row-gap: 14px; align-items: start; }
+  .challenge-layout > .challenge-bar { grid-column: 1; grid-row: 1; }
+  .challenge-layout > .ch-brief { grid-column: 1; grid-row: 2; }
+  .challenge-layout > .ch-work { grid-column: 2; grid-row: 1 / span 2; }
   /* "Wider editor": the task column steps aside */
   .challenge-layout.is-expanded { grid-template-columns: minmax(0, 1fr); }
-  .challenge-layout.is-expanded .ch-brief { display: none; }
+  .challenge-layout.is-expanded > .ch-brief { display: none; }
+  .challenge-layout.is-expanded > .ch-work { grid-column: 1; grid-row: 2; }
   .jump-to-editor { display: none; }
   .practice-layout { grid-template-columns: minmax(0, 1.45fr) minmax(320px, 1fr); align-items: start; }
 }

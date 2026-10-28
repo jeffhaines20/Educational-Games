@@ -71,6 +71,7 @@ REF_RE = re.compile(r"""<(?P<tag>[a-zA-Z][a-zA-Z0-9-]*)\b[^>]*?\s(?P<attr>src|hr
 STYLE_ATTR_URL_RE = re.compile(r"""\sstyle\s*=\s*(["'])[^"']*url\(\s*["']?(?P<url>[^"')\s]+)""", re.IGNORECASE)
 MEDIA_EXT = r"(?:webp|png|jpe?g|gif|svg|avif|ico|bmp|woff2?|ttf|otf|eot|mp3|ogg|oga|wav|m4a|mp4|webm)"
 ASSET_PATH_RE = re.compile(r"^(?:\./)?[A-Za-z0-9_][A-Za-z0-9_./-]*\." + MEDIA_EXT + r"$", re.IGNORECASE)
+SRCSET_DESCRIPTOR_RE = re.compile(r"^\d+(?:\.\d+)?[wxh]$")
 JS_STRING_RE = re.compile(r"""(["'])((?:(?!\1)[^\\\n]){1,2000})\1""")
 
 MIME = {
@@ -79,7 +80,7 @@ MIME = {
     ".woff2": "font/woff2", ".woff": "font/woff", ".ttf": "font/ttf", ".otf": "font/otf",
     ".eot": "application/vnd.ms-fontobject", ".css": "text/css", ".mp3": "audio/mpeg", ".ogg": "audio/ogg",
     ".oga": "audio/ogg", ".wav": "audio/wav", ".m4a": "audio/mp4", ".mp4": "video/mp4", ".webm": "video/webm",
-    ".json": "application/json",
+    ".json": "application/json", ".vtt": "text/vtt",
 }
 
 
@@ -164,7 +165,7 @@ class Builder:
             raise BuildError("%s is not valid UTF-8 (%s)" % (self.rel(path), exc))
         except OSError as exc:
             raise BuildError("could not read %s: %s" % (self.rel(path), exc))
-        if text.startswith("﻿"):
+        if text.startswith("\uFEFF"):
             text = text[1:]
         return text.replace("\r\n", "\n").replace("\r", "\n")
 
@@ -194,7 +195,8 @@ class Builder:
                     return None
                 out.append(" ".join(bits))
                 continue
-            if not strict and not ASSET_PATH_RE.match(url):
+            if not strict and (not ASSET_PATH_RE.match(url) or len(bits) > 2 or
+                               (len(bits) == 2 and not SRCSET_DESCRIPTOR_RE.match(bits[1]))):
                 return None
             target = self.locate(url, base_dir, where)
             if not os.path.isfile(target):

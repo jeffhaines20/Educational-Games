@@ -14,6 +14,12 @@
  *   unlock        ?unlock=all opens every chapter
  *   keyboard      the first spell from the title screen with the keyboard only
  *   answers       Answer Scroll after 3 failed casts (1★ max); hidden with ?answers=off
+ *   framed        inside another page (an LMS frame): sound starts off, the Save Scroll leads with the code
+ *   sound-off     ?sound=off keeps every sound off
+ *   print-blocked print() silently ignored (sandboxed frame) → the player is told and offered the download
+ *   leave-casting leaving the challenge mid-cast still records the mastered spell
+ *   drafts        a draft typed just before leaving the screen is kept
+ *   damaged-slot  an unreadable save slot is shown as damaged and can be deleted
  */
 "use strict";
 const fs = require("fs");
@@ -69,9 +75,21 @@ async function newGame(page, name) {
   if (await page.$(".story-screen")) await page.click(".dlg-skip");
   await page.waitForSelector(".map-screen");
 }
+/** Click through a story dialog (e.g. the chapter intro) until it closes. */
+async function closeStory(page) {
+  for (let i = 0; i < 12 && (await page.$(".modal-dialogue")); i++) {
+    const next = await page.$(".modal-dialogue .dlg-next");
+    if (next) await next.click().catch(() => {});
+    await page.waitForTimeout(200);
+  }
+  await page.waitForFunction(() => !document.querySelector(".modal-overlay"), null, { timeout: 5000 });
+}
 async function firstChallenge(page, { python = true } = {}) {
   await page.click(".map-continue");
   await page.waitForSelector(".challenge-screen");
+  // The gold button tells the chapter's story first (once).
+  await page.waitForSelector(".modal-dialogue", { timeout: 3000 }).catch(() => null);
+  await closeStory(page);
   if (await page.$(".coach-ok")) await page.click(".coach-ok");
   if (python) {
     await waitForPython(page, 90000);
@@ -169,10 +187,11 @@ SCENARIOS["no-storage"] = async function () {
     await page.waitForSelector(".title-screen");
     check(await page.isVisible(".title-screen .banner-warn"), "the title warns that saving is blocked");
     await newGame(page, "Rowan");
+    check(await page.isVisible(".topbar .warn-chip"), "the top bar keeps a “Not saving” warning in view");
     check(await page.isVisible(".map-screen .banner-warn >> text=Open the Save Scroll"), "the map warning points to the Save Scroll");
     await page.click(".map-screen .banner-warn >> text=Open the Save Scroll");
     await page.waitForSelector(".modal-savescroll");
-    check(/^SNS1\./.test(await page.inputValue(".modal-savescroll textarea[readonly]")), "the Save Scroll still exports a code");
+    check(/^PYRO1\./.test(await page.inputValue(".modal-savescroll textarea[readonly]")), "the Save Scroll still exports a code");
     await shot(page, "no-storage");
   } finally { await game.close(); }
 };
@@ -205,6 +224,7 @@ SCENARIOS.scorm = async function () {
   try {
     await page.waitForSelector(".title-screen");
     check(!(await page.$("text=Choose another save")) && !(await page.$("text=I have a Save Scroll")), "SCORM mode has no save slots");
+    check((await page.evaluate(() => SS.UI.app.soundOn())) === false, "sound starts off inside a course");
     await page.click("text=Begin your apprenticeship");
     await page.waitForSelector(".modal-prompt input");
     check((await page.inputValue(".modal-prompt input")) === "Ada", "the wizard name defaults to the learner's first name");
@@ -212,6 +232,13 @@ SCENARIOS.scorm = async function () {
     await page.waitForSelector(".story-screen");
     await page.click(".dlg-skip");
     await page.waitForSelector(".map-screen");
+    await page.click('.tool-btn[data-tool="savescroll"]');
+    await page.waitForSelector(".modal-savescroll");
+    check(/course saves your progress automatically/i.test(await page.textContent(".modal-savescroll")), "the Save Scroll says the course saves automatically");
+    check(!(await page.$(".modal-savescroll textarea:not([readonly])")), "importing a Save Scroll is hidden inside a course");
+    check(!!(await page.$(".modal-savescroll textarea[readonly]")), "…but a backup code can still be copied");
+    await page.keyboard.press("Escape");
+    await page.waitForFunction(() => !document.querySelector(".modal-overlay"));
     await firstChallenge(page);
     await setCode(page, 'print("Hello world")\n');
     await page.evaluate(() => document.querySelector(".btn-cast").click());
@@ -301,9 +328,14 @@ SCENARIOS.keyboard = async function () {
     for (let i = 0; i < panels; i++) await page.keyboard.press("Enter");   // focus stays on Next
     await page.waitForSelector(".map-screen");
     check(true, "Enter pages through the whole prologue");
+    check(/Begin: The First Words|First Words/.test(await focused()), "the map puts focus on its Begin button");
     check(await tabTo(/Begin: The First Words|First Words/), "Tab reaches the Begin button on the map");
     await page.keyboard.press("Enter");
     await page.waitForSelector(".challenge-screen");
+    await page.waitForSelector(".modal-dialogue", { timeout: 4000 });
+    check(await page.evaluate(() => !!document.activeElement.closest(".modal-dialogue")), "the chapter's story opens with the focus inside it");
+    for (let i = 0; i < 12 && (await page.$(".modal-dialogue")); i++) { await page.keyboard.press("Enter"); await page.waitForTimeout(250); }
+    check(!(await page.$(".modal-dialogue")), "Enter pages through the chapter's story");
     await waitForPython(page, 90000);
     await page.waitForFunction(() => document.querySelector(".btn-cast").getAttribute("aria-disabled") === "false");
     check(await tabTo(/Got it/, 60), "Tab reaches the coach note's Got it button");
@@ -351,6 +383,111 @@ SCENARIOS.answers = async function () {
       check((await page.$$eval(".modal-success .success-star.on", (s) => s.length)) === 1, "after the Answer Scroll the spell earns 1 star");
     } finally { await game.close(); }
   }
+};
+
+SCENARIOS.framed = async function () {
+  const game = await openGame({ goto: false });
+  const { page } = game;
+  try {
+    await page.setContent('<!DOCTYPE html><title>Course</title><iframe src="' + game.url + '" style="width:1200px;height:820px;border:0"></iframe>');
+    let frame = null;
+    for (let i = 0; i < 50 && !frame; i++) { frame = page.frames().find((f) => /127\.0\.0\.1/.test(f.url())); if (!frame) await page.waitForTimeout(100); }
+    await frame.waitForSelector(".title-screen");
+    check((await frame.evaluate(() => SS.UI.app.soundOn())) === false, "sound starts off when the game is inside another page");
+    await frame.click("text=Begin your apprenticeship");
+    await frame.waitForSelector(".modal-prompt input");
+    await frame.fill(".modal-prompt input", "Iris");
+    await frame.press(".modal-prompt input", "Enter");
+    await frame.waitForSelector(".story-screen");
+    await frame.click(".dlg-skip");
+    await frame.waitForSelector(".map-screen");
+    check((await frame.evaluate(() => SS.UI.util.settings().sound)) === false, "…and the new wizard's sound setting starts off");
+    await frame.click('.tool-btn[data-tool="savescroll"]');
+    await frame.waitForSelector(".modal-savescroll");
+    const help = await frame.textContent(".modal-savescroll .scroll-section .section-help");
+    check(/^Copy this save code/.test(help.trim()), "inside a frame the Save Scroll leads with copying the code");
+    check(!!(await frame.$(".modal-savescroll >> text=Try downloading a save file")), "…and offers the download only as a try");
+  } finally { await game.close(); }
+};
+
+SCENARIOS["sound-off"] = async function () {
+  const game = await openGame({ query: "?sound=off" });
+  const { page } = game;
+  try {
+    await newGame(page, "Sage");
+    check((await page.evaluate(() => SS.UI.app.soundOn())) === false, "?sound=off keeps sound off");
+    check((await page.getAttribute(".topbar .sound-toggle", "aria-pressed")) === "false", "the sound button shows it is off");
+  } finally { await game.close(); }
+};
+
+SCENARIOS["print-blocked"] = async function () {
+  const game = await openGame({ init: () => { window.print = function () { /* a sandboxed frame ignores print() */ }; } });
+  const { page } = game;
+  try {
+    await newGame(page, "Juno");
+    await page.click('.tool-btn[data-tool="grimoire"]');
+    await page.waitForSelector(".grimoire-screen");
+    await page.click("text=Print Progress Report");
+    await page.waitForSelector("#toast-root .toast", { timeout: 3000 }).catch(() => null);
+    const toast = await page.$("#toast-root .toast");
+    check(!!toast && /Printing is blocked/.test(await toast.textContent()), "when print() is ignored the player is told");
+    check(/Download report/.test(await page.textContent(".grimoire-screen .field-status")), "…and pointed to “Download report”");
+    check(!(await page.evaluate(() => document.documentElement.classList.contains("print-mode"))), "the page is not left in print mode");
+  } finally { await game.close(); }
+};
+
+SCENARIOS["leave-casting"] = async function () {
+  const game = await openGame();
+  const { page } = game;
+  try {
+    await newGame(page, "Lark");
+    await firstChallenge(page);
+    const id = await page.evaluate(() => SS.content.chapters[0].challenges[0].id);
+    await setCode(page, 'print("Hello world")\n');
+    await page.evaluate(() => { document.querySelector(".btn-cast").click(); SS.UI.app.go("map"); });
+    await page.waitForSelector("#toast-root .toast", { timeout: 30000 });
+    check(/mastered/i.test(await page.textContent("#toast-root")), "a spell finished after leaving is announced (“… mastered!”)");
+    check(await page.evaluate((cid) => !!SS.UI.util.challengeState(cid).completed, id), "…and recorded as mastered");
+    check(!(await page.$(".modal-success")), "…without opening a dialog over the map");
+    check(game.errors.length === 0, "no console errors (" + game.errors.join(" | ") + ")");
+  } finally { await game.close(); }
+};
+
+SCENARIOS.drafts = async function () {
+  const game = await openGame();
+  const { page } = game;
+  try {
+    await newGame(page, "Moss");
+    await firstChallenge(page);
+    await setCode(page, 'print("a draft")\n');
+    await page.evaluate(() => SS.UI.app.go("map"));
+    await page.waitForSelector(".map-screen");
+    await page.reload();
+    await page.waitForSelector(".title-screen .btn-continue");
+    await page.click(".btn-continue");
+    await page.waitForSelector(".map-screen");
+    await page.click(".map-continue");
+    await page.waitForSelector(".challenge-screen .editor-surface");
+    await page.waitForTimeout(300);
+    check((await getCode(page)).indexOf('print("a draft")') >= 0, "a draft typed just before leaving is kept after a reload");
+  } finally { await game.close(); }
+};
+
+SCENARIOS["damaged-slot"] = async function () {
+  const game = await openGame({ init: () => { if (!sessionStorage.getItem("seeded")) { localStorage.setItem("pyromancer:slot:1", "{ this is not a save"); sessionStorage.setItem("seeded", "1"); } } });
+  const { page } = game;
+  try {
+    await page.waitForSelector(".title-screen");
+    check(await page.isVisible("text=Choose your save"), "the title offers the save slots when one is damaged");
+    await page.click("text=Choose your save");
+    await page.waitForSelector(".slots-screen");
+    check(await page.isVisible(".slot-card.damaged >> text=Damaged save"), "the damaged slot is shown as “Damaged save”");
+    await shot(page, "damaged-slot");
+    await page.click(".slot-card.damaged >> text=Delete it");
+    await page.click(".modal-confirm .btn-danger");
+    await page.waitForFunction(() => !document.querySelector(".slot-card.damaged"));
+    check(await page.evaluate(() => localStorage.getItem("pyromancer:slot:1") === null), "deleting it frees the slot");
+  } finally { await game.close(); }
 };
 
 (async () => {

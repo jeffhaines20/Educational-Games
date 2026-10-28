@@ -3,9 +3,10 @@
  * game: read the task → write a spell → cast → understand the result → fix.
  *
  * Layout (style.css "Challenge"):
- *   ≥ 1000px  two columns. Left (the brief): scene, story, task, Spell Scroll and
- *             Pip's hints. Right (the work column): editor, Cast, results; it stays in
- *             view while the left column scrolls. "Expand editor" hides the brief.
+ *   ≥ 1000px  two columns. Left: the title bar, then the brief (scene, story, task,
+ *             Spell Scroll and Pip's hints). Right (the work column): editor, Cast,
+ *             results; it stays in view while the left column scrolls. "Wider editor"
+ *             hides the brief.
  *   < 1000px  one column. The brief becomes tabs (Task | Spell Scroll | Hints) so the
  *             editor is never far down the page.
  */
@@ -461,8 +462,10 @@
     var work = h("div", { class: "ch-work" },
       h("div", { class: "work-inner" }, engineBanner, editorPanel, castBar, resultsPanel));
 
-    var layout = h("div", { class: "challenge-layout" }, brief, work);
-    var el = h("section", { class: "challenge-screen" }, bar, layout);
+    // The bar is part of the grid (top of the task column when wide), so the work column starts
+    // right under the top bar and always fits the window, even before the page is scrolled.
+    var layout = h("div", { class: "challenge-layout" }, bar, brief, work);
+    var el = h("section", { class: "challenge-screen" }, layout);
 
     // ------------------------------------------------------------------------
     // Editor (drafts go straight to SS.Save, which debounces and flushes on pagehide)

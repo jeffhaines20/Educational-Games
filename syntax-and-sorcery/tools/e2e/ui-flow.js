@@ -6,14 +6,16 @@
  *   node tools/e2e/ui-flow.js --shots /tmp/shots  # …and save screenshots there
  *   node tools/e2e/ui-flow.js --quick             # full flow at 1280×860 only
  *
- * Full flow (1280×860): title → new game → prologue → map → chapter (intro) →
- * challenge → wrong cast (explanation shown, line highlighted, aria-live) → hint →
- * correct cast → "Spell Mastered!" → reload → progress persisted → Practice Chamber →
- * Grimoire (+ printable report) → Settings (sound, motion, font size, rename, focus
- * trap) → keyboard: Esc then Tab leaves the editor → Save Scroll: download file,
- * export code, delete the slot, import the code back.
- * Responsive pass (1280×860, 1024×768, 800×700, 390×844): the main screens, a failed
- * and a successful cast, and a check that nothing overflows horizontally.
+ * Full flow (1280×860): title (painting not covered) → new game → prologue → map →
+ * chapter (intro) → challenge → wrong cast (explanation shown, line highlighted,
+ * aria-live) → hint → correct cast → "Spell Mastered!" → reload → progress persisted →
+ * ten challenge visits leave no nodes or listeners behind → keyboard: Esc then Tab
+ * leaves the editor → Practice Chamber → Grimoire (+ printable report on white paper,
+ * margins included) → Settings (sound, motion, font size, rename, focus trap) →
+ * Save Scroll: download file, export code, delete the slot, import the code back.
+ * Responsive pass (1440×900, 1366×650, 1280×800, 1024×768, 800×700, 390×844): title
+ * art, the gold button telling the chapter's story before its first spell, the verdict
+ * in view right after a cast, a successful cast, and nothing overflowing horizontally.
  *
  * Needs the local Pyodide copy: bash tools/fetch_pyodide.sh
  */
@@ -26,7 +28,7 @@ const { openGame, waitForPython } = require("./lib");
 const args = process.argv.slice(2);
 const SHOTS = args.indexOf("--shots") >= 0 ? path.resolve(args[args.indexOf("--shots") + 1]) : null;
 const QUICK = args.indexOf("--quick") >= 0;
-const SIZES = [[1280, 860], [1024, 768], [800, 700], [390, 844]];
+const SIZES = [[1440, 900], [1366, 650], [1280, 800], [1024, 768], [800, 700], [390, 844]];
 
 let failures = 0;
 let checks = 0;
@@ -99,6 +101,72 @@ async function newGame(page, name) {
   await page.waitForSelector(".story-screen");
 }
 
+/** Click through a story dialog (chapter intro) until it closes. */
+async function closeStory(page) {
+  for (let i = 0; i < 12 && (await page.$(".modal-dialogue")); i++) {
+    const next = await page.$(".modal-dialogue .dlg-next");
+    if (next) await next.click().catch(() => {});
+    await page.waitForTimeout(200);
+  }
+  await waitForModalGone(page);
+}
+
+/** A rank-up moment may follow "Spell Mastered!": acknowledge it. */
+async function passRankUp(page) {
+  const m = await page.waitForSelector(".modal-rankup", { timeout: 1200 }).catch(() => null);
+  if (m) await page.click(".modal-rankup >> text=Onward!");
+}
+
+/**
+ * Where the title painting's important parts are on screen, and whether the panel covers
+ * them. Regions are fractions of the 1536×1024 painting: painted title + tagline, and the
+ * witch's face. In portrait the painting is replaced by a crop without painted text.
+ */
+async function titleArt(page) {
+  return page.evaluate(() => {
+    const img = document.querySelector(".title-img");
+    const panel = document.querySelector(".title-panel").getBoundingClientRect();
+    const out = { vw: innerWidth, vh: innerHeight, portrait: !img || getComputedStyle(img).display === "none" };
+    if (out.portrait) {
+      const banner = document.querySelector(".title-banner");
+      const h1 = document.querySelector(".title-h1").getBoundingClientRect();
+      out.bannerArt = /url\(/.test(getComputedStyle(banner).backgroundImage) && banner.getBoundingClientRect().height > 100;
+      out.h1Visible = h1.width > 100 && h1.top >= 0 && h1.bottom <= innerHeight;
+      return out;
+    }
+    const r = img.getBoundingClientRect();
+    let x = r.left, y = r.top, w = r.width, hgt = r.height;
+    if (getComputedStyle(img).objectFit === "cover") {
+      const scale = Math.max(r.width / 1536, r.height / 1024);
+      w = 1536 * scale; hgt = 1024 * scale;
+      x = r.left + (r.width - w);            // object-position: right
+      y = r.top + (r.height - hgt) / 2;
+    }
+    const box = (x0, y0, x1, y1) => ({ left: x + w * x0, top: y + hgt * y0, right: x + w * x1, bottom: y + hgt * y1 });
+    const hit = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+    const title = box(0.545, 0.25, 0.985, 0.585), face = box(0.33, 0.17, 0.46, 0.42);
+    out.loaded = img.complete && img.naturalWidth > 0;
+    out.titleInView = title.left >= -1 && title.top >= -1 && title.right <= innerWidth + 1 && title.bottom <= innerHeight + 1;
+    out.coversTitle = hit(panel, title);
+    out.coversFace = hit(panel, face);
+    return out;
+  });
+}
+
+async function checkTitleArt(page, tag) {
+  const art = await titleArt(page);
+  if (art.portrait) {
+    check(art.bannerArt, "the portrait title shows the painting as a banner at " + tag);
+    check(art.h1Visible, "the portrait title shows the game's name in text at " + tag);
+  } else {
+    check(art.loaded, "the title painting loads at " + tag);
+    check(art.titleInView, "the painted title is not cropped at " + tag);
+    check(!art.coversTitle && !art.coversFace, "the buttons don't cover the painted title or the witch's face at " + tag + " " + JSON.stringify(art));
+  }
+  const begin = await page.$eval(".title-actions .btn", (b) => { const r = b.getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight; });
+  check(begin, "the first title button is in view without scrolling at " + tag);
+}
+
 async function horizontalOverflow(page) {
   return page.evaluate(() => {
     const de = document.documentElement;
@@ -122,16 +190,23 @@ async function fullFlow() {
   const game = await openGame({ viewport: { width: 1280, height: 860 }, config: { saveSlots: 3 } });
   const { page } = game;
   page.on("dialog", (d) => d.dismiss().catch(() => {}));
-  await page.addInitScript(() => { window.print = () => { window.__printCalls = (window.__printCalls || 0) + 1; }; });
-  await page.evaluate(() => { window.print = () => { window.__printCalls = (window.__printCalls || 0) + 1; }; });
+  // A print() that behaves like a browser's (fires "beforeprint") without opening a dialog.
+  const fakePrint = () => { window.print = () => { window.__printCalls = (window.__printCalls || 0) + 1; window.dispatchEvent(new Event("beforeprint")); }; };
+  await page.addInitScript(fakePrint);
+  await page.evaluate(fakePrint);
   const prologueLength = await page.evaluate(() => (SS.content.story.prologue || []).length);
   const chapterCount = await page.evaluate(() => SS.content.chapters.length);
 
   try {
     await step(page, "title screen", async () => {
-      await page.waitForSelector(".title-screen .title-logo");
+      await page.waitForSelector(".title-screen .title-h1");
+      await page.waitForFunction(() => { const i = document.querySelector(".title-img"); return i && i.complete; });
       check(await page.isVisible(".title-screen .engine-chip"), "title shows the Python engine status");
-      check((await page.title()).indexOf("Syntax") >= 0, "document title names the game");
+      check((await page.title()) === "Pyromancer", "document title names the game (" + (await page.title()) + ")");
+      check((await page.textContent(".title-h1")).trim() === "Pyromancer", "the title's heading is Pyromancer");
+      check(/Master Python\. Unleash the Magic\./.test(await page.textContent(".title-screen")), "the tagline is in the page");
+      check(await page.isVisible("text=I have a Save Scroll (save code or file)"), "a new player can bring a Save Scroll");
+      await checkTitleArt(page, "1280x860");
       await shot(page, "flow-01-title");
     });
 
@@ -252,6 +327,41 @@ async function fullFlow() {
       check((await getCode(page)).indexOf('print("Hello world")') >= 0, "the editor reopens with the saved spell");
     });
 
+    await step(page, "memory: ten challenge visits leave nothing behind", async () => {
+      const cdp = await page.context().newCDPSession(page);
+      await cdp.send("Performance.enable");
+      const ids = await page.evaluate(() => SS.content.chapters[0].challenges.slice(0, 2).map((c) => c.id));
+      // waitForFunction, not waitForSelector: element handles would keep old screens alive themselves.
+      const visit = async (n) => {
+        for (let i = 0; i < n; i++) {
+          await page.evaluate((id) => SS.UI.app.go("challenge", { id }), ids[i % 2]);
+          await page.waitForFunction(() => !!document.querySelector(".challenge-screen .editor-surface .CodeMirror, .challenge-screen .editor-surface .plain-input"));
+          await page.waitForTimeout(120);
+          await page.evaluate(() => SS.UI.app.go("map"));
+          await page.waitForFunction(() => !!document.querySelector(".map-screen"));
+        }
+      };
+      const measure = async () => {
+        await page.waitForTimeout(1500);
+        await cdp.send("HeapProfiler.collectGarbage");
+        await page.waitForTimeout(150);
+        await cdp.send("HeapProfiler.collectGarbage");
+        const { metrics } = await cdp.send("Performance.getMetrics");
+        const m = {};
+        metrics.forEach((x) => { m[x.name] = x.value; });
+        return { nodes: m.Nodes, listeners: m.JSEventListeners };
+      };
+      await visit(2);
+      const before = await measure();
+      await visit(10);
+      const after = await measure();
+      const grew = { nodes: after.nodes - before.nodes, listeners: after.listeners - before.listeners };
+      check(grew.nodes < 150 && grew.listeners < 20, "DOM nodes and event listeners stay flat over 10 challenge visits (" + JSON.stringify({ before, after }) + ")");
+      await cdp.detach();
+      await page.evaluate((id) => SS.UI.app.go("challenge", { id }), ids[0]);
+      await page.waitForSelector(".challenge-screen");
+    });
+
     await step(page, "keyboard: Esc then Tab leaves the editor", async () => {
       await page.click(".editor-surface");
       await page.keyboard.press("Escape");
@@ -286,6 +396,24 @@ async function fullFlow() {
       check((await page.evaluate(() => window.__printCalls || 0)) === 1, "Print Progress Report opens the print dialog");
       check(/Progress Report/.test(await page.textContent("#print-root")), "the printable report is prepared");
       check(/Morgana/.test(await page.textContent("#print-root")), "the report names the wizard");
+      check(/Pyromancer/.test(await page.textContent("#print-root")), "the report names the game");
+      await page.waitForTimeout(450);
+      check(!(await page.$("#toast-root .toast")), "no “printing is blocked” message when printing works");
+      await page.emulateMedia({ media: "print" });
+      const printed = await page.evaluate(() => {
+        const cs = (el) => getComputedStyle(el);
+        return {
+          html: cs(document.documentElement).backgroundColor, scheme: cs(document.documentElement).colorScheme,
+          body: cs(document.body).backgroundColor, app: cs(document.getElementById("app")).display,
+          report: cs(document.getElementById("print-root")).display
+        };
+      });
+      check(printed.html === "rgb(255, 255, 255)" && /light/.test(printed.scheme) && printed.body === "rgb(255, 255, 255)",
+        "the report prints on white paper, margins included (" + JSON.stringify(printed) + ")");
+      check(printed.app === "none" && printed.report === "block", "only the report is printed");
+      await page.emulateMedia({ media: "screen" });
+      await page.evaluate(() => window.dispatchEvent(new Event("afterprint")));
+      check(!(await page.evaluate(() => document.documentElement.classList.contains("print-mode"))), "the game returns to normal after printing");
       await shot(page, "flow-10-grimoire");
     });
 
@@ -320,7 +448,7 @@ async function fullFlow() {
       await page.click('.tool-btn[data-tool="savescroll"]');
       await page.waitForSelector(".modal-savescroll");
       const code = await page.inputValue(".modal-savescroll textarea[readonly]");
-      check(/^SNS1\./.test(code), "the Save Scroll shows an export code");
+      check(/^PYRO1\./.test(code), "the Save Scroll shows an export code (" + code.slice(0, 8) + "…)");
       const [download] = await Promise.all([
         page.waitForEvent("download", { timeout: 10000 }),
         page.click(".modal-savescroll >> text=Download save file")
@@ -372,6 +500,8 @@ async function responsive(width, height) {
   try {
     await step(page, "title, prologue and map", async () => {
       await page.waitForSelector(".title-screen");
+      await page.waitForFunction(() => { const i = document.querySelector(".title-img"); return !i || getComputedStyle(i).display === "none" || i.complete; });
+      await checkTitleArt(page, tag);
       await noOverflow("title");
       await shot(page, tag + "-01-title");
       await newGame(page, "Tess");
@@ -382,33 +512,51 @@ async function responsive(width, height) {
       await shot(page, tag + "-02-map");
     });
     await step(page, "challenge", async () => {
+      check(await page.evaluate(() => document.activeElement && document.activeElement.classList.contains("map-continue")), "the map puts focus on its Begin button at " + tag);
       await page.click(".map-continue");
       await page.waitForSelector(".challenge-screen");
+      await page.waitForSelector(".modal-dialogue", { timeout: 5000 }).catch(() => null);
+      const intro = await page.$(".modal-dialogue .dlg-title");
+      check(!!intro && /Chapter/i.test(await intro.textContent()), "the gold button tells the chapter's story before its first spell at " + tag);
+      await shot(page, tag + "-03-intro");
+      await closeStory(page);
       await waitForPython(page, 90000);
       await page.waitForFunction(() => document.querySelector(".btn-cast").getAttribute("aria-disabled") === "false");
       const editorHeight = await page.$eval(".editor-surface", (e) => e.getBoundingClientRect().height);
       check(editorHeight >= 240, "the editor is at least 240px tall at " + tag + " (" + Math.round(editorHeight) + "px)");
       await noOverflow("challenge");
-      await shot(page, tag + "-03-challenge");
+      await shot(page, tag + "-04-challenge");
       await setCode(page, 'message = "Hello world"\nprnt(message)\n');
       await cast(page, "error");
+      const inView = () => {
+        const head = document.querySelector(".results .verdict .verdict-headline");
+        if (!head) return false;
+        const r = head.getBoundingClientRect();
+        const bar = document.querySelector(".topbar");
+        const barBottom = bar && getComputedStyle(bar).position === "sticky" ? bar.getBoundingClientRect().bottom : 0;
+        const at = document.elementFromPoint(r.left + Math.min(r.width / 2, 40), r.top + r.height / 2);
+        return r.top >= barBottom - 1 && r.bottom <= innerHeight && !!at && !!at.closest(".verdict");
+      };
+      const seen = await page.waitForFunction(inView, null, { timeout: 3000 }).then(() => true).catch(() => false);
+      check(seen, "the verdict is in view right after the cast at " + tag);
       await noOverflow("error result");
-      await shot(page, tag + "-04-error");
+      await shot(page, tag + "-05-error");
       await setCode(page, 'print("Hello world")\n');
       await page.evaluate(() => document.querySelector(".btn-cast").click());
       await page.waitForSelector(".modal-success", { timeout: 30000 });
       await page.waitForTimeout(1300);
-      await shot(page, tag + "-05-success");
+      await shot(page, tag + "-06-success");
       await page.click(".modal-success >> text=Map");
+      await passRankUp(page);
       await page.waitForSelector(".map-screen");
     });
     await step(page, "Grimoire and Practice Chamber", async () => {
       await page.evaluate(() => SS.UI.app.go("grimoire"));
       await noOverflow("grimoire");
-      await shot(page, tag + "-06-grimoire");
+      await shot(page, tag + "-07-grimoire");
       await page.evaluate(() => SS.UI.app.go("practice"));
       await noOverflow("practice");
-      await shot(page, tag + "-07-practice");
+      await shot(page, tag + "-08-practice");
     });
     check(game.errors.length === 0, "no console errors at " + tag + " (" + game.errors.join(" | ") + ")");
   } finally {

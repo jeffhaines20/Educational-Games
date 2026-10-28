@@ -3,13 +3,15 @@
  * End-to-end test of the distribution bundles made by tools/build.py, in headless
  * Chromium. It builds the real game into a temporary folder, then:
  *
- *   1. opens dist/syntax-and-sorcery.html from file:// in an unrelated folder and casts
+ *   1. opens dist/pyromancer.html from file:// in an unrelated folder and casts
  *      a real challenge's reference solution;
  *   2. runs the SCORM package inside a fake LMS page (SCORM 1.2 API on the parent
  *      window): LMS connection, learner name, suspend_data, score/status, finish on
  *      pagehide, and resuming the saved progress on the next launch;
- *   3. embeds the package in a cross-origin iframe with no LMS (SCORM detection must
- *      not throw, saving falls back to the browser).
+ *   3. embeds the package in a cross-origin iframe with no LMS: SCORM detection must not
+ *      throw, and (the package sets scormRequired) the player is told that nothing reaches
+ *      the course; the plain single-file build embedded the same way shows no warning;
+ *   4. checks that `--answers off` turns the Answer Scroll off in both bundles.
  *
  * Only engine APIs are driven (SS.PythonRunner, SS.Save, SS.Scorm), so the test does
  * not depend on the details of the user interface.
@@ -97,7 +99,7 @@ async function courseFrame(page) {
     console.error("Local Pyodide missing: run  bash tools/fetch_pyodide.sh");
     process.exit(2);
   }
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "ss-bundle-test-"));
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "pyro-bundle-test-"));
   const out = path.join(tmp, "dist");
   const built = spawnSync("python3", [path.join(GAME, "tools", "build.py"), "--out", out], { encoding: "utf8" });
   if (built.status !== 0) {
@@ -108,7 +110,7 @@ async function courseFrame(page) {
 
   // The SCORM package, unpacked as an LMS would.
   const courseDir = path.join(tmp, "course");
-  const unzip = spawnSync("python3", ["-c", "import sys, zipfile; zipfile.ZipFile(sys.argv[1]).extractall(sys.argv[2])", path.join(out, "syntax-and-sorcery-scorm.zip"), courseDir], { encoding: "utf8" });
+  const unzip = spawnSync("python3", ["-c", "import sys, zipfile; zipfile.ZipFile(sys.argv[1]).extractall(sys.argv[2])", path.join(out, "pyromancer-scorm.zip"), courseDir], { encoding: "utf8" });
   assert.strictEqual(unzip.status, 0, unzip.stderr);
   const server = await serve(courseDir);
   const port = server.address().port;
@@ -116,14 +118,16 @@ async function courseFrame(page) {
   const browser = await chromium.launch();
 
   try {
-    await check("single-file build from file:// (another folder): content loads and a real spell passes its trials", async () => {
+    await check("single-file build from file:// (another folder): no local files needed, a real spell passes its trials", async () => {
       const elsewhere = path.join(tmp, "somewhere-else");
       fs.mkdirSync(elsewhere);
-      fs.copyFileSync(path.join(out, "syntax-and-sorcery.html"), path.join(elsewhere, "game.html"));
+      fs.copyFileSync(path.join(out, "pyromancer.html"), path.join(elsewhere, "game.html"));
       const context = await browser.newContext();
       const page = await context.newPage();
       const errors = [];
+      const localRequests = [];
       page.on("pageerror", (e) => errors.push(String(e)));
+      page.on("request", (req) => { if (req.url().startsWith("file:") && !req.url().endsWith("/game.html")) localRequests.push(req.url()); });
       await page.addInitScript((cfg) => { window.SS_CONFIG = cfg; }, { pyodideBaseURLs: [pyodideBase] });
       await page.goto("file://" + path.join(elsewhere, "game.html"));
       await page.waitForFunction(() => window.SS && SS.PythonRunner, null, { timeout: 30000 });
@@ -139,6 +143,9 @@ async function courseFrame(page) {
       assert.notStrictEqual(r.starter, "passed");
       assert.deepStrictEqual(r.loadErrors, []);
       assert.deepStrictEqual(errors, []);
+      const art = await page.evaluate(() => [...document.images].filter((img) => img.complete && img.naturalWidth > 0).map((img) => img.currentSrc.slice(0, 22)));
+      assert.deepStrictEqual(localRequests, [], "images, fonts, CSS and scripts are all inside the file");
+      assert.ok(art.every((src) => src.startsWith("data:image/")), JSON.stringify(art));
       await context.close();
     });
 
@@ -163,7 +170,10 @@ async function courseFrame(page) {
         return { info, version: SS.Scorm.version, total: ids.length, stars: result.stars, first: ids[0], second: ids[1] };
       });
       assert.strictEqual(first.info.scorm, true);
+      assert.strictEqual(first.info.scormMissing, false);
       assert.strictEqual(first.info.learnerName, "Jane Doe");
+      assert.strictEqual(await frame.evaluate(() => SS.config.scormRequired), true, "the package marks itself as SCORM");
+      assert.strictEqual(await frame.evaluate(() => SS.Save.storageWarning()), null);
       assert.strictEqual(first.version, "1.2");
       assert.strictEqual(first.stars, 2);
       let lms = await page.evaluate(() => ({ data: window.lmsData, calls: window.lmsCalls }));
@@ -207,24 +217,57 @@ async function courseFrame(page) {
       await context.close();
     });
 
-    await check("package in a cross-origin iframe with no LMS: no SCORM, no errors, Python works", async () => {
+    await check("package in a cross-origin iframe with no LMS: no errors, Python works, and the player is warned", async () => {
       const context = await browser.newContext();
       const page = await context.newPage();
       const errors = [];
       page.on("pageerror", (e) => errors.push(String(e)));
-      await page.addInitScript((cfg) => { window.SS_CONFIG = cfg; }, { pyodideBaseURLs: [pyodideBase] });
+      await page.addInitScript((cfg) => { window.SS_CONFIG = Object.assign({}, cfg, window.SS_CONFIG || {}); }, { pyodideBaseURLs: [pyodideBase] });
       await page.goto("http://localhost:" + port + "/lms-cross.html");
       const frame = await courseFrame(page);
       const r = await frame.evaluate(async () => {
+        const t0 = Date.now();
         const info = await SS.Save.init();
+        const waited = Date.now() - t0;
         await SS.PythonRunner.init();
         const run = await SS.PythonRunner.run({ code: "print('from an iframe')" });
-        return { info, scorm: SS.Scorm.isActive(), out: run.stdout };
+        return { info, waited, warning: SS.Save.storageWarning(), scorm: SS.Scorm.isActive(), out: run.stdout };
       });
-      assert.strictEqual(r.info.scorm, false);
-      assert.strictEqual(r.scorm, false);
+      assert.deepStrictEqual([r.info.scorm, r.info.scormMissing, r.scorm], [false, true, false]);
+      assert.match(r.warning, /couldn't connect to your course, so your progress and score aren't being recorded/);
+      assert.ok(r.waited < 6000, "gave up after " + r.waited + " ms");
       assert.strictEqual(r.out, "from an iframe\n");
       assert.deepStrictEqual(errors, []);
+      await context.close();
+    });
+
+    await check("the plain single-file build in a cross-origin iframe: no LMS needed, no warning", async () => {
+      fs.copyFileSync(path.join(out, "pyromancer.html"), path.join(courseDir, "plain.html"));
+      const context = await browser.newContext();
+      const page = await context.newPage();
+      await page.addInitScript((cfg) => { window.SS_CONFIG = Object.assign({}, cfg, window.SS_CONFIG || {}); }, { pyodideBaseURLs: [pyodideBase] });
+      await page.setContent('<iframe src="http://127.0.0.1:' + port + '/course/plain.html" width="900" height="600"></iframe>');
+      const frame = await courseFrame(page);
+      const r = await frame.evaluate(async () => ({ info: await SS.Save.init(), warning: SS.Save.storageWarning() }));
+      assert.deepStrictEqual([r.info.scorm, r.info.scormMissing, r.warning], [false, false, null]);
+      await context.close();
+    });
+
+    await check("build.py --answers off turns the Answer Scroll off in both bundles", async () => {
+      const outOff = path.join(tmp, "dist-answers-off");
+      const rebuilt = spawnSync("python3", [path.join(GAME, "tools", "build.py"), "--out", outOff, "--answers", "off"], { encoding: "utf8" });
+      assert.strictEqual(rebuilt.status, 0, rebuilt.stderr);
+      const context = await browser.newContext();
+      const page = await context.newPage();
+      await page.addInitScript((cfg) => { window.SS_CONFIG = Object.assign({}, cfg, window.SS_CONFIG || {}); }, { pyodideBaseURLs: [pyodideBase] });
+      await page.goto("file://" + path.join(outOff, "pyromancer.html"));
+      await page.waitForFunction(() => window.SS && SS.config);
+      assert.strictEqual(await page.evaluate(() => SS.config.allowAnswerScroll), false);
+      const unzipDir = path.join(tmp, "course-answers-off");
+      spawnSync("python3", ["-c", "import sys, zipfile; zipfile.ZipFile(sys.argv[1]).extractall(sys.argv[2])", path.join(outOff, "pyromancer-scorm.zip"), unzipDir]);
+      await page.goto("file://" + path.join(unzipDir, "index.html"));
+      await page.waitForFunction(() => window.SS && SS.config);
+      assert.deepStrictEqual(await page.evaluate(() => [SS.config.allowAnswerScroll, SS.config.scormRequired]), [false, true]);
       await context.close();
     });
   } finally {

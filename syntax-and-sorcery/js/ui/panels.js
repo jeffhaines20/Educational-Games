@@ -266,7 +266,7 @@
     var fileId = u.uid("savefile");
     var fileInput = h("input", { type: "file", id: fileId, class: "file-input", accept: ".json,.txt,.sns,application/json,text/plain" });
     var pasteId = u.uid("paste");
-    var paste = h("textarea", { class: "input code-box", id: pasteId, rows: "3", spellcheck: "false", placeholder: "Paste a save code here (it starts with SNS1.)" });
+    var paste = h("textarea", { class: "input code-box", id: pasteId, rows: "3", spellcheck: "false", placeholder: "Paste a save code here (it starts with PYRO1.)" });
     var importError = h("p", { class: "field-error", role: "alert" });
     var importBtn = u.button("Import save code", { kind: "primary", icon: "📥" });
 
