@@ -208,7 +208,8 @@
     if (els.sound) {
       var on = soundOn();
       els.sound.setAttribute("aria-pressed", on ? "true" : "false");
-      els.sound.textContent = on ? "🔊" : "🔇";
+      u.clear(els.sound);
+      els.sound.appendChild(u.icon(on ? "soundOn" : "soundOff"));
       els.sound.title = on ? "Sound is on" : "Sound is off";
     }
     renderWarning();
@@ -247,7 +248,7 @@
   function loadSlot(slot) {
     var p = u.safe(function () { return SS.Save.loadProfile(slot); }, null);
     if (!p) {
-      UI.dialogs.toast("That save couldn't be opened.", { icon: "⚠️", kind: "warn" });
+      UI.dialogs.toast("That save couldn't be opened.", { icon: "warning", kind: "warn" });
       go("slots");
       return;
     }
@@ -265,7 +266,7 @@
     var scorm = isScorm();
     return UI.dialogs.prompt({
       title: "A new apprentice arrives",
-      icon: "🧙",
+      icon: "wizard",
       intro: "Archmage Ada peers over her spectacles. “Welcome to Coilspire Academy! And you are…?”",
       label: "Your wizard name",
       value: scorm ? learnerFirstName() : "",
@@ -273,7 +274,7 @@
       maxLength: 24,
       help: "This is how the academy will address you. You can change it later in Settings.",
       confirmLabel: "Begin my apprenticeship",
-      confirmIcon: "✨",
+      confirmIcon: "newGame",
       selectAll: true,
       clean: u.cleanName,
       validate: function (v) { return v ? null : "Every wizard needs a name — type one to begin."; }
@@ -290,7 +291,7 @@
         state.slot = target;
       }
       if (!profile) {
-        UI.dialogs.toast("The academy couldn't create your save. Try again.", { icon: "⚠️", kind: "warn" });
+        UI.dialogs.toast("The academy couldn't create your save. Try again.", { icon: "warning", kind: "warn" });
         return false;
       }
       if (!existing && !soundDefault()) u.safe(function () { SS.Save.updateSettings({ sound: false }); });
@@ -330,10 +331,10 @@
   // --------------------------------------------------------------------------
 
   var TOOLS = [
-    { id: "grimoire", icon: "📖", label: "Grimoire", action: function () { go("grimoire"); } },
-    { id: "practice", icon: "🧪", label: "Practice", action: function () { go("practice"); } },
-    { id: "savescroll", icon: "📜", label: "Save Scroll", action: function () { UI.panels.saveScroll(); } },
-    { id: "settings", icon: "⚙️", label: "Settings", action: function () { UI.panels.settings(); } }
+    { id: "grimoire", icon: "grimoire", label: "Grimoire", action: function () { go("grimoire"); } },
+    { id: "practice", icon: "practice", label: "Practice", action: function () { go("practice"); } },
+    { id: "savescroll", icon: "saveScroll", label: "Save Scroll", action: function () { UI.panels.saveScroll(); } },
+    { id: "settings", icon: "settings", label: "Settings", action: function () { UI.panels.settings(); } }
   ];
 
   /** A storage / LMS-connection warning stays visible on every screen as a top-bar chip. */
@@ -362,7 +363,7 @@
     });
 
     var brand = h("button", { type: "button", class: "brand", "aria-label": u.GAME_NAME + ": go to the academy map", on: { click: function () { closeMenu(); go(u.profile() ? "map" : "title"); } } },
-      h("span", { class: "brand-mark", "aria-hidden": "true" }, "🔥"),
+      h("span", { class: "brand-mark", "aria-hidden": "true" }, u.icon("brand")),
       h("span", { class: "brand-name", "aria-hidden": "true" }, u.GAME_NAME));
 
     var chip = engineChip("compact");
@@ -381,7 +382,7 @@
     els.tools = {};
     var toolButtons = TOOLS.map(function (tool) {
       var btn = h("button", { type: "button", class: "tool-btn", title: tool.label, dataset: { tool: tool.id }, on: { click: function () { closeMenu(); tool.action(); } } },
-        h("span", { class: "tool-icon", "aria-hidden": "true" }, tool.icon),
+        h("span", { class: "tool-icon", "aria-hidden": "true" }, u.icon(tool.icon)),
         h("span", { class: "tool-label" }, tool.label));
       els.tools[tool.id] = btn;
       return btn;
@@ -398,11 +399,11 @@
           if (open) { var first = els.menu.querySelector("button"); if (first) u.focusEl(first); }
         }
       }
-    }, "☰");
+    }, u.icon("menu"));
     els.sound = h("button", {
       type: "button", class: "icon-btn sound-toggle", "aria-label": "Sound", "aria-pressed": "true",
       on: { click: function () { toggleSound(); } }
-    }, "🔊");
+    }, u.icon("soundOn"));
     els.warn = h("button", {
       type: "button", class: "warn-chip", hidden: true, title: "Your progress may not be saved",
       on: {
@@ -410,16 +411,16 @@
           closeMenu();
           var text = storageWarning();
           UI.dialogs.open({
-            title: "About saving", icon: "⚠️", size: "sm",
+            title: "About saving", icon: "warning", size: "sm",
             body: h("div", null, h("p", null, text || "Saving works normally.")),
             actions: [
-              isScorm() ? null : { label: "Open the Save Scroll", kind: "primary", icon: "📜", onClick: function () { setTimeout(function () { UI.panels.saveScroll(); }, 0); } },
+              isScorm() ? null : { label: "Open the Save Scroll", kind: "primary", icon: "saveScroll", onClick: function () { setTimeout(function () { UI.panels.saveScroll(); }, 0); } },
               { label: "Close", kind: "ghost" }
             ]
           });
         }
       }
-    }, h("span", { class: "warn-chip-icon", "aria-hidden": "true" }, "⚠️"), h("span", { class: "warn-chip-text" }, "Not saving"));
+    }, h("span", { class: "warn-chip-icon", "aria-hidden": "true" }, u.icon("warning")), h("span", { class: "warn-chip-text" }, "Not saving"));
 
     els.topbar = h("header", { class: "topbar", hidden: true },
       brand,
@@ -451,8 +452,12 @@
     if (!p) { els.wizard.hidden = true; return; }
     els.wizard.hidden = false;
     var xp = u.safe(function () { return SS.Progress.totalXp(p); }, 0) || 0;
-    var rank = u.safe(function () { return SS.Progress.rankFor(xp); }, null) || { title: "Novice", icon: "🌱", fraction: 0 };
-    els.rankIcon.textContent = rank.icon || "✦";
+    var rank = u.safe(function () { return SS.Progress.rankFor(xp); }, null) || { title: "Novice", icon: "rank", fraction: 0 };
+    if (els.rankIcon.getAttribute("data-rank") !== String(rank.icon)) {
+      els.rankIcon.setAttribute("data-rank", String(rank.icon));
+      u.clear(els.rankIcon);
+      els.rankIcon.appendChild(u.icon(rank.icon || "rank"));
+    }
     els.wizardName.textContent = p.wizardName || "Apprentice";
     els.rankTitle.textContent = rank.title || "";
     els.xpFill.style.width = Math.round(Math.max(0, Math.min(1, rank.fraction || 0)) * 100) + "%";
@@ -506,7 +511,7 @@
   function errorScreen(name) {
     return {
       el: h("section", { class: "screen-error panel" },
-        h("h1", null, "🌀 This part of the academy is foggy"),
+        h("h1", null, u.icon("vortex"), " This part of the academy is foggy"),
         h("p", null, "Something went wrong while opening the “" + name + "” screen."),
         u.button("Back to the map", { kind: "primary", onClick: function () { go(u.profile() ? "map" : "title"); } })),
       title: "Oops"
@@ -519,7 +524,7 @@
     els.main.className = "screen view-fatal";
     var errors = loadErrors();
     els.main.appendChild(h("section", { class: "fatal panel" },
-      h("h1", null, u.emoji("🌀"), " The academy gates won't open"),
+      h("h1", null, u.icon("vortex"), " The academy gates won't open"),
       h("p", null, "An essential part of the game didn't load: ", h("strong", null, missing.join(", ")), "."),
       errors.length ? h("ul", { class: "fatal-list" }, errors.map(function (e) {
         return h("li", null, h("code", { class: "inline-code" }, e.file), e.kind === "missing" ? " is missing" : " has an error" + (e.message ? ": " + e.message : ""));

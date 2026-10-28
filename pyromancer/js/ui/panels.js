@@ -25,7 +25,7 @@
     input.addEventListener("change", function () { o.onChange(input.checked); });
     return h("div", { class: "setting-row" + (o.disabled ? " is-disabled" : "") },
       h("div", { class: "setting-text" },
-        h("label", { class: "setting-label", for: id }, o.icon ? u.emoji(o.icon) : null, o.icon ? " " : null, o.label),
+        h("label", { class: "setting-label", for: id }, o.icon ? u.icon(o.icon) : null, o.icon ? " " : null, o.label),
         o.help ? h("p", { class: "setting-help", id: helpId }, o.help) : null),
       h("span", { class: "switch" }, input, h("span", { class: "switch-track", "aria-hidden": "true" }, h("span", { class: "switch-thumb" }))));
   }
@@ -40,12 +40,12 @@
 
     body.appendChild(h("h3", { class: "settings-heading" }, "Sound & motion"));
     body.appendChild(toggleRow({
-      icon: "🔊", label: "Sound effects", checked: s.sound !== false,
+      icon: "soundOn", label: "Sound effects", checked: s.sound !== false,
       help: "Chimes, whooshes and owl hoots, made live by your browser.",
       onChange: function (v) { app().updateSettings({ sound: v }); if (v) UI.sound.play("success"); }
     }));
     body.appendChild(toggleRow({
-      icon: "🌙", label: "Reduce motion", checked: !!s.reduceMotion,
+      icon: "motion", label: "Reduce motion", checked: !!s.reduceMotion,
       help: osReduced ? "Your device already asks for less motion, so big animations are off either way." : "Turns off sparkles, shaking and other animations.",
       onChange: function (v) { app().updateSettings({ reduceMotion: v }); }
     }));
@@ -63,7 +63,7 @@
     }
     body.appendChild(h("div", { class: "setting-row" },
       h("div", { class: "setting-text" },
-        h("p", { class: "setting-label", id: "font-size-label" }, u.emoji("🔠"), " Editor text size"),
+        h("p", { class: "setting-label", id: "font-size-label" }, u.icon("textSize"), " Editor text size"),
         h("p", { class: "setting-help" }, "Makes the code in the spell editor bigger or smaller.")),
       h("div", { class: "stepper", role: "group", "aria-labelledby": "font-size-label" },
         u.button("", { kind: "ghost", size: "sm", icon: "−", ariaLabel: "Smaller text", onClick: function () { setSize(size - 1); } }),
@@ -74,7 +74,7 @@
     body.appendChild(h("h3", { class: "settings-heading" }, "Learning"));
     var forced = conf.unlockAll === true;
     body.appendChild(toggleRow({
-      icon: "🗝️", label: "Free practice: open every chapter", checked: forced || !!s.unlockAll, disabled: forced,
+      icon: "key", label: "Free practice: open every chapter", checked: forced || !!s.unlockAll, disabled: forced,
       help: forced ? "Your instructor has opened every chapter for this class." : "Visit any chapter or challenge in any order. Stars and XP still count.",
       onChange: function (v) {
         app().updateSettings({ unlockAll: v });
@@ -101,7 +101,7 @@
       input.addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); rename(); } });
       body.appendChild(h("div", { class: "setting-row setting-rename" },
         h("div", { class: "setting-text" },
-          h("label", { class: "setting-label", for: nameId }, u.emoji("🧙"), " Wizard name"),
+          h("label", { class: "setting-label", for: nameId }, u.icon("wizard"), " Wizard name"),
           h("div", { class: "rename-field" }, input, u.button("Rename", { kind: "ghost", size: "sm", onClick: rename })),
           note)));
     }
@@ -111,7 +111,8 @@
     var engineName = h("p", { class: "setting-label" });
     var engineBtn = u.button("Restart Python", { kind: "ghost", size: "sm", icon: "↻", onClick: function () { app().retryEngine(); } });
     var unsub = app().onEngine(function (st) {
-      engineName.textContent = "🐍 " + app().engineLabel(st);
+      u.clear(engineName);
+      u.append(engineName, [u.icon("python"), " " + app().engineLabel(st)]);
       engineText.textContent = st.message || "";
       var label = engineBtn.querySelector(".btn-label");
       if (label) label.textContent = st.state === "error" ? "Try again" : "Restart Python";
@@ -122,7 +123,7 @@
     body.appendChild(about());
 
     UI.dialogs.open({
-      title: "Settings", icon: "⚙️", size: "md", className: "modal-settings", body: body, focusInput: false,
+      title: "Settings", icon: "settings", size: "md", className: "modal-settings", body: body, focusInput: false,
       actions: [{ label: "Done", kind: "primary" }],
       onClose: function () {
         unsub();
@@ -136,6 +137,15 @@
     });
   }
 
+  /** The icon set's attribution (CC BY 3.0 asks for it), with a link. */
+  function iconCredit() {
+    var text = (SS.Icons && SS.Icons.credit) || "Icons by the game-icons.net contributors, CC BY 3.0 — https://game-icons.net";
+    var m = /(https?:\/\/\S+)\s*$/.exec(text);
+    if (!m) return text;
+    return [text.slice(0, m.index).replace(/[\s—-]+$/, "") + " — ",
+      h("a", { href: m[1], target: "_blank", rel: "noopener noreferrer" }, m[1].replace(/^https?:\/\//, ""))];
+  }
+
   /** One sentence about where progress lives, for the current mode. */
   function savingSentence() {
     return app().isScorm()
@@ -147,7 +157,7 @@
     var conf = u.config();
     var py = conf.pyodideVersion ? " " + conf.pyodideVersion : "";
     return h("details", { class: "about" },
-      h("summary", null, u.emoji("📜"), " About " + u.GAME_NAME),
+      h("summary", null, u.icon("info"), " About " + u.GAME_NAME),
       h("div", { class: "about-body" },
         h("p", null, h("strong", null, u.GAME_NAME + (conf.version ? " " + conf.version : "")), " — " + u.TAGLINE + " Learn Python, data structures & algorithms and object-oriented programming by casting real Python spells."),
         h("p", null, "Your spells run in real Python (CPython via Pyodide" + py + ") inside your browser. Nothing you type is sent anywhere. " + savingSentence()),
@@ -155,6 +165,7 @@
           h("li", null, "Python in the browser: Pyodide (MPL-2.0)"),
           h("li", null, "Code editor: CodeMirror 5 (MIT)"),
           h("li", null, "Fonts: Cinzel, Inter and JetBrains Mono (SIL Open Font License)"),
+          h("li", null, iconCredit()),
           h("li", null, "Sounds and sparkles are generated by the game itself.")),
         h("p", null, "Keyboard: ", h("kbd", null, UI.Editor.modKey + "+Enter"), " casts a spell. Inside the editor, ", h("kbd", null, "Tab"), " indents; press ", h("kbd", null, "Esc"), " then ", h("kbd", null, "Tab"), " to move on.")));
   }
@@ -167,9 +178,9 @@
     var warning = app().storageWarning();
     if (!warning) return null;
     return h("div", { class: "banner banner-warn", role: "status" },
-      h("span", { class: "banner-icon", "aria-hidden": "true" }, "⚠️"),
+      h("span", { class: "banner-icon", "aria-hidden": "true" }, u.icon("warning")),
       h("div", { class: "banner-text" }, h("p", null, warning)),
-      onOpen ? u.button("Open the Save Scroll", { kind: "ghost", size: "sm", icon: "📜", onClick: onOpen }) : null);
+      onOpen ? u.button("Open the Save Scroll", { kind: "ghost", size: "sm", icon: "saveScroll", onClick: onOpen }) : null);
   }
 
   function readFile(file) {
@@ -218,7 +229,7 @@
       codeBox.value = code;
       codeBox.addEventListener("focus", function () { u.safe(function () { codeBox.select(); }); });
       body.appendChild(h("section", { class: "scroll-section" },
-        h("h3", null, u.emoji("📤"), " Take your progress with you"),
+        h("h3", null, u.icon("exportSave"), " Take your progress with you"),
         h("p", { class: "section-help" }, framed
           ? "Copy this save code and keep it somewhere safe (an email to yourself works). It holds your stars, hints and settings. Course pages sometimes block downloads, so the code is the surest way."
           : "Copy this save code (it holds your stars, hints and settings) or download a save file (which also keeps the spells you wrote)."),
@@ -226,7 +237,7 @@
         codeBox,
         h("div", { class: "button-row" },
           u.button("Copy save code", {
-            kind: "primary", icon: "📋", onClick: function () {
+            kind: "primary", icon: "copy", onClick: function () {
               u.copyText(code).then(function (ok) {
                 exportStatus.className = "field-status" + (ok ? " ok" : "");
                 exportStatus.textContent = ok ? "Copied! Paste it somewhere safe (an email to yourself works)." :
@@ -236,7 +247,7 @@
             }
           }),
           u.button(framed ? "Try downloading a save file" : "Download save file", {
-            kind: "ghost", icon: "⬇️", onClick: function () {
+            kind: "ghost", icon: "download", onClick: function () {
               var ok = u.safe(function () { return SS.Save.exportFile(); }, false);
               exportStatus.className = "field-status" + (ok !== false ? " ok" : "");
               exportStatus.textContent = ok !== false
@@ -270,7 +281,7 @@
     var pasteId = u.uid("paste");
     var paste = h("textarea", { class: "input code-box", id: pasteId, rows: "3", spellcheck: "false", placeholder: "Paste a save code here (it starts with PYRO1.)" });
     var importError = h("p", { class: "field-error", role: "alert" });
-    var importBtn = u.button("Import save code", { kind: "primary", icon: "📥" });
+    var importBtn = u.button("Import save code", { kind: "primary", icon: "importSave" });
 
     function targetSlot() {
       if (slots) return picked;
@@ -287,13 +298,13 @@
       var who = slots ? (slotData && slotData.data ? slotData.data.wizardName : "the damaged save") : (p && p.wizardName);
       var ask = occupied && !scorm
         ? UI.dialogs.confirm({
-          title: "Replace this save?", icon: "📜", danger: true, confirmLabel: "Replace it",
+          title: "Replace this save?", icon: "saveScroll", danger: true, confirmLabel: "Replace it",
           message: h("p", null, "Importing replaces the progress of ", h("strong", null, who || "this wizard"), " in this save slot. This can't be undone.")
         })
         : Promise.resolve(true);
       if (scorm) {
         ask = UI.dialogs.confirm({
-          title: "Add this Save Scroll to your course save?", icon: "📜", confirmLabel: "Import it",
+          title: "Add this Save Scroll to your course save?", icon: "saveScroll", confirmLabel: "Import it",
           message: "Its progress is combined with the progress your course already has, keeping the best result for every spell."
         });
       }
@@ -310,7 +321,7 @@
         app().state.slot = slot;
         if (m) m.close("imported");
         UI.sound.play("unlock");
-        UI.dialogs.toast("Save Scroll imported. Welcome back, " + (profile.wizardName || "apprentice") + "!", { icon: "📜", kind: "ok" });
+        UI.dialogs.toast("Save Scroll imported. Welcome back, " + (profile.wizardName || "apprentice") + "!", { icon: "saveScroll", kind: "ok" });
         if (opts.onImported) opts.onImported(profile);
         else app().enterGame();
       });
@@ -326,24 +337,24 @@
 
     if (allowImport) {
       body.appendChild(h("section", { class: "scroll-section" },
-        h("h3", null, u.emoji("📥"), " Import a Save Scroll"),
+        h("h3", null, u.icon("importSave"), " Import a Save Scroll"),
         h("p", { class: "section-help" }, scorm
           ? "Importing adds the Save Scroll's progress to this course's save, keeping the best result for every spell."
           : p ? "Importing replaces the progress in this save slot." : "Choose where the wizard should go, then pick a file or paste a code."),
         slotPicker,
         h("div", { class: "button-row" },
           fileInput,
-          h("label", { class: "btn btn-ghost file-label", for: fileId }, u.emoji("📂"), h("span", { class: "btn-label" }, "Choose a save file…"))),
+          h("label", { class: "btn btn-ghost file-label", for: fileId }, u.icon("folder", { className: "btn-icon" }), h("span", { class: "btn-label" }, "Choose a save file…"))),
         h("label", { class: "field-label", for: pasteId }, "…or paste a save code"),
         paste,
         h("div", { class: "button-row" }, importBtn),
         importError));
     } else {
-      body.appendChild(h("p", { class: "scroll-note" }, u.emoji("🎓"), " Your course saves your progress automatically, so there is nothing to import here."));
+      body.appendChild(h("p", { class: "scroll-note" }, u.icon("report"), " Your course saves your progress automatically, so there is nothing to import here."));
     }
 
     m = UI.dialogs.open({
-      title: "Save Scroll", icon: "📜", size: "md", className: "modal-savescroll", body: body, focusInput: false,
+      title: "Save Scroll", icon: "saveScroll", size: "md", className: "modal-savescroll", body: body, focusInput: false,
       actions: [{ label: "Close", kind: "ghost" }]
     });
     return m;
@@ -365,7 +376,7 @@
     body.appendChild(tech);
     var retry = { label: "Try again", kind: "primary", icon: "↻", id: u.uid("retry"), onClick: function () { app().retryEngine(); return false; } };
     var m = UI.dialogs.open({
-      title: "The Python engine", icon: "🐍", size: "md", body: body,
+      title: "The Python engine", icon: "python", size: "md", body: body,
       actions: [retry, { label: "Close", kind: "ghost" }]
     });
     var retryBtn = m.footer.querySelector("#" + retry.id);
@@ -404,6 +415,7 @@
     engineHelp: engineHelp,
     storageBanner: storageBanner,
     savingSentence: savingSentence,
+    iconCredit: iconCredit,
     about: about
   };
 })(typeof window !== "undefined" ? window : globalThis);

@@ -62,7 +62,7 @@
     });
     if (opts.title) {
       dialog.appendChild(h("header", { class: "modal-header" },
-        opts.icon ? h("span", { class: "modal-icon", "aria-hidden": "true" }, opts.icon) : null,
+        opts.icon ? h("span", { class: "modal-icon", "aria-hidden": "true" }, u.icon(opts.icon)) : null,
         h("h2", { class: "modal-title", id: titleId }, opts.title)));
     }
     var body = h("div", { class: "modal-body" });
@@ -252,8 +252,9 @@
     opts = opts || {};
     var root = document.getElementById("toast-root");
     if (!root) return;
+    var iconKey = opts.icon || (opts.kind === "ok" ? "passed" : opts.kind === "warn" ? "warning" : null);
     var el = h("div", { class: "toast toast-" + (opts.kind || "info") },
-      opts.icon ? h("span", { class: "toast-icon", "aria-hidden": "true" }, opts.icon) : null,
+      iconKey ? h("span", { class: "toast-icon", "aria-hidden": "true" }, u.icon(iconKey)) : null,
       h("span", { class: "toast-text" }, message));
     root.appendChild(el);
     while (root.childNodes.length > 3) u.remove(root.firstChild);
@@ -271,8 +272,8 @@
   function speakerInfo(key) {
     var chars = SS.CHARACTERS || {};
     var known = chars[key];
-    var c = known || chars.narrator || { name: "", icon: "📜", role: "" };
-    return { key: known ? key : "narrator", name: c.name || "", icon: c.icon || "📜", role: c.role || "" };
+    var c = known || chars.narrator || { name: "", icon: "story", role: "" };
+    return { key: known ? key : "narrator", name: c.name || "", icon: c.icon || "story", role: c.role || "" };
   }
 
   function isPanel(p) {
@@ -290,7 +291,8 @@
   }
 
   /**
-   * The dialogue component. opts: { title, finishLabel, skipLabel, onDone(reason) }.
+   * The dialogue component. opts: { title, finishLabel, skipLabel, banner, onDone(reason) }.
+   * opts.banner: an SS.Art slot (e.g. "location-tower") shown above the story when painted.
    * Returns { el, focus() }.
    */
   function dialogueView(panels, opts) {
@@ -309,7 +311,10 @@
     var next = u.button("Next", { kind: "primary", class: "dlg-next" });
     var skip = u.button(opts.skipLabel || "Skip", { kind: "link", class: "dlg-skip" });
     var speaker = h("div", { class: "dlg-speaker" }, portrait, h("div", { class: "dlg-who" }, nameEl, roleEl));
-    var card = h("div", { class: "dlg-card" }, speaker, h("div", { class: "dlg-bubble" }, textEl));
+    var bannerImg = opts.banner ? u.artImg(opts.banner, "dlg-banner-img") : null;
+    var card = h("div", { class: "dlg-card" + (bannerImg ? " has-banner" : "") },
+      bannerImg ? h("div", { class: "dlg-banner", "aria-hidden": "true" }, bannerImg) : null,
+      speaker, h("div", { class: "dlg-bubble" }, textEl));
     var el = h("section", { class: "dialogue", "aria-label": opts.title || "Story" },
       h("header", { class: "dlg-top" },
         opts.title ? h("h2", { class: "dlg-title" }, opts.title) : h("span"),
@@ -329,7 +334,12 @@
       var p = panels[i];
       var who = speakerInfo(p.speaker);
       el.setAttribute("data-speaker", who.key);
-      portrait.textContent = p.icon || who.icon;
+      // The speaker's painted portrait when there is one, else their icon.
+      u.clear(portrait);
+      portrait.appendChild(p.icon ? u.icon(p.icon) : u.characterIcon(who.key, who.icon));
+      var painted = p.icon ? null : u.artImg("portrait-" + who.key, "portrait-art");
+      if (painted) portrait.appendChild(painted);
+      portrait.classList.toggle("has-art", !!painted);
       nameEl.textContent = p.name !== undefined ? p.name : who.name;
       roleEl.textContent = p.name !== undefined ? (p.role || "") : (who.key === "narrator" ? "" : who.role);
       nameEl.hidden = !nameEl.textContent;

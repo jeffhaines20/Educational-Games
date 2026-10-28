@@ -95,6 +95,27 @@
   var PLACEHOLDER = /(\d+)/g;
 
   /** Append text to parent, turning code placeholders into <code> and newlines into <br>. */
+  // Pictorial emoji in content text become icons (the same pictures as the rest of the game);
+  // typographic marks such as ★ ✓ → ▶ stay text.
+  var EMOJI_RE = null;
+  try { EMOJI_RE = new RegExp("\\p{Extended_Pictographic}\\uFE0F?(?:\\u200D\\p{Extended_Pictographic}\\uFE0F?)*", "gu"); } catch (err) { EMOJI_RE = null; }
+  var KEEP_AS_TEXT = { "★": 1, "☆": 1, "▶": 1, "✓": 1, "✗": 1, "✕": 1, "→": 1, "←": 1 };
+
+  function appendText(parent, text) {
+    if (!text) return;
+    if (!EMOJI_RE || !SS.Icons) { parent.appendChild(document.createTextNode(text)); return; }
+    var last = 0, m;
+    EMOJI_RE.lastIndex = 0;
+    while ((m = EMOJI_RE.exec(text)) !== null) {
+      var name = KEEP_AS_TEXT[m[0].replace(/\uFE0F/g, "")] ? null : SS.Icons.nameFor(m[0]);
+      if (!name) continue;
+      if (m.index > last) parent.appendChild(document.createTextNode(text.slice(last, m.index)));
+      parent.appendChild(u.icon(name, { className: "inline-icon" }));
+      last = m.index + m[0].length;
+    }
+    if (last < text.length) parent.appendChild(document.createTextNode(text.slice(last)));
+  }
+
   function appendPlain(parent, text, codes) {
     var lines = text.split("\n");
     lines.forEach(function (line, index) {
@@ -102,11 +123,11 @@
       var last = 0, match;
       PLACEHOLDER.lastIndex = 0;
       while ((match = PLACEHOLDER.exec(line)) !== null) {
-        if (match.index > last) parent.appendChild(document.createTextNode(line.slice(last, match.index)));
+        if (match.index > last) appendText(parent, line.slice(last, match.index));
         parent.appendChild(h("code", { class: "inline-code" }, codes[Number(match[1])]));
         last = match.index + match[0].length;
       }
-      if (last < line.length) parent.appendChild(document.createTextNode(line.slice(last)));
+      if (last < line.length) appendText(parent, line.slice(last));
     });
   }
 
@@ -175,7 +196,7 @@
   // --------------------------------------------------------------------------
 
   function copyButton(getText, label) {
-    var btn = u.button("Copy", { kind: "ghost", size: "xs", icon: "📋", class: "copy-btn", ariaLabel: label || "Copy code" });
+    var btn = u.button("Copy", { kind: "ghost", size: "xs", icon: "copy", class: "copy-btn", ariaLabel: label || "Copy code" });
     btn.addEventListener("click", function () {
       u.copyText(getText()).then(function (ok) {
         var text = btn.querySelector(".btn-label");
@@ -194,12 +215,12 @@
     var pre = h("pre", { class: "code-block", tabindex: "0", "aria-label": opts.label || "Python example" },
       h("code", { class: "language-python" }, highlight(code)));
     var head = h("div", { class: "code-head" },
-      h("span", { class: "code-lang" }, u.emoji("🐍"), " ", opts.title || "Python"),
+      h("span", { class: "code-lang" }, u.icon("python"), " ", opts.title || "Python"),
       opts.noCopy ? null : copyButton(function () { return code; }, "Copy this example"));
     var figure = h("figure", { class: "rt-code" }, head, pre);
     if (output !== undefined && output !== null) {
       figure.appendChild(h("div", { class: "rt-output" },
-        h("div", { class: "rt-output-label" }, u.emoji("🔮"), " Output"),
+        h("div", { class: "rt-output-label" }, u.icon("output"), " Output"),
         h("pre", { class: "output-text" }, String(output))));
     }
     return figure;
@@ -214,7 +235,7 @@
 
   function outputBlock(output, label) {
     return h("figure", { class: "rt-output rt-output-alone" },
-      h("figcaption", { class: "rt-output-label" }, u.emoji("🔮"), " ", label || "Expected output"),
+      h("figcaption", { class: "rt-output-label" }, u.icon("output"), " ", label || "Expected output"),
       h("pre", { class: "output-text" }, String(output)));
   }
 
@@ -223,7 +244,7 @@
     if (Array.isArray(content)) body.appendChild(render(content));
     else body.appendChild(h("p", null, inline(content)));
     return h("div", { class: "callout callout-" + kind, role: "note", "aria-label": title },
-      h("span", { class: "callout-icon", "aria-hidden": "true" }, icon), body);
+      h("span", { class: "callout-icon", "aria-hidden": "true" }, u.icon(icon)), body);
   }
 
   function listItems(items) {
@@ -245,8 +266,8 @@
     if (block.output !== undefined) return outputBlock(block.output, block.label);
     if (Array.isArray(block.list)) return h("ul", { class: "rt-list" }, listItems(block.list));
     if (Array.isArray(block.steps)) return h("ol", { class: "rt-steps" }, listItems(block.steps));
-    if (block.tip !== undefined) return callout("tip", "💡", "Tip", block.tip);
-    if (block.warning !== undefined) return callout("warning", "⚠️", "Careful", block.warning);
+    if (block.tip !== undefined) return callout("tip", "tip", "Tip", block.tip);
+    if (block.warning !== undefined) return callout("warning", "warning", "Careful", block.warning);
     if (block.text !== undefined) return h("p", null, inline(block.text));
     // An unknown block type: show whatever text it carries rather than nothing (or an error).
     var texts = Object.keys(block).map(function (k) { return block[k]; })
