@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate every Syntax & Sorcery challenge.
+"""Validate every Pyromancer challenge.
 
 For each challenge this checks the content structure and then runs the real
 trial harness (with CPython) to make sure that:

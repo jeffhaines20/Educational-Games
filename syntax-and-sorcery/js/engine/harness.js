@@ -1,5 +1,5 @@
 /*
- * Syntax & Sorcery — the spell-checking harness.
+ * Pyromancer — the spell-checking harness.
  *
  * SS.HARNESS_PY holds the Python source of the `spellcheck` module. It runs an
  * apprentice's spell (their Python code) plus a challenge's trials (test code)
@@ -16,7 +16,7 @@
   var SS = (global.SS = global.SS || {});
 
   SS.HARNESS_PY = String.raw`
-"""spellcheck: the trial harness for Syntax & Sorcery.
+"""spellcheck: the trial harness for Pyromancer.
 
 Public entry points
 -------------------
@@ -25,7 +25,7 @@ run_spell_json(source, trials="", inputs_json="[]", output_limit=50000) -> str
 
 Trial code (a challenge's "tests") runs in its own namespace with helpers such
 as test(), expect(), expect_equal(), expect_output(), need_function() and
-count_calls(). See syntax-and-sorcery/docs/DESIGN.md for the full guide.
+count_calls(). See pyromancer/docs/DESIGN.md for the full guide.
 """
 
 import ast

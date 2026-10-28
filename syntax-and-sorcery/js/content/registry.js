@@ -1,5 +1,5 @@
 /*
- * Syntax & Sorcery — content registry.
+ * Pyromancer — content registry.
  *
  * Loaded before every chapter file. Chapter files call SS.defineChapter({...})
  * and write Python with the SS.py`...` tag, which keeps backslashes exactly as
@@ -71,7 +71,7 @@
   });
 
   function fail(where, message) {
-    throw new Error("[Syntax & Sorcery content] " + where + ": " + message);
+    throw new Error("[Pyromancer content] " + where + ": " + message);
   }
 
   /** Register a chapter and its challenges. Throws on obvious structural mistakes. */

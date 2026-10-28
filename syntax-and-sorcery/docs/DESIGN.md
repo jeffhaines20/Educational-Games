@@ -1,4 +1,4 @@
-# Syntax & Sorcery — Design & Developer Guide
+# Pyromancer — Design & Developer Guide
 
 *An apprentice wizard learns Python, data structures & algorithms, and object-oriented
 programming by writing real Python "spells" that run in the browser.*
@@ -42,7 +42,7 @@ and this document disagree, fix one of them.
 ## 2. File layout and ownership
 
 ```
-syntax-and-sorcery/
+pyromancer/
   index.html                 UI       entry point; loads every script in order (§3)
   README.md                  lead     player + instructor guide (deployment, LMS)
   css/style.css              UI       all styles (one file; sections with comments)
@@ -178,7 +178,7 @@ problems (storage blocked, no SCORM API, user-code errors) — they degrade grac
 
 ```js
 SS.config = {
-  title: "Syntax & Sorcery",
+  title: "Pyromancer",
   version: "1.0.0",
   pyodideVersion: "0.29.5",
   pyodideBaseURLs: [                      // tried in order until one loads
@@ -188,7 +188,7 @@ SS.config = {
   defaultTimeLimitMs: 8000,               // per cast; a challenge may set timeLimitMs
   outputLimitChars: 50000,
   saveSlots: 3,
-  storageKey: "syntax-and-sorcery",       // localStorage key prefix
+  storageKey: "pyromancer",       // localStorage key prefix
   allowAnswerScroll: true,
   answerScrollAfterFailedCasts: 3,
   unlockAll: false,
@@ -338,9 +338,9 @@ SS.Scorm.commit() / SS.Scorm.finish()           // finish on pagehide
 
 `python3 tools/build.py` writes:
 
-* `dist/syntax-and-sorcery.html` — single file: `index.html` with every local CSS/JS
+* `dist/pyromancer.html` — single file: `index.html` with every local CSS/JS
   file inlined (CDN links stay as links). Must work when opened from disk.
-* `dist/syntax-and-sorcery-scorm.zip` — SCORM 1.2 package: `imsmanifest.xml` +
+* `dist/pyromancer-scorm.zip` — SCORM 1.2 package: `imsmanifest.xml` +
   `index.html` (the single-file build) at the zip root.
 
 Standard library only. Deterministic output (fixed zip timestamps).

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /*
  * Tiny static server for local testing.
- *   /            -> the game folder (syntax-and-sorcery/)
+ *   /            -> the game folder (pyromancer/)
  *   /pyodide/    -> tools/.cache/pyodide (run tools/fetch_pyodide.sh first)
  *
  *   node tools/dev_server.js [port]       (default 8000)
@@ -52,5 +52,5 @@ module.exports = { start, GAME, PYODIDE };
 
 if (require.main === module) {
   const port = Number(process.argv[2] || 8000);
-  start(port).then(({ port }) => console.log("Syntax & Sorcery dev server on http://localhost:" + port + "/"));
+  start(port).then(({ port }) => console.log("Pyromancer dev server on http://localhost:" + port + "/"));
 }
