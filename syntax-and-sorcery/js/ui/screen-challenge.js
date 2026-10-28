@@ -536,6 +536,7 @@
       }
       castCode = editor.getValue();
       u.safe(function () { SS.Save.saveDraft(ch.id, castCode); });
+      if (coach && coach.parentNode === resultsPanel && coach.nextSibling !== backToTask) resultsPanel.insertBefore(coach, backToTask);
       casting = true;
       updateCast();
       editor.clearMarks();

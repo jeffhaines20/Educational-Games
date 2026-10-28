@@ -21,13 +21,12 @@
     document.addEventListener("DOMContentLoaded", function () { window.SS_LOAD_DONE = true; });
   </script>
 
-  <!-- Fonts (optional: system fonts are used if Google Fonts is blocked). Loaded without blocking the page. -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <!-- Python (Pyodide) and the code editor (CodeMirror) come from these CDNs. -->
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
   <link rel="preconnect" href="https://cdnjs.cloudflare.com">
-  <link id="ss-fonts" rel="stylesheet" media="print" onload="this.media='all'"
-        href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&amp;family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;700&amp;display=swap">
+
+  <!-- Self-hosted fonts (assets/fonts, SIL OFL): no third-party font service is contacted. -->
+  <link rel="stylesheet" href="css/fonts.css">
 
   <!-- The code editor (CodeMirror 5) is loaded on demand by js/ui/editor.js from cdnjs;
        if it is blocked, a plain text editor is used instead. -->

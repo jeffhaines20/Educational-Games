@@ -1,5 +1,5 @@
 /*
- * Syntax & Sorcery — SS.Progress: stars, XP, ranks and unlocks.
+ * Pyromancer — SS.Progress: stars, XP, ranks and unlocks.
  *
  * Pure, deterministic functions over SS.content (the registered chapters) and a
  * profile (see SS.Save). No DOM, no storage, no clock. Every function accepts a

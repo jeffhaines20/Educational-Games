@@ -547,8 +547,6 @@
 
   function boot() {
     buildShell();
-    var fonts = document.getElementById("ss-fonts");
-    if (fonts && fonts.media !== "all") fonts.media = "all";
     UI.effects.initSky(document.getElementById("sky"));
     applySettings();
     afterLoad(function () { u.safe(function () { UI.Editor.loadCodeMirror(); }); });
