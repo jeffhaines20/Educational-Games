@@ -525,7 +525,7 @@
       history: {
         list: [
           "**Six weeks ago:** heart attack at home; emergency angioplasty and a stent in the LAD.",
-          "**Since then:** gets tired after about 10 minutes of walking; no chest pain.",
+          "**Since then:** gets tired after about 5–10 minutes of walking; no chest pain.",
           "**Past medical history:** high blood pressure for 18 years; high cholesterol.",
           "**Social:** retired machinist; quit smoking the day of his heart attack; wants to get back to fishing and to his grandchildren's soccer games."
         ]
@@ -608,7 +608,7 @@
         type: "single",
         prompt: "What does an ejection fraction of 30 % mean for Mr. Fontaine?",
         options: [
-          { text: "His left ventricle is significantly weakened, which limits his aerobic capacity", correct: true, why: "Yes. Only 30 % of the blood leaves with each beat, against a normal of more than 55 %. A reduced EF lowers the ability to do aerobic activity — one reason he tires after 10 minutes of walking." },
+          { text: "His left ventricle is significantly weakened, which limits his aerobic capacity", correct: true, why: "Yes. Only 30 % of the blood leaves with each beat, against a normal of more than 55 %. A reduced EF lowers the ability to do aerobic activity — one reason he needed a rest after 6 minutes of easy walking today." },
           { text: "It's normal: a healthy left ventricle ejects only about a third of the blood it holds", why: "A healthy left ventricle pumps out more than half of its blood each beat (normal EF above 55 %, about 58 %)." },
           { text: "It shows that the heart attack left no lasting damage to his pumping", why: "The opposite: the front wall and apex move poorly where the muscle was damaged, and his EF is well below normal." },
           { text: "It means his heart rate is too slow to pump enough blood", why: "EF is the share of blood ejected with each beat; it doesn't depend on how fast the heart beats. His rate of 72 is normal." }
@@ -779,7 +779,7 @@
         categories: ["Ischemia", "Injury (a new infarct)", "Infarction (dead muscle)", "Conduction problem"],
         items: [
           { text: "ST depression, downsloping 2–3 mm", category: 0, why: "Downsloping ST depression of 2–3 mm may indicate ischemia — heart muscle short of oxygen." },
-          { text: "Inverted T waves in leads V2–V6", category: 0, why: "T-wave inversion is the sign of ischemia; in V2–V6 it is always abnormal." },
+          { text: "Inverted T waves in leads V2–V6", category: 0, why: "T-wave inversion is the sign of ischemia; in V2–V6 it is abnormal in adults." },
           { text: "ST elevation", category: 1, why: "ST elevation marks injury — a new infarct in progress (it can also come from pericarditis)." },
           { text: "Pathological Q waves", category: 2, why: "Q waves come from dead, electrically silent muscle: an infarction." },
           { text: "A wide QRS (0.12 seconds or more)", category: 3, why: "A wide QRS means the impulse spreads slowly through the ventricles — a bundle branch block." },

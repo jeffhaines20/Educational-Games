@@ -501,7 +501,7 @@
         type: "single",
         prompt: "What does lead V3 show?",
         options: [
-          { text: "Inverted T waves — a sign of myocardial ischemia", correct: true, why: "Yes. Her T waves now point downward where they were upright before. T-wave inversion is the ECG sign of ischemia — and in V2–V6 it is always abnormal." },
+          { text: "Inverted T waves — a sign of myocardial ischemia", correct: true, why: "Yes. Her T waves now point downward where they were upright before. T-wave inversion is the ECG sign of ischemia — and in V2–V6 it is abnormal in adults." },
           { text: "ST elevation — injury from a heart attack in progress", why: "The ST segment sits on the baseline. ST elevation would mark the zone of injury — an evolving heart attack (a STEMI)." },
           { text: "Pathological Q waves — an old, completed heart attack", why: "There are no deep, wide Q waves. Pathological Q waves mean dead, electrically silent muscle from an infarction." },
           { text: "A normal ECG — so the problem must be something other than her heart", why: "Upside-down T waves are not normal in V3. (And even a normal ECG wouldn't rule out unstable angina: the history matters most.)" }
@@ -510,7 +510,7 @@
           "Look at the last wave of each beat. Which way does it point — and which way should it point in V3?"
         ],
         explain: [
-          "**Inverted T waves = ischemia.** A 12-lead ECG is the most common test for angina; T-wave inversion in V2–V6 is always abnormal (in the limb leads it can be a normal variant).",
+          "**Inverted T waves = ischemia.** A 12-lead ECG is the most common test for angina; T-wave inversion in V2–V6 is abnormal in adults (in the limb leads, and in some young people and athletes, it can be a normal variant).",
           "Unstable angina may show T-wave inversion, ST depression or a normal ECG. Blood tests for **troponin** then show whether any heart muscle has actually died — which would make it a heart attack (a non-ST-elevation MI, or NSTEMI)."
         ]
       },
@@ -544,7 +544,7 @@
         "Stable angina: brought on by exertion, stress, cold or a big meal; lasts 15 minutes or less; relieved by rest or nitroglycerin.",
         "Unstable angina: at rest or without a cause, lasts longer, often not relieved by nitroglycerin — any change from the usual pattern is a red flag.",
         "Chest pain at rest, or not relieved by nitroglycerin, is an emergency: stay, get help (rapid response in hospital, 911 outside), keep the patient resting, notify the PT.",
-        "Inverted T waves mean ischemia (always abnormal in V2–V6); ST elevation means injury; Q waves mean infarction.",
+        "Inverted T waves mean ischemia (abnormal in V2–V6 in adults); ST elevation means injury; Q waves mean infarction.",
         "PTAs don't give medications — the nurse does; outpatients take their own prescribed nitroglycerin."
       ],
       sources: [
@@ -1233,7 +1233,7 @@
       },
       {
         heading: "Tests",
-        body: "A **12-lead ECG** is the main test: **inverted T waves** (always abnormal in V2–V6) or downsloping ST depression show ischemia. An exercise stress test can bring ischemia out; **troponin** blood tests show whether any heart muscle has died (which would make it an MI); coronary angiography maps the narrowed arteries."
+        body: "A **12-lead ECG** is the main test: **inverted T waves** (abnormal in V2–V6 in adults) or downsloping ST depression show ischemia. An exercise stress test can bring ischemia out; **troponin** blood tests show whether any heart muscle has died (which would make it an MI); coronary angiography maps the narrowed arteries."
       },
       {
         heading: "Treatment",

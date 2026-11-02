@@ -1010,20 +1010,25 @@
     var base = 60 / r.plan.rr, pattern = s.pvc.pattern, k = pv.length;
     var w = pv.length ? Math.max.apply(null, pv.map(function (b) { return b.qrs; })) : 0.16;
     var t = ["Most beats have an upright P wave and a narrow QRS complex after a constant PR interval of about " + sec(prAvg) + "; these beats come regularly at about " + Math.round(base) + " per minute."];
-    var early = "wide (about " + sec(Math.round(w / 0.01) * 0.01) + ", " + squares(w) + ") and oddly shaped, have no P wave in front of them, and are followed by a large T wave pointing the opposite way to their QRS";
+    function early(n) {
+      return "wide (about " + sec(Math.round(w / 0.01) * 0.01) + ", " + squares(w) + ") and oddly shaped, " + (n === 1
+        ? "has no P wave in front of it, and is followed by a large T wave pointing the opposite way to its QRS"
+        : "have no P wave in front of them, and are followed by a large T wave pointing the opposite way to their QRS");
+    }
     var pause = "After each early complex there is a longer pause, so the beats on either side of it are two ordinary beat-lengths apart.";
     if (pattern === "bigeminy") {
-      t.push("Every other complex comes early — an ordinary beat, then an early complex, then an ordinary beat, and so on (" + plural(k, "early complex", "early complexes") + "). The early complexes are " + early + "; they all look alike. " + pause);
+      t.push("Every other complex comes early — an ordinary beat, then an early complex, then an ordinary beat, and so on (" + plural(k, "early complex", "early complexes") + "). " +
+        (k === 1 ? "The early complex is " + early(1) + ". " : "The early complexes are " + early(k) + "; they all look alike. ") + pause);
     } else if (pattern === "couplets") {
       var pairs = 0;
       for (var i = 1; i < beats.length; i++) if (beats[i].kind === "pvc" && beats[i - 1].kind === "pvc") pairs++;
-      t.push("Two early complexes come back to back, with no ordinary beat between them (" + plural(pairs, "pair") + " on the strip). They are " + early + ". After the pair there is a longer pause before the next ordinary beat.");
-    } else if (pattern === "multifocal") {
+      t.push("Two early complexes come back to back, with no ordinary beat between them (" + plural(pairs, "pair") + " on the strip). They are " + early(2) + ". After the pair there is a longer pause before the next ordinary beat.");
+    } else if (pattern === "multifocal" && k > 1) {
       var shapes = [];
       pv.forEach(function (b) { var d = SHAPE_WORDS[b.focus]; if (shapes.indexOf(d) < 0) shapes.push(d); });
-      t.push(capital(plural(k, "complex", "complexes")) + " come early, sooner than the next beat was due. They are " + early + ". They do not look alike: " + shapes.map(function (d, i) { return (i === 0 ? "one " : i === shapes.length - 1 ? "and another " : "another ") + d; }).join(", ") + ". " + pause);
+      t.push(capital(plural(k, "complex", "complexes")) + " come early, sooner than the next beat was due. They are " + early(k) + ". They do not look alike: " + shapes.map(function (d, i) { return (i === 0 ? "one " : i === shapes.length - 1 ? "and another " : "another ") + d; }).join(", ") + ". " + pause);
     } else {
-      t.push(capital(plural(k, "complex", "complexes")) + (k === 1 ? " comes" : " come") + " early, sooner than the next beat was due. " + (k === 1 ? "It is " : "They are ") + early + (k > 1 ? "; they all look alike. " : ". ") + pause);
+      t.push(capital(plural(k, "complex", "complexes")) + (k === 1 ? " comes" : " come") + " early, sooner than the next beat was due. " + (k === 1 ? "It is " : "They are ") + early(k) + (k > 1 ? "; they all look alike. " : ". ") + pause);
     }
     t.push(capital(count) + " in total.");
     if (normal.length) t.push(qrsSentence(s, P, normal[0].qrs).replace(/^QRS complexes are/, "The ordinary QRS complexes are"));
