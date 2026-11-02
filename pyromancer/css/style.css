@@ -1885,11 +1885,26 @@ html.modal-open .toast { pointer-events: none; }
 .station-banner img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: 50% 42%; filter: saturate(1.08) brightness(1.1); }
 .station-banner::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(20, 16, 48, 0) 55%, rgba(30, 26, 70, 0.7) 100%); }
 .station-locked .station-banner img { filter: grayscale(1) brightness(0.55); }
-/* Optional painted map behind the path */
-.trail-art { position: absolute; inset: -30px -4% -30px; z-index: 0; pointer-events: none; opacity: 0.3;
-  -webkit-mask-image: radial-gradient(ellipse at 50% 50%, #000 40%, transparent 75%); mask-image: radial-gradient(ellipse at 50% 50%, #000 40%, transparent 75%); }
-.trail-art:empty { display: none; }
-.trail-art img { width: 100%; height: 100%; object-fit: cover; }
+/* The optional map painting: the academy behind the map's heading, which sits on a dark fade */
+.map-heading.has-art {
+  position: relative; isolation: isolate; overflow: hidden;
+  display: flex; flex-direction: column; justify-content: flex-end;
+  max-width: none; min-height: clamp(220px, 27vw, 340px);
+  margin: 26px 0 6px; padding: 24px 24px 12px;
+  border-radius: 18px;
+  border: 1px solid rgba(245, 207, 116, 0.32);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.45);
+}
+.map-heading.has-art > .map-hero-img {
+  position: absolute; inset: 0; z-index: -2;
+  width: 100%; height: 100%; object-fit: cover; object-position: 50% 16%;
+}
+.map-heading.has-art::after {
+  content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+  background: linear-gradient(180deg, rgba(10, 8, 28, 0) 38%, rgba(10, 8, 28, 0.74) 72%, rgba(10, 8, 28, 0.92) 100%);
+}
+.map-heading.has-art .screen-title { text-shadow: 0 2px 6px rgba(0, 0, 0, 0.95), 0 0 24px rgba(245, 207, 116, 0.25); }
+.map-heading.has-art .screen-lead { color: #e6e0ff; text-shadow: 0 1px 4px rgba(0, 0, 0, 0.95); }
 
 /* Chapter header: the area's painting glows behind the heading */
 .chapter-hero { position: relative; overflow: hidden; isolation: isolate; }
@@ -1932,6 +1947,7 @@ html.modal-open .toast { pointer-events: none; }
 }
 .dlg-banner:empty { display: none; }
 .dlg-banner img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: 50% 45%; }
+.dlg-banner img[data-slot="map"] { object-position: 50% 14%; }   /* the prologue: the tower and the moon */
 .dlg-banner::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(30, 25, 72, 0) 45%, rgba(32, 27, 78, 0.97) 100%); }
 /* The certificate screen's painting */
 .cert-art { width: 100%; max-width: 980px; height: clamp(120px, 24vw, 220px); border-radius: 14px; overflow: hidden; box-shadow: 0 18px 40px rgba(0, 0, 0, 0.5); border: 1px solid rgba(245, 207, 116, 0.4); }

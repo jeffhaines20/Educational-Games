@@ -531,7 +531,7 @@ SCENARIOS.paintings = async function () {
     await newGame(page, "Ivy");
     const plain = await page.evaluate(() => ({
       stations: document.querySelectorAll(".trail-list .station").length,
-      paintings: document.querySelectorAll(".trail img").length,
+      paintings: document.querySelectorAll(".map-screen img").length,
       icons: [...document.querySelectorAll(".medallion-face svg.gi")].filter((s) => getComputedStyle(s).visibility !== "hidden").length
     }));
     check(plain.paintings === 0 && plain.icons === plain.stations, "without paintings every map station shows its icon (" + JSON.stringify(plain) + ")");
@@ -542,7 +542,8 @@ SCENARIOS.paintings = async function () {
   game = await openGame({ goto: false });
   page = game.page;
   try {
-    const entries = LOCATIONS.map((id) => '"location-' + id + '": { src: "assets/art/location-' + id + '.webp", width: 1024, height: 683 }');
+    const entries = LOCATIONS.map((id) => '"location-' + id + '": { src: "assets/art/location-' + id + '.webp", width: 1024, height: 683 }')
+      .concat('"map": { src: "assets/art/map.webp", width: 1536, height: 1024 }');
     const manifest = "(function (g) { var SS = (g.SS = g.SS || {}); SS.ART = {" + entries.join(", ") + "}; })(window);";
     const picture = fs.readFileSync(path.join(GAME, "assets", "pyromancer-title-1024.webp"));
     await page.route("**/js/ui/art-manifest.js", (r) => r.fulfill({ contentType: "text/javascript", body: manifest }));
@@ -554,7 +555,7 @@ SCENARIOS.paintings = async function () {
       for (const st of document.querySelectorAll(".trail-list .station")) { st.scrollIntoView(); await new Promise((r) => setTimeout(r, 40)); }
       window.scrollTo(0, 0);
     });
-    await page.waitForFunction(() => [...document.querySelectorAll(".medallion-art")].every((i) => i.complete), null, { timeout: 10000 });
+    await page.waitForFunction(() => [...document.querySelectorAll(".medallion-art, .map-hero-img")].every((i) => i.complete), null, { timeout: 10000 });
     const painted = await page.evaluate(() => {
       const imgs = [...document.querySelectorAll(".medallion-face .medallion-art")];
       const hall = document.querySelector('.station[data-chapter="hall"] .medallion-face');
@@ -563,12 +564,14 @@ SCENARIOS.paintings = async function () {
         loaded: imgs.filter((i) => i.naturalWidth > 0).length,
         decorative: imgs.every((i) => i.getAttribute("alt") === "" && i.getAttribute("loading") === "lazy" && i.getAttribute("width") && i.getAttribute("height")),
         banners: document.querySelectorAll(".station-banner img").length,
+        mapHero: !!document.querySelector(".map-heading.has-art > img.map-hero-img") && document.querySelector(".map-hero-img").naturalWidth > 0,
         hallIcon: !!hall && !hall.classList.contains("has-art") && !hall.querySelector("img") && getComputedStyle(hall.querySelector("svg.gi")).visibility !== "hidden"
       };
     });
     check(painted.medallions === 6 && painted.loaded === 6, "the map shows the paintings in the station medallions (" + JSON.stringify(painted) + ")");
     check(painted.decorative, "paintings are decorative images (alt=\"\", lazy, with width and height)");
     check(painted.banners === 6, "painted stations get a painted banner on their card");
+    check(painted.mapHero, "the map painting sits behind the map's heading");
     check(painted.hallIcon, "a painting that can't be loaded falls back to the station's icon");
     await shot(page, "paintings-map");
     await page.click(".trail-list .station:nth-child(1) .station-btn");

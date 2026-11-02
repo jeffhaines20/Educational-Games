@@ -7,6 +7,7 @@
   "use strict";
   var SS = (global.SS = global.SS || {});
   SS.ART = {
+    "ending": { src: "assets/art/ending.webp", width: 1200, height: 800 },
     "location-circle": { src: "assets/art/location-circle.webp", width: 1200, height: 800 },
     "location-hall": { src: "assets/art/location-hall.webp", width: 1200, height: 800 },
     "location-hydra": { src: "assets/art/location-hydra.webp", width: 1200, height: 800 },
@@ -14,6 +15,7 @@
     "location-library": { src: "assets/art/location-library.webp", width: 1200, height: 800 },
     "location-tower": { src: "assets/art/location-tower.webp", width: 1024, height: 683 },
     "location-workshop": { src: "assets/art/location-workshop.webp", width: 1200, height: 800 },
+    "map": { src: "assets/art/map.webp", width: 1600, height: 900 },
     "portrait-ada": { src: "assets/art/portrait-ada.webp", width: 640, height: 640 },
     "portrait-glitch": { src: "assets/art/portrait-glitch.webp", width: 640, height: 640 },
     "portrait-hydra": { src: "assets/art/portrait-hydra.webp", width: 640, height: 640 },

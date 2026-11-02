@@ -147,6 +147,7 @@
     if (!a || !a.src) return null;
     var img = h("img", {
       class: "art" + (className ? " " + className : ""),
+      dataset: { slot: slot },
       src: a.src, alt: alt || "",
       width: a.width ? String(a.width) : null, height: a.height ? String(a.height) : null,
       loading: "lazy", decoding: "async", draggable: "false"
