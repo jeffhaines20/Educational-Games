@@ -138,7 +138,7 @@ async function main() {
       // A locked card explains itself.
       const locked = await page.$('.case-open[aria-disabled="true"]');
       if (locked) {
-        await locked.click();
+        await locked.click({ force: true });      // aria-disabled: Playwright won't click it unforced
         await page.waitForSelector(".toast");
         check(/Solve case/.test(await text(page, ".toast")), "a locked case says which case opens it");
       }

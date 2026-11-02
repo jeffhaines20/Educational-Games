@@ -703,7 +703,7 @@
           text: "The paramedics arrive within 8 minutes, start IV lines and leave with lights and sirens; his wife rides with him. That afternoon, Dr. Okafor sits down with you to review aneurysms.",
           exhibits: [
             {
-              id: "ed-ultrasound", type: "report", title: "Bedside ultrasound and vascular surgery note", sealed: true,
+              id: "ed-ultrasound", type: "report", title: "Emergency department and surgery report", sealed: true,
               text: [
                 "**Bedside abdominal ultrasound (emergency department):** abdominal aortic aneurysm about 5.6 cm across, with blood outside the aorta behind the abdominal organs — a **ruptured AAA**.",
                 "**Vascular surgery:** taken straight to the operating room; the ruptured section of aorta was replaced with a synthetic graft. Stable after surgery and recovering in intensive care.",
