@@ -133,7 +133,7 @@
         options: [
           { text: "Obesity (body mass index 31)", correct: true, why: "Modifiable: losing even a modest amount of weight lowers blood pressure." },
           { text: "Sitting most of the day with no regular exercise", correct: true, why: "Modifiable: a sedentary lifestyle is on the lecture's list. Regular aerobic exercise lowers blood pressure — and PT can help her start." },
-          { text: "Two to three glasses of wine most evenings", correct: true, why: "Modifiable: excessive alcohol raises blood pressure. For women the usual advice is no more than one drink a day." },
+          { text: "Two to three glasses of wine most evenings", correct: true, why: "Modifiable: excessive alcohol raises blood pressure. For women the usual advice is no more than one drink a day — and less is better." },
           { text: "Salty takeout, chips and canned food most days", correct: true, why: "Modifiable: excess dietary sodium is a classic contributor to high blood pressure." },
           { text: "Her mother and brother have high blood pressure", why: "Family history raises her risk, but she can't change it — one more reason to work on the factors she can." },
           { text: "Her age, 49", why: "Risk rises with age, but age isn't modifiable." }
@@ -753,7 +753,7 @@
         ],
         explain: [
           "**Imaging for aneurysms** (L2 s5): ultrasound, CT, MRI, echocardiography and angiography. Abdominal **ultrasound** is the usual screening and follow-up test for an AAA; CT angiography maps it before repair.",
-          "**Treatment** (L2 s5): blood pressure control, and surgery for large aortic aneurysms — the weak section is replaced with a synthetic fabric graft, today often placed from inside the artery through a catheter (endovascular repair). His 5.2 cm aneurysm was approaching the size at which repair is usually offered."
+          "**Treatment** (L2 s5): blood pressure control, and surgery for large aortic aneurysms — the weak section is replaced with a synthetic fabric graft, today often placed from inside the artery through a catheter (endovascular repair). His 5.2 cm aneurysm was approaching the size at which repair is usually offered (about 5.5 cm in men)."
         ]
       }
     ],
@@ -863,13 +863,13 @@
           "Who can give her the care she needs within minutes?"
         ],
         explain: [
-          "**Call 911** for a sudden severe headache with vomiting, double vision, confusion, a facial droop, arm weakness or slurred speech — and for a blood pressure above 180/120 with symptoms (Casebook: red flags). Then:",
+          "**Call 911** for a sudden severe headache with vomiting, double vision, confusion, a facial droop, arm weakness or slurred speech — and for a blood pressure above 180 systolic and/or 120 diastolic with symptoms (Casebook: red flags). Then:",
           { list: [
             "Stop the session and stay with her.",
             "Help her lie down, turned on her side while she is vomiting or drowsy, to protect her airway.",
             "Nothing to eat, drink or take by mouth.",
             "Recheck blood pressure, pulse, breathing and responsiveness, and note when the symptoms began.",
-            "If she has a seizure: protect her head, move hard objects away, don't hold her down or put anything in her mouth; turn her on her side afterwards.",
+            "If she has a seizure: protect her head, move hard objects away, don't hold her down or put anything in her mouth, note how long it lasts; turn her on her side afterwards.",
             "Tell Dr. Okafor; send someone to meet the paramedics."
           ] }
         ]
@@ -1027,7 +1027,7 @@
           "Know the side effects of the patient's blood pressure medicines: dizziness and orthostatic hypotension on standing; a blunted heart-rate response with beta blockers (use RPE).",
           "Encourage patients to take their medicines as prescribed; questions about doses go to the physician."
         ] },
-        { warn: "Higher than 180/120: get the supervising PT and a physician's advice right away. With symptoms — severe headache, confusion, vision changes, chest pain, shortness of breath, weakness, trouble speaking — call 911." }
+        { warn: "Higher than 180 systolic and/or 120 diastolic: get the supervising PT and a physician's advice right away. With symptoms — severe headache, confusion, vision changes, chest pain, shortness of breath, weakness, trouble speaking — call 911." }
       ] }
     ],
     sources: ["L2 s20–22 · Hypertension", "L2 s23 · AHA blood pressure categories", "L2 s24–26 · Management, prognosis and clinical manifestations"]
@@ -1097,7 +1097,7 @@
       { heading: "Tests and treatment", body: { list: [
         "**Imaging:** ultrasound (the usual screening and follow-up test for an AAA), CT, MRI, echocardiography and angiography.",
         "Blood pressure control with antihypertensive medicines; stopping smoking.",
-        "**Large aortic aneurysms:** surgical repair, replacing the weak section with a synthetic fabric graft — today often placed from inside the artery through a catheter (endovascular repair)."
+        "**Large aortic aneurysms:** surgical repair — for an AAA usually at about 5.5 cm in men or 5.0 cm in women, or sooner if it grows quickly or causes symptoms — replacing the weak section with a synthetic fabric graft, today often placed from inside the artery through a catheter (endovascular repair)."
       ] } },
       { heading: "What it means for the PTA", body: [
         { list: [

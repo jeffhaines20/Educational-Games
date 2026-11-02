@@ -16,7 +16,7 @@
     aka: ["doxazosin", "prazosin", "Cardura", "Minipress"],
     summary: "Relax the smooth muscle of arterioles and veins, so vessels widen and blood pressure falls.",
     sections: [
-      { heading: "Used for", body: "Hypertension." },
+      { heading: "Used for", body: "Hypertension; doxazosin and prazosin are also prescribed for an enlarged prostate (benign prostatic hyperplasia)." },
       { heading: "Side effects", body: { list: ["Dizziness", "Palpitations", "**Orthostatic hypotension** (a fall in blood pressure on standing)", "Drowsiness"] } },
       { heading: "What it means for PT", body: { list: ["Have the patient rise slowly from lying or sitting: dizziness and orthostatic hypotension are common.", "Monitor the patient closely during exercise."] } },
       { heading: "Examples", body: "Cardura (doxazosin), Minipress (prazosin)." }
@@ -39,13 +39,13 @@
 
   def({
     id: "anticoagulants", kind: "drug", title: "Anticoagulants",
-    aka: ["blood thinners", "heparin", "warfarin", "Coumadin"],
+    aka: ["blood thinners", "heparin", "warfarin", "Coumadin", "enoxaparin", "Lovenox", "low-molecular-weight heparin", "LMWH"],
     summary: "Slow the clotting process, so new clots are less likely to form and existing ones are less likely to grow.",
     sections: [
-      { heading: "Used for", body: { list: ["After coronary artery bypass graft surgery", "Preventing venous thromboembolism (DVT and PE)", "Preventing clots from the heart in atrial fibrillation and with prosthetic heart valves"] } },
+      { heading: "Used for", body: { list: ["After coronary artery bypass graft surgery", "Preventing and treating venous thromboembolism (DVT and PE)", "Preventing clots from the heart in atrial fibrillation and with prosthetic heart valves"] } },
       { heading: "Side effects", body: { list: ["**Hemorrhage and an increased risk of bleeding**", "Gastrointestinal upset with oral forms"] } },
       { heading: "What it means for PT", body: { list: ["Avoid anything that could injure the patient: bleeding and bruising come easily. Guard against falls; be gentle with manual techniques.", "Teach the patient the warning signs of bleeding (unusual bruising, blood in urine or stools, nosebleeds that won't stop) and to report them."] } },
-      { heading: "Examples", body: "Heparin, Coumadin (warfarin)." }
+      { heading: "Examples", body: "Heparin — including the low-molecular-weight heparins (LMWH) such as enoxaparin (Lovenox), injected under the skin — and Coumadin (warfarin); newer oral agents include apixaban and rivaroxaban." }
     ],
     sources: ["L1 s53 · Anticoagulant agents"]
   });
@@ -68,7 +68,7 @@
     aka: ["aspirin", "clopidogrel", "Bayer", "Plavix"],
     summary: "Stop platelets from clumping together, which prevents clots forming in arteries.",
     sections: [
-      { heading: "Used for", body: "After a myocardial infarction or a stent, atrial fibrillation, and preventing arterial clots." },
+      { heading: "Used for", body: "After a myocardial infarction or a stent, and to prevent clots in arteries (heart attack, stroke, peripheral arterial disease). The lecture also lists atrial fibrillation; today an anticoagulant, not an antiplatelet, is used to prevent stroke in AFib." },
       { heading: "Side effects", body: { list: ["Hemorrhage", "Thrombocytopenia (low platelets)", "Possible liver toxicity", "Gastrointestinal distress"] } },
       { heading: "What it means for PT", body: { list: ["Avoid injury: bleeding risk is higher, especially when two antiplatelets are combined or one is combined with an anticoagulant.", "Teach the patient which side effects to report."] } },
       { heading: "Examples", body: "Bayer (aspirin), Plavix (clopidogrel)." }
@@ -94,7 +94,7 @@
     aka: ["CCBs", "nifedipine", "diltiazem", "amlodipine", "Procardia", "Cardizem", "Norvasc"],
     summary: "Reduce calcium entry into heart and vascular smooth-muscle cells: vessels widen and the heart works less hard.",
     sections: [
-      { heading: "Used for", body: "Hypertension, angina, arrhythmias and heart failure; also Raynaud's disease." },
+      { heading: "Used for", body: "Hypertension, angina and arrhythmias; also Raynaud's disease. The lecture also lists congestive heart failure; today several of them, such as diltiazem, are avoided when the left ventricle pumps weakly, because they can make heart failure worse." },
       { heading: "Side effects", body: { list: ["Dizziness and headache", "Hypotension", "**Peripheral edema** (ankle swelling)"] } },
       { heading: "What it means for PT", body: { list: ["Heart rate and blood pressure responses to exercise may be smaller than expected.", "Watch for dizziness and orthostatic hypotension when the patient stands up.", "Watch for signs of heart failure: worsening peripheral edema, dyspnea or weight gain."] } },
       { heading: "Examples", body: "Procardia (nifedipine), Cardizem (diltiazem); amlodipine (Norvasc) is another common one." }
@@ -143,7 +143,7 @@
 
   def({
     id: "digoxin", kind: "drug", title: "Digoxin (digitalis, a cardiac glycoside)",
-    aka: ["digitalis", "Lanoxin", "cardiac glycoside"],
+    aka: ["digoxin", "digitalis", "Lanoxin", "cardiac glycoside"],
     summary: "Slows conduction through the AV node and strengthens contraction. In atrial fibrillation it **slows the ventricular rate**; it does not restore normal rhythm.",
     sections: [
       { heading: "Used for", body: "Controlling the heart rate in atrial fibrillation, and heart failure." },
@@ -197,7 +197,7 @@
         ["0.00–0.40", "Severe peripheral arterial disease", "early, limiting; rest pain"]
       ] } } },
       { heading: "Good to know", body: [
-        "Calcified arteries — common in diabetes — can't be squeezed shut by the cuff, so the ABI reads falsely high. Other tests (Doppler studies, transcutaneous oximetry) are used instead.",
+        "Calcified arteries — common in diabetes and chronic kidney disease — can't be squeezed shut by the cuff, so the ABI reads falsely high. Other tests are used instead: Doppler waveforms, toe pressures (the toe-brachial index; 0.70 or more is normal) and transcutaneous oximetry.",
         { tip: "The lecture's table puts the non-compressible cut-off at 1.30. Current American Heart Association / American College of Cardiology guidelines use **above 1.40** (and call 1.00–1.40 normal). The cases in this game avoid values between the two." }
       ] }
     ],
@@ -267,7 +267,7 @@
         ["Murmur", "Turbulent blood flow", "Graded I (faint) to VI (heard without a stethoscope)"]
       ] } } },
       { heading: "Technique", body: [
-        "Put the diaphragm or bell directly on bare skin with enough pressure to seal, while the patient breathes quietly through the nose.",
+        "Put the stethoscope directly on bare skin — the diaphragm pressed firmly, the bell held lightly, just enough to seal (the bell picks up low-pitched sounds such as S3 and S4) — while the patient breathes quietly through the nose.",
         { tip: "The game's chest diagram numbers the areas 1 aortic, 2 pulmonic, 3 Erb's point, 4 tricuspid, 5 mitral. The lecture's figure (L1 s25) numbers them differently — learn the locations, not the numbers." }
       ] }
     ],
@@ -295,7 +295,7 @@
       { heading: "Selected abnormalities", body: { table: { head: ["Finding", "Suggests"], rows: [
         ["ST elevation", "Injury — a new infarct (or pericarditis)"],
         ["ST depression, downsloping 2–3 mm", "Ischemia"],
-        ["Inverted T waves", "Ischemia (always abnormal in V2–V6)"],
+        ["Inverted T waves", "Ischemia (in adults, abnormal in V2–V6)"],
         ["Pathological Q waves", "Infarction — dead (necrotic) heart muscle"],
         ["Wide QRS (0.12 s or more)", "Bundle branch block — slowed conduction in the ventricles"],
         ["P waves absent or different", "Atrial or ventricular arrhythmia"],
@@ -322,7 +322,7 @@
       ] } } },
       { heading: "Lungs and vessels", body: { table: { head: ["Test", "What it shows"], rows: [
         ["Chest X-ray", "Fluid in the lungs (pulmonary edema), heart size."],
-        ["V/Q (ventilation–perfusion) scan or CT", "Confirms a pulmonary embolism."],
+        ["V/Q (ventilation–perfusion) scan or CT", "Confirms a pulmonary embolism; a CT pulmonary angiogram is usually the first choice today."],
         ["Doppler / duplex ultrasound", "Blood flow in arteries and veins; confirms a DVT; venous ultrasonography for chronic venous insufficiency."],
         ["Ankle-brachial index (ABI)", "Screens for peripheral arterial disease."],
         ["Transcutaneous oximetry", "Oxygen reaching the skin; useful when the ABI is unreliable."],
@@ -342,7 +342,7 @@
       { heading: "Pacemaker", body: "A battery-powered device placed under the skin, usually in the upper left chest, with leads to the heart (single chamber, dual chamber or biventricular). It treats slow heart rates and conduction problems such as heart block, relieving fatigue, light-headedness and fainting." },
       { heading: "Coronary artery bypass graft (CABG)", body: "Blood is rerouted around a blocked coronary artery using the patient's own saphenous vein (from the leg), internal thoracic (mammary) artery or radial artery." },
       { heading: "Defibrillation", body: "An electric shock that stops a chaotic rhythm such as ventricular fibrillation so that a normal rhythm can restart. Used with CPR; every clinician, including PTAs, is trained in CPR and the AED." },
-      { heading: "Aneurysm repair", body: "Large aortic aneurysms are repaired surgically by replacing the weak section with a synthetic graft." }
+      { heading: "Aneurysm repair", body: "Large aortic aneurysms are repaired by replacing the weak section with a synthetic graft — in open surgery, or today often from inside the artery through a catheter (endovascular repair)." }
     ],
     sources: ["L1 s45–47 · Ventricular fibrillation", "L1 s61–66 · Procedures", "L2 s5 · Aneurysm treatment"]
   });
@@ -358,7 +358,7 @@
         "Sudden severe breathlessness — for example with chest pain that is worse on breathing in (pulmonary embolism) or frothy pink sputum (acute pulmonary edema).",
         "Sudden severe back, abdominal or groin pain with light-headedness and a racing pulse in someone with an aortic aneurysm.",
         "Sudden severe headache, vomiting, double vision, confusion, facial droop, arm weakness or slurred speech.",
-        "Blood pressure above 180/120 with symptoms."
+        "Blood pressure above 180 systolic and/or 120 diastolic with symptoms."
       ] } },
       { heading: "Heart-attack warning signs", body: [
         { list: ["Pressure, squeezing or pain in the center of the chest lasting more than a few minutes, or coming back", "Pain spreading to the shoulders, neck, jaw, arms or back", "Chest discomfort with light-headedness, fainting, sweating, nausea or shortness of breath"] },

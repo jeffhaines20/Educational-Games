@@ -66,7 +66,7 @@
         explain: [
           "In **right-sided heart failure** the right ventricle can't pump all the blood returning from the body on to the lungs, so it backs up into the **systemic veins**: **dependent pitting edema** (ankles and shins first), **jugular venous distention**, an enlarged, aching liver (right upper quadrant pain), **ascites** (fluid in the abdomen), poor appetite and nausea, and **weight gain**.",
           "Her edema is **2+**: easily seen, 2–4 mm deep, filling back in within 15 seconds. Bilateral pitting edema, especially with breathlessness or fatigue, points to heart failure; one swollen leg points to a local cause.",
-          { tip: "A gain of 2–3 lb in a day or about 5 lb in a week is a warning sign of fluid building up. Report it to the supervising PT, who will contact her physician." }
+          { tip: "A gain of 2–3 lb in a day or about 5 lb in a week is a warning sign of fluid building up. Her 3 lb in two days, with new swelling, needs reporting too: tell the supervising PT, who will contact her physician." }
         ]
       },
       {
@@ -670,7 +670,7 @@
         prompt: "Which findings point to pulmonary edema rather than a pulmonary embolism? Select all that apply.",
         options: [
           { text: "Frothy pink sputum", correct: true, why: "Froth is air mixed with edema fluid. A PE can cause blood-streaked sputum, but not large amounts of froth." },
-          { text: "Crackles throughout both lungs", correct: true, why: "Crackles come from fluid in the air sacs. The lungs often sound clear in a PE." },
+          { text: "Crackles throughout both lungs", correct: true, why: "Crackles come from fluid in the air sacs. In a PE the lungs often sound clear, or have only a few crackles in one area." },
           { text: "Breathlessness that's worse lying flat", correct: true, why: "Orthopnea is a sign of left-sided failure and pulmonary edema." },
           { text: "Admitted with heart failure and fluid overload", correct: true, why: "Left-sided heart failure is the most common cause of pulmonary edema." },
           { text: "A sudden onset", why: "Both come on suddenly." },
@@ -686,7 +686,7 @@
             ["Onset", "Sudden (acute) or gradual (chronic)", "Sudden"],
             ["Sputum", "Frothy, often pink", "May be blood-tinged, not frothy"],
             ["Chest pain", "May occur", "Typical: worse with deep breaths, coughing, eating or bending"],
-            ["Lungs", "Crackles throughout; wheezing", "Often clear; sometimes wheezing"],
+            ["Lungs", "Crackles throughout; wheezing", "Often clear; sometimes wheezing or a few local crackles"],
             ["Position", "Worse lying flat", "Not typically worse lying flat"],
             ["Clues", "Heart failure, S3, edema in both legs", "Recent surgery or immobility; one swollen, tender leg"],
             ["Confirming test", "Chest X-ray", "V/Q scan or CT"]
@@ -995,7 +995,7 @@
     sections: [
       { heading: "The three types", body: { table: { head: ["Type", "The muscle", "What goes wrong"], rows: [
         ["Dilated", "Thinner than usual; the chamber is enlarged", "A weak squeeze (low ejection fraction)"],
-        ["Hypertrophic", "Thickened, especially the left ventricle", "A thick, stiff ventricle fills poorly; often inherited"],
+        ["Hypertrophic", "Thickened, especially the left ventricle", "A thick, stiff ventricle fills poorly; often inherited; a known cause of sudden death in young athletes"],
         ["Restrictive", "Stiffened by fibrous tissue", "The heart can't expand to fill"]
       ] } } },
       { heading: "Causes", body: "Heart attacks; alcoholism; long-term, severe hypertension; systemic lupus erythematosus (SLE); end-stage renal disease; viral infections. Some forms are inherited." },

@@ -59,7 +59,7 @@
           { text: "Shortness of breath that comes on with effort", why: "That's dyspnea on exertion. Her breathing is comfortable." }
         ],
         hints: [
-          "Three of these options describe other cardinal symptoms: angina, syncope and dyspnea.",
+          "Re-read her words: what exactly is she feeling her heart do?",
           "Which option matches what Ms. Chen is *noticing*, rather than pain or breathlessness?"
         ],
         explain: [
@@ -246,7 +246,7 @@
           { text: "Stop, have him sit and rest, monitor him, and consult Dr. Okafor right away", correct: true, why: "Yes. If the PTA suspects atrial fibrillation, the supervising PT should be consulted immediately. She will contact his physician, who will want to see him today." },
           { text: "Carry on with the gait training at a slower pace, rechecking his pulse every 5 minutes", why: "A new arrhythmia with dizziness needs a medical evaluation before exercise continues. Slowing down doesn't make it safe." },
           { text: "Finish the session, then note the irregular pulse so Dr. Okafor sees it tomorrow", why: "Suspected AFib needs the supervising PT *immediately*, not tomorrow." },
-          { text: "Call 911 and get the AED — atrial fibrillation stops the heart pumping", why: "AFib lowers the heart's output but doesn't stop it: he's alert and talking, with a stable blood pressure. Call 911 if he faints, has chest pain or becomes unresponsive — and start CPR if he becomes unconscious." },
+          { text: "Call 911 and get the AED — atrial fibrillation stops the heart pumping", why: "AFib lowers the heart's output but doesn't stop it: he's alert and talking, with a stable blood pressure. Call 911 if he faints, has chest pain or becomes unresponsive — and start CPR if he is unresponsive and not breathing normally." },
           { text: "Suggest he take an extra lisinopril tonight to slow his heart down", why: "A PTA never advises changing a medication — and lisinopril lowers blood pressure, not the heart rate." }
         ],
         hints: [
@@ -336,7 +336,7 @@
         "An irregularly irregular pulse suggests atrial fibrillation; count it for a full minute.",
         "AFib on the ECG: no recognizable P waves, a wavy fibrillatory baseline, and irregular RR intervals with no pattern. Atrial flutter is fast but regular, with a sawtooth baseline.",
         "Losing the atrial kick, plus a fast rate, can lower cardiac output: dizziness, dyspnea, weakness.",
-        "If you suspect AFib, stop and consult the supervising PT immediately; call 911 and start CPR if the patient becomes unconscious.",
+        "If you suspect AFib, stop and consult the supervising PT immediately; call 911 and start CPR if the patient becomes unresponsive and isn't breathing normally.",
         "Anticoagulants such as warfarin prevent clots in AFib but raise the bleeding risk: prevent falls and injury, and teach the bleeding warning signs."
       ],
       sources: ["L1 s27–31 · Atrial fibrillation and flutter", "L1 s53 · Anticoagulant agents", "L1 s56 · Beta blocker agents"]
@@ -404,7 +404,7 @@
         explain: [
           "**Syncope** is fainting caused by too little oxygen reaching the brain. When an arrhythmia or coronary artery disease causes it, it's **cardiac syncope** — and the PT, nurse or physician must be alerted **immediately**.",
           "A pulse of 36 can't keep enough blood flowing to his brain, especially when he stands up or walks.",
-          { warn: "Call 911 if he faints again, has chest pain or breathlessness, becomes confused or doesn't respond — and start CPR if he isn't breathing normally." }
+          { warn: "Call 911 if he faints again, has chest pain or breathlessness, becomes confused or doesn't respond, or if you can't reach the PT or his physician right away — and start CPR if he is unresponsive and isn't breathing normally." }
         ]
       },
       {
@@ -426,9 +426,9 @@
         prompt: "Which rhythm does the strip show?",
         options: [
           { text: "Third-degree (complete) heart block", correct: true, why: "Yes. The P waves march along regularly at about 80 a minute, while wide QRS complexes come slowly and regularly at about 36 a minute — with no fixed relationship between them. No atrial impulse is getting through; a slow escape rhythm in the ventricles has taken over." },
-          { text: "Second-degree heart block, with occasional dropped beats", why: "In second-degree block most P waves are conducted, each with a consistent PR interval, and only some are dropped. Here no P wave has a consistent relationship to a QRS." },
+          { text: "Second-degree heart block, with occasional dropped beats", why: "In second-degree block some P waves are conducted and some are dropped, and the conducted beats follow a predictable PR pattern — lengthening beat by beat (Mobitz I) or fixed (Mobitz II). Here no P wave has a consistent relationship to a QRS." },
           { text: "First-degree heart block, with a long PR interval", why: "In first-degree block every P wave is followed by a QRS, just after a longer-than-normal PR interval (more than 0.20 s). Here the P waves and QRS complexes ignore each other." },
-          { text: "Sinus bradycardia from a slow sinus node", why: "In sinus bradycardia each slow beat starts with a P wave, followed at a normal PR interval by a narrow QRS. Here there are more than twice as many P waves as QRS complexes." }
+          { text: "Sinus bradycardia from a slow sinus node", why: "In sinus bradycardia each slow beat starts with a P wave, followed at a normal PR interval by a narrow QRS. Here there are about twice as many P waves as QRS complexes, and they don't line up." }
         ],
         hints: [
           "Count the P waves and the QRS complexes separately. Is each P wave followed by a QRS?",
@@ -523,7 +523,7 @@
         explain: [
           "On a **paced** rhythm strip, each **pacing spike** (a sharp vertical line) is the pacemaker's electrical impulse. The QRS that follows is wide because the impulse starts in the ventricle wall rather than travelling down the normal conduction pathway.",
           "Pacemaker checks — and Holter monitoring — confirm the device is working.",
-          { tip: "After an implant, follow the physician's arm precautions (like his: no raising the elbow on the pacemaker side above shoulder height and no heavy lifting for several weeks), and check with the supervising PT before using electrical stimulation." }
+          { tip: "After an implant, follow the physician's arm precautions (like his: no raising the elbow on the pacemaker side above shoulder height and no heavy lifting for several weeks — the details vary between hospitals), and check with the supervising PT before using electrical stimulation, which can interfere with a pacemaker." }
         ]
       }
     ],
@@ -709,7 +709,7 @@
         prompt: "Which answer to Mrs. Novak's question is correct?",
         options: [
           { text: "It slows conduction through the AV node, so the ventricles beat more slowly", correct: true, why: "Yes. Digoxin controls the *ventricular rate*. Her atria keep fibrillating — the rhythm is still AFib, just at a safer rate." },
-          { text: "It stops the atria from fibrillating, so her heart returns to a normal sinus rhythm", why: "A common misconception — and older slides say so. Digoxin doesn't convert AFib: her atria are still fibrillating, with the ventricular rate under control." },
+          { text: "It stops the atria from fibrillating, so her heart returns to a normal sinus rhythm", why: "A common misconception — and the way Lecture 1 (slide 31) words it. Digoxin doesn't convert AFib: her atria are still fibrillating, with the ventricular rate under control." },
           { text: "It thins her blood so clots can't form in her atria", why: "That's what her warfarin does." },
           { text: "It removes extra fluid so her heart has less to pump", why: "That's her furosemide, a diuretic." }
         ],
@@ -1047,8 +1047,8 @@
       ] },
       { heading: "What it means for the PTA", body: { list: [
         "Fainting or light-headedness with a slow pulse: stop, keep the patient safe, and alert the PT, nurse or physician immediately.",
-        "After a pacemaker implant, follow the physician's arm precautions (often no raising the elbow on the device side above shoulder height, and no heavy lifting, for several weeks).",
-        "Check with the supervising PT before using electrical stimulation on a patient with a pacemaker.",
+        "After a pacemaker implant, follow the physician's arm precautions (often no raising the elbow on the device side above shoulder height, and no heavy lifting, for several weeks; the details vary between hospitals).",
+        "Check with the supervising PT before using electrical stimulation on a patient with a pacemaker: it can interfere with the device.",
         "Holter monitoring can check how a pacemaker is working."
       ] } },
       { heading: "Note on the slides", body: "Lecture 1 (slide 37) says complete heart block makes the heart “skip” a beat. Dropped beats describe second-degree block; in complete block no atrial impulses get through, and a slow escape rhythm takes over." }

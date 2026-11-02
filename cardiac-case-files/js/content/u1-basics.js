@@ -317,8 +317,8 @@
         options: [
           { text: "An S3 — at 73 it suggests ventricular failure; report it today", correct: true, why: "Yes. An S3 comes just after S2 and is heard at the apex with the patient on her left side. It's normal in children and young adults, but over 40 it suggests the left ventricle is failing — and she has new fatigue, breathlessness, crackles and pillows to go with it." },
           { text: "An S3 — a normal filling sound, so carry on with her exercises", why: "An S3 is normal in children and young adults. In an adult over 40 it is abnormal — and she has new symptoms to go with it." },
-          { text: "An S4 — the atrial gallop, a harmless sound in older adults", why: "An S4 comes just *before* S1, as the atria push blood into a stiff ventricle, and it is abnormal at any age. Her extra sound comes after S2." },
-          { text: "A heart attack in progress — call 911 right away", why: "Nothing suggests a heart attack: no chest pain or pressure, no sweating, and her vital signs are stable. This needs prompt reporting, not an ambulance — unless she develops severe breathlessness, chest pain or confusion." }
+          { text: "An S4 — the atrial gallop, a harmless sound in older adults", why: "An S4 comes just *before* S1, as the atria push blood into a stiff ventricle — usually a sign of heart disease, not a harmless sound. Her extra sound comes after S2." },
+          { text: "A heart attack in progress — call 911 right away", why: "Her symptoms built up over three days and fit a failing left ventricle; she has no chest pain or sweating and is not in distress. Her physician needs to know today (and will look for the cause) — call 911 only if she develops severe breathlessness, chest pain or confusion." }
         ],
         hints: [
           "Where in the cycle is the extra sound — before S1, or after S2?",
@@ -342,7 +342,7 @@
         "Aortic: 2nd ICS, right sternal border · pulmonic: 2nd ICS, left · Erb's point: 3rd ICS, left · tricuspid: 4th ICS, left · mitral: 5th ICS, left midclavicular line (the apex).",
         "S1 = the mitral and tricuspid valves closing; S2 = the aortic and pulmonary valves closing.",
         "Blood flows right atrium → right ventricle → pulmonary artery → lungs → pulmonary veins → left atrium → left ventricle → aorta.",
-        "An S3 is normal in children and young adults but suggests ventricular failure or CHF after 40; an S4 (just before S1) is always abnormal."
+        "An S3 is normal in children and young adults but suggests ventricular failure or CHF after 40; an S4 (just before S1) usually signals a stiff ventricle (hypertrophy, hypertension, cardiomyopathy, MI)."
       ],
       sources: [
         "L1 s6–8 · Chambers, valves and the path of blood",
@@ -731,7 +731,7 @@
             { name: "Troponin T (high-sensitivity), on arrival", value: 6, unit: "ng/L", ref: "under 14", flag: null },
             { name: "Troponin T (high-sensitivity), 3 hours later", value: 7, unit: "ng/L", ref: "under 14", flag: null }
           ],
-          note: "Troponin is released into the blood when heart muscle is damaged. Two normal results make a heart attack unlikely."
+          note: "Troponin is released into the blood when heart muscle is damaged. Two normal results make a heart attack unlikely. (Reference ranges differ between labs and tests; results are read against the lab's own range.)"
         },
         {
           id: "rest-strip", type: "ecg", title: "Telemetry strip at rest this morning (lead II)",

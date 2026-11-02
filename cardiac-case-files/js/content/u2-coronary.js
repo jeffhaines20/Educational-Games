@@ -111,7 +111,8 @@
         explain: [
           "His clenched fist over the chest is **Levine's sign** — patients with ischemic chest pain often make it without being asked.",
           "**When angina starts during a session:** stop the activity, have the patient sit and rest, monitor symptoms and vital signs, and tell the supervising PT. Patients who have nitroglycerin use it as prescribed.",
-          { warn: "Call 911 if the pain doesn't ease within a few minutes, gets worse, or comes with sweating, nausea or breathlessness — it may not be stable angina." }
+          { warn: "Call 911 if the pain doesn't ease within a few minutes, gets worse, or comes with sweating, nausea or breathlessness — it may not be stable angina." },
+          { tip: "Better still, catch it before exercise starts: chest symptoms a patient mentions at check-in that his physician hasn't evaluated — like Mr. Brenner's — go to the supervising PT first." }
         ]
       },
       {
@@ -298,7 +299,7 @@
         type: "single",
         prompt: "The cardiologist calls his LAD lesion a “widow maker”. Why is a blockage in the left anterior descending artery so dangerous?",
         options: [
-          { text: "It feeds much of the left ventricle and is the most common site of heart attacks", correct: true, why: "Yes. The LAD runs down the front of the heart and feeds a large part of the left ventricle — the main pump. A clot there is the most common cause of a heart attack, and often a large one." },
+          { text: "It feeds much of the left ventricle and is a very common site of heart attacks", correct: true, why: "Yes. The LAD runs down the front of the heart and feeds a large part of the left ventricle — the main pump. Your lecture names it the most common site of a heart attack, and a blockage near its start causes a large one." },
           { text: "It supplies the right ventricle, the chamber that pumps blood out to the whole body", why: "The right coronary artery mainly supplies the right atrium and right ventricle — and the right ventricle pumps blood to the lungs, not the body." },
           { text: "It's the heart's only coronary artery, so nothing else can feed the heart", why: "There are two main coronary arteries, right and left, both branching from the aorta. The left main divides into the LAD and the circumflex." },
           { text: "It carries blood from the heart muscle back to the right atrium", why: "That's the job of the coronary veins, which drain into the coronary sinus and then the right atrium." }
@@ -308,14 +309,14 @@
         ],
         explain: [
           "The **right and left coronary arteries** branch from the ascending aorta. The **left main** divides into the **left anterior descending (LAD)** and the **circumflex**, which mainly supply the left atrium and ventricle; the **right coronary artery (RCA)** mainly supplies the right atrium and ventricle.",
-          "**Thrombosis of the LAD is the most common location of a heart attack**, and it damages the left ventricle — hence the nickname “widow maker”.",
+          "The lecture names **thrombosis of the LAD as the most common location of a heart attack** (the right coronary artery is close behind). Because the LAD feeds so much of the left ventricle, a blockage near its start (proximal, like his) causes a large and often fatal heart attack — hence the nickname “widow maker”.",
           "His 40 % RCA narrowing is milder: for now it is treated with medicines and lifestyle change."
         ]
       },
       {
         id: "s5",
         update: {
-          title: "The next day",
+          title: "A week later",
           text: [
             "During the same catheterization, the cardiologist widened his LAD with a balloon and left a stent in place. Mr. Kowalski has been referred to cardiac rehab — and is back with you for his knee.",
             { quote: "They put a little spring in my artery. So now it's fixed for good, right?", by: "Mr. Kowalski" }
@@ -342,7 +343,7 @@
     debrief: {
       diagnosis: "Coronary artery disease — 85 % proximal LAD narrowing, treated with angioplasty and a stent",
       summary: [
-        "Mr. Kowalski's two months of breathlessness and fatigue on the stairs were not just being out of shape: partly blocked coronary arteries were limiting blood flow whenever his heart worked harder. Coronary angiography mapped the plaque — a severe narrowing in the proximal LAD, the artery most often behind heart attacks — and a stent now props it open.",
+        "Mr. Kowalski's two months of breathlessness and fatigue on the stairs were not just being out of shape: partly blocked coronary arteries were limiting blood flow whenever his heart worked harder. Coronary angiography mapped the plaque — a severe narrowing in the proximal LAD, the “widow maker” — and a stent now props it open.",
         "Your report started it all: new symptoms on exertion in a patient with risk factors always go to the supervising PT."
       ],
       takeaways: [
@@ -449,7 +450,7 @@
         type: "single",
         prompt: "What do you do?",
         options: [
-          { text: "Hold the session, stay with her, and make sure the rapid response team is called now", correct: true, why: "Yes. Chest pain at rest that nitroglycerin hasn't relieved is an emergency. Don't start therapy; stay with her; have her nurse activate the rapid response team (any staff member can call it); keep her resting and monitor her; then notify Dr. Okafor." },
+          { text: "Hold the session, stay with her, and make sure the rapid response team is called now", correct: true, why: "Yes. Chest pain at rest that nitroglycerin hasn't relieved is an emergency. Don't start therapy; stay with her; have her nurse activate the rapid response team (in most hospitals any staff member, you included, can call it); keep her resting and monitor her; then notify Dr. Okafor." },
           { text: "Help her take a second nitroglycerin tablet, then start the session if the pain eases", why: "A PTA doesn't give medications — her nurse does, under the physician's orders. And waiting to see whether a second tablet works delays emergency care." },
           { text: "Let her rest, and come back in an hour to try the session again", why: "Leaving her alone with unrelieved chest pain is unsafe. Unstable angina can turn into a heart attack — get help now." },
           { text: "Get her up into the chair — moving around often eases this kind of pain", why: "Activity increases her heart's demand for oxygen. She should stay at rest in a comfortable position, propped up if that makes breathing easier." }
@@ -895,11 +896,11 @@
       {
         id: "s5",
         type: "single",
-        prompt: "Her changes are in V1–V4, over the front of the left ventricle. Which coronary artery is most often blocked in a heart attack — and supplies this area?",
+        prompt: "Her changes are in V1–V4, over the front of the left ventricle. Which coronary artery supplies this area?",
         options: [
-          { text: "The left anterior descending (LAD) artery", correct: true, why: "Yes. Thrombosis of the LAD is the most common location of a heart attack, and it damages the front of the left ventricle." },
+          { text: "The left anterior descending (LAD) artery", correct: true, why: "Yes. The LAD runs down the front of the heart and supplies the front of the left ventricle — and your lecture names LAD thrombosis as the most common location of a heart attack." },
           { text: "The right coronary artery (RCA)", why: "The RCA mainly supplies the right atrium and ventricle, and usually the underside (inferior wall) of the heart. Its heart attacks show up in other leads (II, III and aVF)." },
-          { text: "The left circumflex artery", why: "The circumflex wraps around the side and back of the left ventricle. It's blocked less often than the LAD." },
+          { text: "The left circumflex artery", why: "The circumflex wraps around the side and back of the left ventricle. Its heart attacks show up in other leads (such as I, aVL, V5 and V6), not V1–V4." },
           { text: "The posterior descending artery", why: "The posterior descending artery runs along the underside of the heart, usually as a branch of the right coronary artery." }
         ],
         hints: [
@@ -907,7 +908,7 @@
         ],
         explain: [
           "The **left main coronary artery** divides into the **LAD** and the **circumflex**; the **right coronary artery** gives off a marginal branch and, usually, the posterior descending artery.",
-          "**LAD thrombosis is the most common site of infarction** and affects the left ventricle, the main pump — which is why the slide calls it the “widow maker”. The nickname ignores the fact that women have heart attacks too — often atypical ones, like Mrs. Carter's."
+          "The lecture names **LAD thrombosis as the most common site of infarction** (the right coronary artery is close behind). Because the LAD feeds so much of the left ventricle, the main pump, the slide calls it the “widow maker”. The nickname ignores the fact that women have heart attacks too — often atypical ones, like Mrs. Carter's."
         ]
       },
       {
@@ -947,8 +948,8 @@
           "Troponin comes from inside heart-muscle cells. When would it turn up in the blood?"
         ],
         explain: [
-          "An MI is diagnosed with the **12-lead ECG** and **blood markers of heart-muscle injury**. Your lecture lists the older enzymes **CPK, AST and LDH**; today **troponin** is the main marker — more sensitive and more specific for heart muscle, and its rise (and later fall) confirms the infarction.",
-          "Mrs. Carter went from “feeling off” to an open artery in 84 minutes because someone recognized an atypical heart attack and called 911."
+          "An MI is diagnosed with the **12-lead ECG** and **blood markers of heart-muscle injury**. Your lecture lists the older enzymes **CPK, AST and LDH**; today **troponin** is the main marker — more sensitive and more specific for heart muscle. A level above the lab's reference range (the exact cut-off depends on the test) that rises — or later falls — confirms the infarction; hers rose more than fortyfold.",
+          "Her artery was open 84 minutes after the 911 call because someone recognized an atypical heart attack and called right away instead of waiting."
         ]
       }
     ],
@@ -962,7 +963,7 @@
         "Heart attacks are often atypical, especially in women and people with diabetes: nausea, fatigue, jaw, neck or mid-back pain, breathlessness, “indigestion” — sometimes no symptoms at all.",
         "Suspected MI: call 911 at once, keep the patient at rest, stay and monitor; don't drive them, don't wait, don't give medications.",
         "ECG and the zones of infarction: T-wave inversion = ischemia, ST elevation = injury, pathological Q waves = infarction.",
-        "The LAD is the most common site of infarction and supplies the front of the left ventricle.",
+        "The LAD supplies the front of the left ventricle; the lecture names it the most common site of infarction (the “widow maker”).",
         "Troponin is today's main blood marker of heart-muscle damage (the lecture lists CPK, AST and LDH)."
       ],
       sources: [
@@ -1102,7 +1103,7 @@
         prompt: "What are the new beats on this strip?",
         options: [
           { text: "Premature ventricular contractions (PVCs), in pairs", correct: true, why: "Yes. The new beats come early, have no P wave in front of them, and are wide (more than 0.12 s) and bizarre — PVCs. Two in a row make a pair, or couplet." },
-          { text: "Atrial fibrillation", why: "In atrial fibrillation there are no P waves and the rhythm is irregularly irregular, but the QRS complexes stay narrow. These early beats are wide and bizarre, between normal sinus beats." },
+          { text: "Atrial fibrillation", why: "In atrial fibrillation there are no P waves and the rhythm is irregularly irregular, but the QRS complexes usually stay narrow. These early beats are wide and bizarre, between normal sinus beats." },
           { text: "Ventricular fibrillation", why: "Ventricular fibrillation is chaotic electrical activity with no QRS complexes at all — and he would be unresponsive. He's sitting up and talking." },
           { text: "Second-degree heart block (dropped beats)", why: "In second-degree block a P wave isn't followed by a QRS — a beat is dropped. Here there are extra, early beats, not missing ones." }
         ],
@@ -1176,7 +1177,7 @@
         "PVCs: early beats with a wide (more than 0.12 s), bizarre QRS and no P wave in front.",
         "During exercise, PVCs are a concern at more than 5 per minute, in pairs, or when multifocal — and whenever they come with symptoms.",
         "Multifocal PVCs come from several irritable spots in the ventricles; PVCs can progress to VT or VF.",
-        "Ask about symptoms between sessions — his tightness while raking leaves was an early clue."
+        "Ask about symptoms between sessions and report new ones to the supervising PT before exercise starts — his tightness while raking leaves was an early clue."
       ],
       sources: [
         "L1 s20 · Selected ECG abnormalities",
@@ -1275,7 +1276,7 @@
           {
             list: [
               "The **right and left coronary arteries** branch from the ascending aorta. The **right coronary artery (RCA)** mainly supplies the right atrium and ventricle; the **left** — through its **left anterior descending (LAD)** and **circumflex** branches — mainly the left atrium and ventricle.",
-              "The **LAD** is the most common site of heart attacks."
+              "The lecture names the **LAD** as the most common site of heart attacks (the “widow maker”); the right coronary artery is close behind."
             ]
           }
         ]
@@ -1378,13 +1379,13 @@
           list: [
             "**Transmural** (the full thickness of the wall): usually an **ST-elevation MI (STEMI)**, or Q-wave MI.",
             "**Subendocardial** (the inner third of the wall): a **non-ST-elevation MI (NSTEMI)**, or non-Q-wave MI.",
-            "**Thrombosis of the LAD** is the most common site; it damages the left ventricle (the “widow maker”)."
+            "**Thrombosis of the LAD** is the lecture's most common site (the right coronary artery is close behind); it damages the front of the left ventricle (the “widow maker”)."
           ]
         }
       },
       {
         heading: "Tests",
-        body: "The **12-lead ECG** is the primary tool. Blood tests show heart-muscle damage: today the main marker is **troponin**, which rises within hours. The lecture lists the older enzymes **CPK, AST and LDH**, which also change after an MI but are less specific to the heart."
+        body: "The **12-lead ECG** is the primary tool. Blood tests show heart-muscle damage: today the main marker is **troponin**, which rises above the lab's reference range within hours. The lecture lists the older enzymes **CPK, AST and LDH**, which also change after an MI but are less specific to the heart."
       },
       {
         heading: "Treatment",
@@ -1392,7 +1393,7 @@
           list: [
             "**Stabilize and act fast** — “time is muscle”. Emergency angioplasty with a stent reopens the artery; **thrombolytics** dissolve the clot when angioplasty can't be done quickly.",
             "**Medicines:** antiplatelets and anticoagulants, beta blockers, ACE inhibitors, vasodilators such as nitrates, statins.",
-            "**Surgery** when needed: stenting, endarterectomy, coronary artery bypass grafting.",
+            "**Procedures and surgery** when needed: stenting, endarterectomy, coronary artery bypass grafting.",
             "**Cardiac rehabilitation** once the patient is stable."
           ]
         }

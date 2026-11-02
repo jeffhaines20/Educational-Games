@@ -775,7 +775,7 @@
     aka: ["pulmonary embolus", "blood clot in the lung", "V/Q scan", "CT pulmonary angiogram"],
     summary: "A clot — usually from the deep veins of the legs — lodges in a pulmonary artery and cuts off blood flow to part of the lung. It causes sudden breathlessness and chest pain that can mimic a heart attack, and it is a medical emergency.",
     sections: [
-      { heading: "What it is", body: "Venous thrombi detach, travel through the right side of the heart and lodge in a pulmonary artery; often several clots are needed to cause symptoms. The lung tissue supplied by the blocked vessel loses its blood flow and becomes ischemic, and the body can't get enough oxygen." },
+      { heading: "What it is", body: "Venous thrombi detach, travel through the right side of the heart and lodge in a pulmonary artery; often there are several clots at once. The lung tissue supplied by the blocked vessel loses its blood flow and becomes ischemic, and the body can't get enough oxygen." },
       { heading: "Risk factors", body: "The same as for DVT: immobility (bed rest, a cast, long travel), surgery, pregnancy, obesity, smoking, birth-control pills and hormone replacement, polycythemia, clotting disorders and cancer. Sometimes a PE is the first sign that a DVT was there." },
       { heading: "Signs and symptoms", body: { list: [
         "**Sudden dyspnea**, at rest and with activity.",

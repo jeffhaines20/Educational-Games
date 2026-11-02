@@ -33,6 +33,10 @@ explanation gives the current view.
 | L1 s38 | Claudication "most often" from popliteal artery disease | The femoral and popliteal arteries are the usual sites; cases say "femoral and popliteal". |
 | L2 s49 | Anticoagulants and thrombolytics for PVD | Standard long-term treatment is an antiplatelet plus a statin; clot-dissolving drugs are for a sudden arterial blockage. The Casebook says so. |
 | L2 s51 | "At least 30 %" 5-year mortality in symptomatic PVD | Current estimates vary (roughly 15–30 %); cases say "up to about 30 %". |
+| L1 s55 | Antiplatelets indicated for atrial fibrillation | Stroke prevention in AFib uses an anticoagulant, not aspirin; the Casebook says so. |
+| L1 s57 | Calcium channel blockers indicated for congestive heart failure | Some (e.g. diltiazem) are avoided when the left ventricle pumps weakly, because they can worsen heart failure; the Casebook says so. |
+| L2 s62 | Several thrombi are usually needed to cause PE symptoms | One large clot can be enough; the game says "often there are several clots at once". |
+| L2 s9 | T-wave inversion "always abnormal in V2–V6" | True for most adults; normal variants exist in young people and some athletes. The game says "in adults". |
 | L1 s20 | "Bindle branch" | Bundle branch block. |
 
 ---
@@ -91,7 +95,8 @@ explanation gives the current view.
   ventricular repolarization; QT = electrical systole.
 * Selected ECG abnormalities (s20): ST elevation — new infarct/injury or pericarditis; ST
   depression — may indicate ischemia if downsloping 2–3 mm; inverted T — ischemia (L2 s9:
-  T inversion can be a normal variant in limb leads but is always abnormal in V2–V6); wide QRS —
+  T inversion can be a normal variant in limb leads but is "always abnormal" in V2–V6 — in adults;
+  young people and some athletes have normal variants); wide QRS —
   bundle branch block; Q wave — infarction; P waves different or absent — atrial or
   ventricular arrhythmias. PVCs during exercise are a concern at more than 5/min, in pairs,
   or when multifocal.
