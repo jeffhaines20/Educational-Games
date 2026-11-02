@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ECG gallery — The Cardiac Case Files</title>
+<style>
+  :root { --bg: #f4f1ec; --ink: #1f2430; --muted: #5b6270; --card: #ffffff; --line: #ddd6cc; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif; }
+  header { position: sticky; top: 0; z-index: 2; background: #1f2a3a; color: #fff; padding: 10px 16px; display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; }
+  header h1 { font-size: 17px; margin: 0 12px 0 0; }
+  header label { font-size: 13px; display: inline-flex; gap: 6px; align-items: center; }
+  header input[type=number] { width: 5.5em; }
+  main { max-width: 1180px; margin: 0 auto; padding: 16px; }
+  main.narrow-480 .card .frame { max-width: 480px; }
+  main.narrow-340 .card .frame { max-width: 340px; }
+  h2 { font-size: 18px; margin: 28px 0 10px; border-bottom: 2px solid var(--line); padding-bottom: 4px; }
+  .grid { display: grid; gap: 16px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; min-width: 0; }
+  .card h3 { margin: 0 0 2px; font-size: 15px; }
+  .card code { display: block; font-size: 12px; color: var(--muted); margin-bottom: 8px; word-break: break-word; }
+  .card .desc { margin: 8px 0 0; font-size: 13px; color: #333a46; }
+  .card .facts { margin: 4px 0 0; font-size: 12px; color: var(--muted); }
+  .note { color: var(--muted); font-size: 13px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>ECG gallery</h1>
+  <label>Seed offset <input id="seed" type="number" value="0" step="1"></label>
+  <label><input id="compact" type="checkbox"> compact</label>
+  <label>Layout
+    <select id="layout"><option value="auto">auto</option><option value="line">line</option><option value="rows">rows</option></select>
+  </label>
+  <label>Preview width
+    <select id="width"><option value="full">full</option><option value="480">480 px</option><option value="340">340 px</option></select>
+  </label>
+  <label><input id="showdesc" type="checkbox" checked> descriptions</label>
+</header>
+<main id="main">
+  <p class="note">Every rhythm and morphology option of <code>CCF.ECG</code> (js/ui/ecg.js), with its text alternative. Open from disk; nothing is fetched. URL options: <code>?seed=3&amp;compact=1&amp;width=340&amp;layout=rows</code>.</p>
+  <div id="out"></div>
+</main>
+<script src="../js/ui/ecg.js"></script>
+<script>
+(function () {
+  "use strict";
+  var E = window.CCF && window.CCF.ECG;
+  var out = document.getElementById("out");
+  if (!E) { out.textContent = "Could not load ../js/ui/ecg.js"; return; }
+
+  var SECTIONS = [
+    { title: "Every rhythm (default settings)", items: E.RHYTHMS.map(function (r) { return { label: r.name, spec: { rhythm: r.id } }; }) },
+    { title: "Rates at the ends of each range", items: [
+      { label: "Sinus bradycardia, 38", spec: { rhythm: "sinus-brady", rate: 38 } },
+      { label: "Normal sinus rhythm, 98", spec: { rhythm: "nsr", rate: 98 } },
+      { label: "Sinus tachycardia, 160", spec: { rhythm: "sinus-tach", rate: 160 } },
+      { label: "Atrial fibrillation, 70 (controlled)", spec: { rhythm: "afib", rate: 70 } },
+      { label: "Atrial fibrillation, 150 (rapid)", spec: { rhythm: "afib", rate: 150 } },
+      { label: "Ventricular tachycardia, 220", spec: { rhythm: "vtach", rate: 220 } },
+      { label: "Ventricular tachycardia, 140", spec: { rhythm: "vtach", rate: 140 } }
+    ] },
+    { title: "Morphology (on normal sinus rhythm)", items: [
+      { label: "ST elevation 3 mm (lead II)", spec: { rhythm: "nsr", rate: 80, st: "elevation", stMm: 3 } },
+      { label: "ST elevation 3 mm, lead V2, rate 104 (case 2.5)", spec: { rhythm: "nsr", rate: 104, st: "elevation", stMm: 3, lead: "V2" } },
+      { label: "ST depression 2 mm, downsloping (case 1.5)", spec: { rhythm: "nsr", st: "depression", stMm: 2, stSlope: "downsloping" } },
+      { label: "ST depression 2 mm, horizontal", spec: { rhythm: "nsr", st: "depression", stMm: 2, stSlope: "horizontal" } },
+      { label: "ST depression 1.5 mm, upsloping", spec: { rhythm: "nsr", st: "depression", stMm: 1.5, stSlope: "upsloping" } },
+      { label: "Inverted T waves", spec: { rhythm: "nsr", tWave: "inverted" } },
+      { label: "Pathological Q waves", spec: { rhythm: "nsr", qWave: true } },
+      { label: "Q waves + ST elevation + inverted T (evolving MI)", spec: { rhythm: "nsr", qWave: true, st: "elevation", stMm: 2, tWave: "inverted" } },
+      { label: "Wide QRS 0.14 s (bundle-branch-like)", spec: { rhythm: "nsr", qrs: 0.14 } },
+      { label: "Wide QRS 0.14 s, lead V1", spec: { rhythm: "nsr", qrs: 0.14, lead: "V1" } }
+    ] },
+    { title: "PVC patterns", items: [
+      { label: "Isolated (case 3.1)", spec: { rhythm: "pvc", pvc: { pattern: "isolated" } } },
+      { label: "Isolated, count 1", spec: { rhythm: "pvc", pvc: { pattern: "isolated", count: 1 } } },
+      { label: "Bigeminy", spec: { rhythm: "pvc", pvc: { pattern: "bigeminy" } } },
+      { label: "Couplets (case 2.6)", spec: { rhythm: "pvc", rate: 88, pvc: { pattern: "couplets" } } },
+      { label: "Couplets, rate 55", spec: { rhythm: "pvc", rate: 55, pvc: { pattern: "couplets" } } },
+      { label: "Multifocal", spec: { rhythm: "pvc", pvc: { pattern: "multifocal" } } }
+    ] },
+    { title: "Heart blocks", items: [
+      { label: "First-degree, PR 0.28", spec: { rhythm: "av-block-1" } },
+      { label: "First-degree, PR 0.36, rate 56", spec: { rhythm: "av-block-1", pr: 0.36, rate: 56 } },
+      { label: "Wenckebach, rate 60", spec: { rhythm: "av-block-2-type1" } },
+      { label: "Wenckebach, rate 75, 8 s", spec: { rhythm: "av-block-2-type1", rate: 75, seconds: 8 } },
+      { label: "Mobitz II, rate 50", spec: { rhythm: "av-block-2-type2" } },
+      { label: "Mobitz II, wide QRS, rate 40", spec: { rhythm: "av-block-2-type2", rate: 40, qrs: 0.13 } },
+      { label: "Complete block, escape 36, P 80 (case 3.3)", spec: { rhythm: "av-block-3", rate: 36, atrialRate: 80 } },
+      { label: "Complete block, narrow escape 45, P 90", spec: { rhythm: "av-block-3", rate: 45, atrialRate: 90, qrs: 0.09 } },
+      { label: "Paced, 70 (case 3.3, after the implant)", spec: { rhythm: "paced" } }
+    ] },
+    { title: "Flutter conduction", items: [
+      { label: "Flutter 2:1 (150)", spec: { rhythm: "aflutter", conduction: 2 } },
+      { label: "Flutter 3:1 (100)", spec: { rhythm: "aflutter", conduction: 3 } },
+      { label: "Flutter 4:1 (75)", spec: { rhythm: "aflutter", conduction: 4 } },
+      { label: "Flutter, variable", spec: { rhythm: "aflutter", conduction: "variable" } }
+    ] },
+    { title: "Strip lengths", items: [
+      { label: "AFib, 3 s", spec: { rhythm: "afib", seconds: 3 } },
+      { label: "Sinus, 12 s", spec: { rhythm: "nsr", seconds: 12 } },
+      { label: "With a caption", spec: { rhythm: "sinus-brady", rate: 48, caption: "Rhythm strip at rest, lead II (Ms. Morgan)." } }
+    ] }
+  ];
+
+  var params = new URLSearchParams(location.search);
+  var seedIn = document.getElementById("seed"), compactIn = document.getElementById("compact");
+  var layoutIn = document.getElementById("layout"), widthIn = document.getElementById("width"), descIn = document.getElementById("showdesc");
+  if (params.get("seed")) seedIn.value = params.get("seed");
+  if (params.get("compact") === "1") compactIn.checked = true;
+  if (params.get("layout")) layoutIn.value = params.get("layout");
+  if (params.get("width")) widthIn.value = params.get("width");
+  if (params.get("desc") === "0") descIn.checked = false;
+
+  function draw() {
+    var offset = parseInt(seedIn.value, 10) || 0;
+    var main = document.getElementById("main");
+    main.className = widthIn.value === "full" ? "" : "narrow-" + widthIn.value;
+    out.textContent = "";
+    var t0 = performance.now(), n = 0;
+    SECTIONS.forEach(function (sec) {
+      var h = document.createElement("h2");
+      h.textContent = sec.title;
+      out.appendChild(h);
+      var grid = document.createElement("div");
+      grid.className = "grid";
+      sec.items.forEach(function (item) {
+        var spec = JSON.parse(JSON.stringify(item.spec));
+        if (offset) spec.seed = offset * 7919 + n;
+        var card = document.createElement("article");
+        card.className = "card";
+        var h3 = document.createElement("h3");
+        h3.textContent = item.label;
+        var code = document.createElement("code");
+        code.textContent = JSON.stringify(item.spec);
+        var frame = document.createElement("div");
+        frame.className = "frame";
+        frame.appendChild(E.render(spec, { compact: compactIn.checked, layout: layoutIn.value }));
+        card.appendChild(h3);
+        card.appendChild(code);
+        card.appendChild(frame);
+        var g = E.generate(spec);
+        var facts = document.createElement("p");
+        facts.className = "facts";
+        facts.textContent = "QRS in strip: " + g.beats.length + " · P waves: " + g.pWaves.length +
+          (g.nonConducted.length ? " (" + g.nonConducted.length + " without a QRS)" : "") +
+          " · rate " + (g.rate === null ? "—" : g.rate) + (g.atrialRate && g.atrialRate !== g.rate ? " · atrial " + g.atrialRate : "") +
+          (g.conduction ? " · conduction " + g.conduction : "") + " · seed " + g.seed;
+        card.appendChild(facts);
+        if (descIn.checked) {
+          var p = document.createElement("p");
+          p.className = "desc";
+          p.textContent = E.describe(spec);
+          card.appendChild(p);
+        }
+        grid.appendChild(card);
+        n++;
+      });
+      out.appendChild(grid);
+    });
+    document.title = "ECG gallery (" + n + " strips, " + Math.round(performance.now() - t0) + " ms)";
+  }
+  [seedIn, compactIn, layoutIn, widthIn, descIn].forEach(function (x) { x.addEventListener("change", draw); });
+  draw();
+})();
+</script>
+</body>
+</html>

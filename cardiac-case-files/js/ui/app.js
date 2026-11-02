@@ -35,10 +35,12 @@
     return !!u.safe(function () { return CCF.Save && CCF.Save.isScorm && CCF.Save.isScorm(); }, false);
   }
 
+  /** The saving warning: CCF.Save.storageWarning() is the source of truth (it changes, e.g. when an LMS connects late). */
   function storageWarning() {
-    var w = u.safe(function () { return CCF.Save && CCF.Save.storageWarning ? CCF.Save.storageWarning() : null; }, null);
-    if (!w && state.bootInfo && state.bootInfo.warning) w = state.bootInfo.warning;
-    return w || null;
+    if (CCF.Save && typeof CCF.Save.storageWarning === "function") {
+      return u.safe(function () { return CCF.Save.storageWarning(); }, null) || null;
+    }
+    return (state.bootInfo && state.bootInfo.warning) || null;
   }
 
   /** [{ index, slot, data | null, damaged }] from CCF.Save.listSlots() (both summary shapes accepted). */
@@ -162,7 +164,7 @@
       label: "Your name",
       value: scorm ? learnerFirstName() : "",
       placeholder: "e.g. Jordan",
-      maxLength: 24,
+      maxLength: 40,
       help: "It goes on your save, your case log and your certificate. You can change it later in Settings.",
       confirmLabel: "Open the first case files",
       confirmIcon: "newGame",
@@ -443,6 +445,11 @@
     if (type === "scorm") {
       // An LMS connection arrived late: the game now runs on the course's profile.
       setTimeout(function () { applySettings(); go("title"); }, 0);
+      return;
+    }
+    if (type === "status") {
+      // The saving warning changed: the top bar is already redrawn; the title screen shows it too.
+      if (state.screen === "title" && !UI.dialogs.isOpen()) setTimeout(function () { go("title"); }, 0);
       return;
     }
     if (type !== "sync" && type !== "slots") return;

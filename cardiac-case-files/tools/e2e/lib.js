@@ -69,9 +69,19 @@ async function openGame(options = {}) {
   });
   const page = await context.newPage();
   const errors = [];
+  const allErrors = [];
   const requests = [];
-  page.on("pageerror", (err) => errors.push("pageerror: " + String((err && err.stack) || err)));
-  page.on("console", (msg) => { if (msg.type() === "error") errors.push("console: " + msg.text()); });
+  page.on("pageerror", (err) => { const t = "pageerror: " + String((err && err.stack) || err); errors.push(t); allErrors.push(t); });
+  page.on("console", (msg) => {
+    if (msg.type() !== "error") return;
+    const loc = (msg.location && msg.location()) || {};
+    const t = "console: " + msg.text() + (loc.url ? " [" + loc.url + "]" : "");
+    allErrors.push(t);
+    // A content file (or the ECG module) that isn't on disk yet is reported quietly by the game
+    // itself; its 404 is expected. Anything else is a real error.
+    if (/Failed to load resource|ERR_FILE_NOT_FOUND/.test(msg.text()) && isMissingOptionalFile(loc.url)) return;
+    errors.push(t);
+  });
   page.on("request", (req) => requests.push(req.url()));
   if (options.config) await page.addInitScript((cfg) => { window.CCF_CONFIG = Object.assign({}, cfg, window.CCF_CONFIG || {}); }, options.config);
   if (options.blockStorage) {
@@ -94,7 +104,24 @@ async function openGame(options = {}) {
     await browser.close().catch(() => {});
     server.close();
   }
-  return { browser, context, page, port, url, errors, requests, close };
+  return { browser, context, page, port, url, errors, allErrors, requests, close };
+}
+
+/** True for a js/content/*.js or js/ui/ecg.js URL whose file doesn't exist on disk. */
+function isMissingOptionalFile(url) {
+  const m = /\/(js\/(?:content\/[^/?#]+\.js|ui\/ecg\.js))(?:[?#].*)?$/.exec(String(url || ""));
+  if (!m) return false;
+  return !fs.existsSync(path.join(GAME, m[1]));
+}
+
+/** Content files index.html loads that aren't on disk (the game must cope without them). */
+function missingContentFiles() {
+  const html = fs.readFileSync(path.join(GAME, "index.html"), "utf8");
+  const out = [];
+  const re = /<script\b[^>]*\bsrc\s*=\s*["'](js\/content\/[^"']+)["']/g;
+  let m;
+  while ((m = re.exec(html))) if (!fs.existsSync(path.join(GAME, m[1]))) out.push(m[1]);
+  return out;
 }
 
 // ------------------------------------------------------------------------------------------
@@ -150,12 +177,23 @@ async function check(page) {
 }
 
 /** Give a deliberately wrong answer for this step (one strike). */
+/** An incorrect option (original index) that hasn't been struck out yet. */
+async function freshWrongOption(page, step) {
+  const wrongs = step.options.map((o, i) => (o.correct ? -1 : i)).filter((i) => i >= 0);
+  return page.evaluate((list) => {
+    for (const i of list) {
+      const input = document.querySelector('.answer-choices .choice[data-index="' + i + '"] input');
+      if (input && !input.disabled) return i;
+    }
+    return -1;
+  }, wrongs);
+}
+
 async function answerWrong(page, step) {
-  if (step.type === "single" || step.type === "test") {
-    const wrong = step.options.findIndex((o) => !o.correct);
-    await pickOptions(page, [wrong]);
-  } else if (step.type === "multi") {
-    const wrong = step.options.findIndex((o) => !o.correct);
+  if (step.type === "single" || step.type === "test" || step.type === "multi") {
+    if (step.type === "multi") await page.evaluate(() => document.querySelectorAll(".answer-choices .choice-input:checked").forEach((el) => { if (!el.disabled) el.click(); }));
+    const wrong = await freshWrongOption(page, step);
+    if (wrong < 0) throw new Error("no incorrect option left to choose");
     await pickOptions(page, [wrong]);
   } else if (step.type === "numeric") {
     await page.fill(".numeric-input", String(step.answer + Math.max(1000, Math.abs(step.answer) * 10)));
@@ -297,7 +335,7 @@ async function shot(page, dir, name, opts = {}) {
 }
 
 module.exports = {
-  GAME, openGame, content, newGame, openCase, currentStepIndex, pickOptions, check,
+  GAME, openGame, content, missingContentFiles, isMissingOptionalFile, newGame, openCase, currentStepIndex, pickOptions, check,
   answerWrong, answerRight, solveStep, nextStep, playCase, sortOrder, horizontalOverflow,
   waitForModalGone, makeChecker, shot
 };

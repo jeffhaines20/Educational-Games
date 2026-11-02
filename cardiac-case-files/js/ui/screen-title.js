@@ -237,14 +237,14 @@
           : "Three players can share this browser. Each slot keeps its own cases, stars and settings.")),
       list,
       h("div", { class: "button-row" },
-        u.button("Back to the title", { kind: "ghost", icon: "back", onClick: function () { app().go("title"); } }),
+        u.button("Back to the title", { kind: "ghost", icon: "back", class: "slots-back", onClick: function () { app().go("title"); } }),
         canImport() ? u.button("I have a save code", { kind: "ghost", icon: "importSave", onClick: function () { importDialog(); } }) : null));
 
     function render() {
       u.clear(list);
       app().slotList().forEach(function (sl) {
         var d = sl.data;
-        var item = h("li", { class: "slot-card" + (d ? "" : sl.damaged ? " is-damaged" : " is-empty") });
+        var item = h("li", { class: "slot-card" + (d ? "" : sl.damaged ? " is-damaged" : " is-empty"), dataset: { slot: String(sl.slot) } });
         var head = h("div", { class: "slot-head" },
           h("span", { class: "slot-number" }, "Slot " + (sl.index + 1)),
           d ? h("h2", { class: "slot-name" }, d.name || "Player") : h("h2", { class: "slot-name slot-name-empty" }, sl.damaged ? "Unreadable save" : "Empty"));
@@ -257,11 +257,11 @@
             d.updatedAt ? h("span", { class: "muted" }, "Last played " + u.relativeTime(d.updatedAt)) : null));
           item.appendChild(h("div", { class: "button-row" },
             u.button("Continue", { kind: "primary", icon: "folder", onClick: function () { app().loadSlot(sl.slot); } }),
-            u.button("Delete", { kind: "ghost", icon: "remove", ariaLabel: "Delete slot " + (sl.index + 1) + " (" + (d.name || "Player") + ")", onClick: function () { del(sl, d.name); } })));
+            u.button("Delete", { kind: "ghost", icon: "remove", class: "slot-delete", ariaLabel: "Delete slot " + (sl.index + 1) + " (" + (d.name || "Player") + ")", onClick: function () { del(sl, d.name); } })));
         } else if (sl.damaged) {
           item.appendChild(h("p", { class: "slot-meta" }, "This save can't be read (it may be damaged). Delete it to use the slot again."));
           item.appendChild(h("div", { class: "button-row" },
-            u.button("Delete", { kind: "ghost", icon: "remove", ariaLabel: "Delete the unreadable save in slot " + (sl.index + 1), onClick: function () { del(sl, null); } })));
+            u.button("Delete", { kind: "ghost", icon: "remove", class: "slot-delete", ariaLabel: "Delete the unreadable save in slot " + (sl.index + 1), onClick: function () { del(sl, null); } })));
         } else {
           item.appendChild(h("p", { class: "slot-meta muted" }, "A fresh stack of case files."));
           item.appendChild(h("div", { class: "button-row" },

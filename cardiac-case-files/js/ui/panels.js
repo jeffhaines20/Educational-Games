@@ -64,13 +64,14 @@
     if (p) {
       body.appendChild(h("h3", { class: "settings-heading" }, "Your name badge"));
       var nameId = u.uid("rename");
-      var input = h("input", { class: "input", id: nameId, type: "text", maxlength: "24", autocomplete: "off", spellcheck: "false" });
+      var input = h("input", { class: "input", id: nameId, type: "text", maxlength: "40", autocomplete: "off", spellcheck: "false" });
       input.value = p.name || "";
       var note = h("p", { class: "field-status", role: "status" });
       var rename = function () {
         var name = u.cleanName(input.value);
         if (!name) { note.textContent = "Type a name first."; note.className = "field-error"; return; }
-        u.safe(function () { CCF.Save.rename(name); });
+        var saved = u.safe(function () { return CCF.Save.rename(name); }, null);
+        if (typeof saved === "string" && saved) name = saved;
         input.value = name;
         note.className = "field-status ok";
         note.textContent = "Done — your badge now says " + name + ".";

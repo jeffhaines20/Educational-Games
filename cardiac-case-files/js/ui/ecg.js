@@ -747,3 +747,526 @@
     }
     return make(plan, lo + off * 0.01, S);
   }
+
+  // ------------------------------------------------------------------------------------
+  // Synthesis: the window's events → samples (mV) every DT seconds from 0 to S
+  // ------------------------------------------------------------------------------------
+
+  function morphFor(s, P, b, amp, plan) {
+    switch (b.kind) {
+      case "pvc": return ventricularMorph(VSHAPES[b.focus] || VSHAPES.A, plan.rr, amp, {});
+      case "vtach": return ventricularMorph(VSHAPES.VT, b.rr, amp, { maxEnd: plan.rr - 0.01 });
+      case "paced": return ventricularMorph(VSHAPES.PACED, b.rr, amp, { tLen: 1.1 });
+      case "escape":
+        return s.qrs >= 0.12
+          ? ventricularMorph(VSHAPES.A, b.rr, 0.72 * amp, { stretch: s.qrs / 0.16, tLen: 1.15, tScale: 0.9 })
+          : svMorph(s, P, b.rr, amp);
+      default: return svMorph(s, P, b.rr, amp);
+    }
+  }
+
+  function synthesize(s, P, mat, plan, R) {
+    var S = s.seconds, n = Math.round(S / DT) + 1, buf = new Float64Array(n), j;
+    if (s.rhythm === "afib") {
+      var fib = makeFib(R.fib);
+      for (j = 0; j < n; j++) buf[j] += P.sign * fib(j * DT + mat.w);
+    } else if (s.rhythm === "aflutter") {
+      for (j = 0; j < n; j++) {
+        var u = ((j * DT + mat.w - plan.phase) / plan.Tf) % 1;
+        buf[j] += P.sign * P.flutterAmp * flutterShape(u < 0 ? u + 1 : u);
+      }
+    } else if (s.rhythm === "vfib") addVf(buf, S, R.vf);
+
+    mat.ps.forEach(function (p) {
+      if (p.t > S || p.t < -0.3) return;
+      addP(buf, p.t, P.pDur * uni(R.amp, 0.97, 1.03), P.sign * P.p * uni(R.amp, 0.94, 1.06), P.family);
+    });
+    var spikes = [];
+    mat.beats.forEach(function (b) {
+      if (b.t > S + 0.02 || b.t < -1.6) return;
+      var amp = (1 + 0.04 * Math.sin(6.283185 * (b.t + mat.w) / P.respPeriod + P.resp)) * uni(R.amp, 0.97, 1.03);
+      var m = morphFor(s, P, b, amp, plan);
+      b.qrs = m.qrsDur;
+      b.morph = m;
+      var ventricular = b.kind === "pvc" || b.kind === "vtach" || b.kind === "paced" || (b.kind === "escape" && s.qrs >= 0.12);
+      addMorph(buf, b.t, m, ventricular ? 1 : P.sign);
+      if (b.spike) spikes.push(b.t);
+    });
+    smooth(buf);
+    spikes.forEach(function (t) {                     // pacing spikes go on after smoothing: razor-thin
+      var k = Math.round(t / DT);
+      if (k >= 0 && k < n) buf[k] += 1.55;
+      if (k + 1 >= 0 && k + 1 < n) buf[k + 1] -= 0.28;
+    });
+    // A breath of baseline wander and a whisper of noise, so the line looks recorded, not drawn.
+    var wph = uni(R.noise, 0, 6.283), wper = uni(R.noise, 4, 7), wamp = s.rhythm === "vfib" ? 0 : uni(R.noise, 0.012, 0.03);
+    var step = 0.016, nz = [];
+    for (j = 0; j < Math.ceil(S / step) + 2; j++) nz.push((2 * R.noise() - 1) * 0.006);
+    for (j = 0; j < n; j++) {
+      var x = j * DT / step, i0 = Math.floor(x), fr = x - i0;
+      buf[j] += wamp * Math.sin(6.283185 * (j * DT + mat.w) / wper + wph) + nz[i0] * (1 - fr) + nz[i0 + 1] * fr;
+    }
+    return buf;
+  }
+
+  // ------------------------------------------------------------------------------------
+  // generate()
+  // ------------------------------------------------------------------------------------
+
+  var CACHE = [];
+
+  function build(spec) {
+    var s = normalize(spec), key = JSON.stringify(s);
+    for (var i = 0; i < CACHE.length; i++) if (CACHE[i].key === key) return CACHE[i].res;
+    var seed = String(s.seed);
+    var R = {
+      plan: stream(seed, "plan"), win: stream(seed, "window"), morph: stream(seed, "morph"),
+      amp: stream(seed, "amp"), fib: stream(seed, "fib"), vf: stream(seed, "vf"), noise: stream(seed, "noise")
+    };
+    var P = personality(s, R.morph);
+    var plan = makePlan(s, R, P), S = s.seconds;
+    var mat = plan ? chooseWindow(plan, S, R.win) : { w: 0, beats: [], ps: [], extra: 0 };
+    if (plan && plan.post) plan.post(mat, S, R.win);
+    var buf = synthesize(s, P, mat, plan, R);
+
+    var all = mat.beats, beats = [];
+    for (i = 0; i < all.length; i++) {
+      var b = all[i];
+      if (b.t < 0 || b.t >= S) continue;
+      var o = { t: round(b.t, 4), kind: b.kind, qrs: round(b.qrs, 3), rr: i > 0 ? round(b.t - all[i - 1].t, 4) : null };
+      if (b.p !== null && b.p !== undefined) { o.p = round(b.p, 4); o.pr = round(b.t - b.p, 3); }
+      if (b.focus) o.focus = b.focus;
+      if (b.spike) o.spike = round(b.t, 4);
+      beats.push(o);
+    }
+    var ps = mat.ps.filter(function (p) { return p.t >= 0 && p.t < S; });
+    var res = {
+      key: key, s: s, P: P, plan: plan, mat: mat, buf: buf, beats: beats,
+      pWaves: ps.map(function (p) { return round(p.t, 4); }),
+      nonConducted: ps.filter(function (p) { return !p.conducted; }).map(function (p) { return round(p.t, 4); }),
+      fWaves: plan && plan.fw ? plan.fw.map(function (f) { return f - mat.w; }).filter(function (f) { return f >= 0 && f < S; }).map(function (f) { return round(f, 4); }) : null,
+      atrialRate: s.rhythm === "aflutter" ? s.atrialRate : plan && plan.atrialRate ? round(plan.atrialRate, 1)
+        : ["afib", "vtach", "vfib"].indexOf(s.rhythm) >= 0 ? null : s.rate,
+      ratio: plan && plan.ratio ? plan.ratio : null
+    };
+    CACHE.unshift({ key: key, res: res });
+    if (CACHE.length > 12) CACHE.pop();
+    return res;
+  }
+
+  function copySpec(s) { var o = {}; for (var k in s) if (Object.prototype.hasOwnProperty.call(s, k)) o[k] = s[k] && typeof s[k] === "object" ? JSON.parse(JSON.stringify(s[k])) : s[k]; return o; }
+
+  function generate(spec) {
+    var r = build(spec), n = r.buf.length, samples = new Array(n);
+    for (var j = 0; j < n; j++) samples[j] = { t: round(j * DT, 4), mv: round(r.buf[j], 4) };
+    var out = {
+      rhythm: r.s.rhythm, seconds: r.s.seconds, lead: r.s.lead, seed: r.s.seed,
+      rate: r.s.rate, atrialRate: r.atrialRate,
+      samples: samples,
+      beats: r.beats.map(function (b) { return copySpec(b); }),
+      pWaves: r.pWaves.slice(),
+      nonConducted: r.nonConducted.slice(),
+      spec: copySpec(r.s)
+    };
+    if (r.fWaves) out.fWaves = r.fWaves.slice();
+    if (r.s.rhythm === "aflutter") out.conduction = r.s.conduction;
+    if (r.ratio) out.conduction = r.ratio + ":" + (r.ratio - 1);
+    return out;
+  }
+
+  // ------------------------------------------------------------------------------------
+  // describe(): what a sighted reader sees — never the name of the rhythm
+  // ------------------------------------------------------------------------------------
+
+  function sec(x) { return x.toFixed(2) + " s"; }
+  function squares(x) {
+    var q = Math.round(x / 0.04 * 2) / 2;
+    return q + " small square" + (q === 1 ? "" : "s");
+  }
+  function plural(n, one, many) { return n + " " + (n === 1 ? one : many || one + "s"); }
+  function capital(t) { return t.charAt(0).toUpperCase() + t.slice(1); }
+
+  function qrsSentence(s, P, width) {
+    var right = P.family === "v1" || P.family === "v2" || P.family === "v3";
+    var w = Math.round(width / 0.01) * 0.01;
+    if (s.qrs >= 0.12) {
+      return "QRS complexes are wide, about " + sec(w) + " (" + squares(w) + "), " +
+        (right ? "deep and broad, pointing mostly downward." : "with a broad, notched top.");
+    }
+    var t = "QRS complexes are narrow, about " + sec(w) + " (" + squares(w) + ").";
+    if (right && !s.qWave) t += " Each has a small upward wave followed by a deep downward wave.";
+    return t;
+  }
+
+  function morphSentences(s, P) {
+    var out = [], right = P.family === "v1" || P.family === "v2" || P.family === "v3";
+    if (s.qWave) {
+      out.push(right
+        ? "Each QRS complex is entirely downward (a QS complex), with no small upward wave at the start."
+        : "Each QRS complex begins with a deep, wide downward Q wave — about 0.05 s wide (more than one small square) and almost half the height of the R wave that follows it.");
+    }
+    var mm = s.stMm, mmTxt = (Math.round(mm * 2) / 2) + " mm";
+    if (s.st === "elevation") out.push("The ST segment is raised about " + mmTxt + " above the baseline and bows upward (convex), running straight into the T wave.");
+    else if (s.st === "depression" && s.stSlope === "horizontal") out.push("The ST segment sits about " + mmTxt + " below the baseline and runs flat (horizontal) before the T wave.");
+    else if (s.st === "depression" && s.stSlope === "downsloping") out.push("The ST segment starts below the baseline and slopes downward to about " + mmTxt + " below it, then curves slowly back up to the baseline.");
+    else if (s.st === "depression") out.push("The ST segment starts about " + mmTxt + " below the baseline at the end of the QRS and rises steadily (upsloping) into the T wave.");
+    else out.push("The ST segment is flat, level with the baseline.");
+    if (s.tWave === "inverted") out.push("T waves are inverted: they point downward.");
+    else if (s.qrs >= 0.12 && !right) out.push("T waves point downward, opposite to the main direction of the QRS.");
+    else if (s.st === "depression" && s.stSlope === "downsloping") out.push("The T wave is low and points slightly downward.");
+    else if (s.st === "elevation") out.push("T waves are upright and tall.");
+    else out.push("T waves are upright.");
+    return out;
+  }
+
+  function rateText(rrs) {
+    if (!rrs.length) return "";
+    return "about " + Math.round(60 / mean(rrs)) + " per minute";
+  }
+
+  var SHAPE_WORDS = { A: "points mainly upward", B: "points mainly downward", C: "dips downward first and then swings upward" };
+
+  function describe(spec) {
+    if (spec && typeof spec.describe === "string" && spec.describe.trim()) return spec.describe.trim();
+    var r = build(spec), s = r.s, P = r.P, S = s.seconds, id = s.rhythm;
+    var beats = r.beats, n = beats.length, out = [];
+    var rrs = [];
+    for (var i = 1; i < n; i++) rrs.push(beats[i].t - beats[i - 1].t);
+    var secs = (S % 1 === 0 ? S : S.toFixed(1));
+    out.push(secs + "-second strip, lead " + s.lead + ".");
+    var count = plural(n, "QRS complex", "QRS complexes") + " in " + secs + " seconds";
+    var regular = rrs.length > 1 && sd(rrs) / mean(rrs) < 0.05;
+    var sv = beats.filter(function (b) { return b.kind === "sinus" || b.kind === "afib" || b.kind === "flutter"; });
+    var qrsW = sv.length ? sv[0].qrs : s.qrs;
+    var prs = beats.filter(function (b) { return b.pr !== undefined; }).map(function (b) { return b.pr; });
+    var prAvg = prs.length ? mean(prs) : s.pr;
+    var pCount = r.pWaves.length;
+    var atrialTxt = r.atrialRate ? "about " + Math.round(r.atrialRate) + " per minute" : "";
+
+    if (id === "nsr" || id === "sinus-brady" || id === "sinus-tach" || id === "av-block-1") {
+      out.push("Upright, rounded P waves, one before every QRS complex; the PR interval is the same each time, about " + sec(prAvg) + " (" + squares(prAvg) + ").");
+      out.push(capital(count) + ", evenly spaced: " + rateText(rrs) + ".");
+      out.push(qrsSentence(s, P, qrsW));
+      out = out.concat(morphSentences(s, P));
+    } else if (id === "afib") {
+      out.push("No distinct P waves; instead the baseline wavers with small, uneven, irregular waves.");
+      out.push(capital(count) + " (" + rateText(rrs) + " on average). The spacing between QRS complexes keeps changing with no pattern, from about " + sec(Math.min.apply(null, rrs)) + " to " + sec(Math.max.apply(null, rrs)) + ".");
+      out.push(qrsSentence(s, P, qrsW));
+      out = out.concat(morphSentences(s, P));
+    } else if (id === "aflutter") {
+      out.push("No rounded P waves. Instead the baseline is a continuous run of identical saw-toothed waves that point downward, about " + Math.round(s.atrialRate) + " per minute (" + (Math.abs(s.atrialRate - 300) < 20 ? "one every large square" : "evenly spaced") + ").");
+      if (s.conduction === "variable") {
+        out.push("The number of these waves between QRS complexes changes (between 2 and 4), so the QRS spacing is irregular, although each gap is a whole number of waves.");
+        out.push(capital(count) + " (" + rateText(rrs) + " on average).");
+      } else {
+        out.push("There are " + s.conduction + " of these waves for every QRS complex. " + capital(count) + ", evenly spaced: " + rateText(rrs) + ".");
+      }
+      out.push(qrsSentence(s, P, qrsW));
+      out = out.concat(morphSentences(s, P).filter(function (t) { return !/^The ST segment is flat/.test(t); }));
+    } else if (id === "pvc") {
+      out.push(describePvc(r, s, P, beats, count, prAvg));
+      out = out.concat(morphSentences(s, P));
+    } else if (id === "av-block-2-type1") {
+      var incs = [0, 0.10, 0.16, 0.20, 0.23, 0.25], seq = [];
+      for (i = 0; i < r.ratio - 1; i++) seq.push((s.pr + incs[i]).toFixed(2));
+      out.push("Upright P waves come regularly, " + atrialTxt + " (" + plural(pCount, "P wave") + " on the strip).");
+      out.push("The PR interval gets longer with each beat — about " + seq.join(", then ") + " s — until a P wave is not followed by any QRS complex; then the PR interval is short again and the cycle repeats. A P wave with no QRS after it appears " + plural(r.nonConducted.length, "time") + " on this strip.");
+      out.push(capital(count) + " (" + rateText(rrs) + " on average); because of the pauses the QRS complexes come in groups.");
+      out.push(qrsSentence(s, P, qrsW));
+      out = out.concat(morphSentences(s, P));
+    } else if (id === "av-block-2-type2") {
+      out.push("Upright P waves come regularly, " + atrialTxt + " (" + plural(pCount, "P wave") + " on the strip).");
+      out.push("Every QRS complex has the same PR interval, about " + sec(prAvg) + " (" + squares(prAvg) + "), but " + plural(r.nonConducted.length, "P wave") + " on the strip " + (r.nonConducted.length === 1 ? "is" : "are") + " not followed by a QRS complex, without any warning lengthening of the PR before — a pattern of " + r.ratio + " P waves for every " + (r.ratio - 1) + " QRS complexes.");
+      out.push(capital(count) + " (" + rateText(rrs) + " on average).");
+      out.push(qrsSentence(s, P, qrsW));
+      out = out.concat(morphSentences(s, P));
+    } else if (id === "av-block-3") {
+      out.push("Upright P waves come regularly, " + atrialTxt + " (" + plural(pCount, "P wave") + " on the strip), and QRS complexes come regularly but slowly, " + rateText(rrs) + " (" + plural(n, "QRS complex", "QRS complexes") + ").");
+      out.push("The P waves have no fixed relationship to the QRS complexes: the distance from a P wave to the next QRS keeps changing, and some P waves fall on top of QRS complexes or T waves.");
+      if (s.qrs >= 0.12) out.push("The QRS complexes are wide, about " + sec(Math.round(n ? beats[0].qrs / 0.01 : 14) * 0.01) + " (" + squares(n ? beats[0].qrs : 0.14) + "), with broad T waves pointing the opposite way.");
+      else out.push(qrsSentence(s, P, qrsW));
+    } else if (id === "vtach") {
+      var w = n ? beats[0].qrs : 0.165;
+      out.push("No P waves can be seen. Fast, regular, wide and bizarre complexes, about " + sec(Math.round(w / 0.01) * 0.01) + " (" + squares(w) + ") wide, each running straight into a large T wave pointing the opposite way, with no flat baseline between them.");
+      out.push(capital(count).replace(/QRS complex/, "complex") + ": " + rateText(rrs) + ".");
+    } else if (id === "vfib") {
+      var lo = Infinity, hi = 0;
+      for (var k = 0; k + 250 <= r.buf.length; k += 125) {
+        var mn = Infinity, mx = -Infinity;
+        for (var q = k; q < k + 250; q++) { mn = Math.min(mn, r.buf[q]); mx = Math.max(mx, r.buf[q]); }
+        lo = Math.min(lo, mx - mn); hi = Math.max(hi, mx - mn);
+      }
+      out.push("No P waves, QRS complexes or T waves can be identified. The whole strip is a continuous, chaotic line of irregular waves that keep changing in height (from about " + Math.max(1, Math.round(lo * 10)) + " to " + Math.round(hi * 10) + " mm from trough to peak) and in shape, with no flat baseline and no repeating pattern.");
+    } else if (id === "paced") {
+      var pw = n ? beats[0].qrs : 0.175;
+      out.push("Each upright P wave is followed, about " + sec(prAvg) + " later, by a tall, very narrow vertical spike, and every spike is followed immediately by a wide QRS complex (about " + sec(Math.round(pw / 0.01) * 0.01) + ", " + squares(pw) + ") that points mainly downward, with a T wave pointing upward, the opposite way.");
+      out.push(capital(count) + ", evenly spaced: " + rateText(rrs) + ".");
+    }
+    if (regular === false && id === "nsr") { /* sinus strips are always regular; nothing to add */ }
+    return out.join(" ");
+  }
+
+  function describePvc(r, s, P, beats, count, prAvg) {
+    var pv = beats.filter(function (b) { return b.kind === "pvc"; });
+    var normal = beats.filter(function (b) { return b.kind !== "pvc"; });
+    var base = 60 / r.plan.rr, pattern = s.pvc.pattern, k = pv.length;
+    var w = pv.length ? Math.max.apply(null, pv.map(function (b) { return b.qrs; })) : 0.16;
+    var t = ["Most beats have an upright P wave and a narrow QRS complex after a constant PR interval of about " + sec(prAvg) + "; these beats come regularly at about " + Math.round(base) + " per minute."];
+    var early = "wide (about " + sec(Math.round(w / 0.01) * 0.01) + ", " + squares(w) + ") and oddly shaped, have no P wave in front of them, and are followed by a large T wave pointing the opposite way to their QRS";
+    var pause = "After each early complex there is a longer pause, so the beats on either side of it are two ordinary beat-lengths apart.";
+    if (pattern === "bigeminy") {
+      t.push("Every other complex comes early — an ordinary beat, then an early complex, then an ordinary beat, and so on (" + plural(k, "early complex", "early complexes") + "). The early complexes are " + early + "; they all look alike. " + pause);
+    } else if (pattern === "couplets") {
+      var pairs = 0;
+      for (var i = 1; i < beats.length; i++) if (beats[i].kind === "pvc" && beats[i - 1].kind === "pvc") pairs++;
+      t.push("Two early complexes come back to back, with no ordinary beat between them (" + plural(pairs, "pair") + " on the strip). They are " + early + ". After the pair there is a longer pause before the next ordinary beat.");
+    } else if (pattern === "multifocal") {
+      var shapes = [];
+      pv.forEach(function (b) { var d = SHAPE_WORDS[b.focus]; if (shapes.indexOf(d) < 0) shapes.push(d); });
+      t.push(capital(plural(k, "complex", "complexes")) + " come early, sooner than the next beat was due. They are " + early + ". They do not look alike: " + shapes.map(function (d, i) { return (i === 0 ? "one " : i === shapes.length - 1 ? "and another " : "another ") + d; }).join(", ") + ". " + pause);
+    } else {
+      t.push(capital(plural(k, "complex", "complexes")) + (k === 1 ? " comes" : " come") + " early, sooner than the next beat was due. " + (k === 1 ? "It is " : "They are ") + early + (k > 1 ? "; they all look alike. " : ". ") + pause);
+    }
+    t.push(capital(count) + " in total.");
+    if (normal.length) t.push(qrsSentence(s, P, normal[0].qrs).replace(/^QRS complexes are/, "The ordinary QRS complexes are"));
+    return t.join(" ");
+  }
+
+  // ------------------------------------------------------------------------------------
+  // Rendering. The strip is built as a small tree ({ tag, attrs, children, text }) that
+  // becomes DOM nodes (render) or an HTML string (markup). Content strings (lead, caption,
+  // description) only ever go into textContent or escaped attributes.
+  // ------------------------------------------------------------------------------------
+
+  var SVG_NS = "http://www.w3.org/2000/svg";
+  var PAPER = { bg: "#fff6f4", minor: "#f3c6c0", major: "#e2877e", trace: "#1c1a1f", mark: "#3b2b2b", label: "#3b2626", note: "#a8483f" };
+  var FONT = "system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif";
+
+  function el(tag, attrs, children, text) { return { tag: tag, attrs: attrs || {}, children: children || [], text: text }; }
+  function f2(x) { return (Math.round(x * 100) / 100).toString(); }
+
+  /** Douglas–Peucker: keep only the points needed to stay within eps (mm) of the full trace. */
+  function simplify(xs, ys, eps) {
+    var n = xs.length, keep = new Uint8Array(n), stack = [0, n - 1];
+    keep[0] = keep[n - 1] = 1;
+    while (stack.length) {
+      var b = stack.pop(), a = stack.pop();
+      var dx = xs[b] - xs[a], dy = ys[b] - ys[a], len = Math.sqrt(dx * dx + dy * dy) || 1e-9, dmax = 0, idx = -1;
+      for (var i = a + 1; i < b; i++) {
+        var d = Math.abs(dy * (xs[i] - xs[a]) - dx * (ys[i] - ys[a])) / len;
+        if (d > dmax) { dmax = d; idx = i; }
+      }
+      if (dmax > eps) { keep[idx] = 1; stack.push(a, idx, idx, b); }
+    }
+    return keep;
+  }
+
+  function baselineY(buf, H) {
+    var mx = 0, mn = 0;
+    for (var j = 0; j < buf.length; j++) { if (buf[j] > mx) mx = buf[j]; if (buf[j] < mn) mn = buf[j]; }
+    var top = 2.8 + mx * MM_PER_MV, bottom = H - 1.2 + mn * MM_PER_MV;
+    return top <= bottom ? clamp(H * 0.6, top, bottom) : (top + bottom) / 2;
+  }
+
+  /** One piece of paper with the trace from ta to tb seconds, at (x0, y0) in mm. */
+  function paper(r, ta, tb, x0, y0, H, base, o) {
+    var W = (tb - ta) * MM_PER_S, nodes = [], minor = "", major = "", x, y, seg;
+    nodes.push(el("rect", { x: f2(x0), y: f2(y0), width: f2(W), height: H, fill: PAPER.bg }));
+    for (x = 0; x <= W + 1e-6; x++) {
+      seg = "M" + f2(x0 + x) + " " + y0 + "V" + (y0 + H);
+      if (x % 5 === 0) major += seg; else minor += seg;
+    }
+    for (y = 0; y <= H; y++) {
+      seg = "M" + f2(x0) + " " + (y0 + y) + "H" + f2(x0 + W);
+      if (y % 5 === 0) major += seg; else minor += seg;
+    }
+    nodes.push(el("path", { d: minor, stroke: PAPER.minor, "stroke-width": o.compact ? "0.45" : "0.6", fill: "none", "vector-effect": "non-scaling-stroke" }));
+    nodes.push(el("path", { d: major, stroke: PAPER.major, "stroke-width": o.compact ? "0.85" : "1.1", fill: "none", "vector-effect": "non-scaling-stroke" }));
+    var marks = "";
+    for (var k = Math.ceil(ta / 3 - 1e-9); k * 3 <= tb + 1e-9; k++) {
+      var mx = x0 + (k * 3 - ta) * MM_PER_S;
+      mx = Math.min(Math.max(mx, x0 + 0.35), x0 + W - 0.35);
+      marks += "M" + f2(mx) + " " + y0 + "V" + f2(y0 + 2.6);
+    }
+    var buf = r.buf, j0 = Math.round(ta / DT), j1 = Math.min(buf.length - 1, Math.round(tb / DT)), xs = [], ys = [];
+    for (var j = j0; j <= j1; j++) {
+      xs.push(x0 + (j - j0) * DT * MM_PER_S);
+      ys.push(clamp(y0 + base - buf[j] * MM_PER_MV, y0 + 0.3, y0 + H - 0.3));
+    }
+    var keep = simplify(xs, ys, 0.04), d = "";
+    for (j = 0; j < xs.length; j++) if (keep[j]) d += (d ? "L" : "M") + f2(xs[j]) + " " + f2(ys[j]);
+    nodes.push(el("path", { "class": "ecg-trace", d: d, stroke: PAPER.trace, "stroke-width": o.compact ? "1.4" : "1.6", fill: "none",
+      "stroke-linejoin": "round", "stroke-linecap": "round", "vector-effect": "non-scaling-stroke" }));
+    nodes.push(el("path", { d: marks, stroke: PAPER.mark, "stroke-width": "1.6", fill: "none", "vector-effect": "non-scaling-stroke" }));
+    if (o.lead) {
+      var fs = o.compact ? 3.2 : 3.6;
+      nodes.push(el("rect", { x: f2(x0 + 0.8), y: f2(y0 + 0.9), width: f2(1.6 + o.lead.length * fs * 0.62), height: f2(fs + 1.1), rx: "0.6", fill: PAPER.bg, "fill-opacity": "0.85" }));
+      nodes.push(el("text", { x: f2(x0 + 1.6), y: f2(y0 + 0.9 + fs * 1.02), "font-size": fs, "font-weight": "700", "font-family": FONT, fill: PAPER.label }, [], o.lead));
+    }
+    if (o.corner) {
+      nodes.push(el("text", { x: f2(x0 + (o.cornerLeft ? 1.2 : W - 1.2)), y: f2(y0 + H - 1.1), "font-size": "2.2", "font-family": FONT, fill: PAPER.note,
+        "text-anchor": o.cornerLeft ? "start" : "end", stroke: PAPER.bg, "stroke-width": "0.7", "paint-order": "stroke" }, [], o.corner));
+    }
+    return nodes;
+  }
+
+  function svgTree(r, label, compact, layout) {
+    var S = r.s.seconds, H = compact ? 30 : 40, base = baselineY(r.buf, H), nodes = [], W, total;
+    var speed = "25 mm/s · 10 mm/mV";
+    if (layout === "rows") {
+      var gap = 2.5, rows = [];
+      for (var ta = 0; ta < S - 1e-6; ta += 3) rows.push([ta, Math.min(S, ta + 3)]);
+      W = 3 * MM_PER_S;
+      total = rows.length * H + (rows.length - 1) * gap;
+      rows.forEach(function (row, i) {
+        nodes = nodes.concat(paper(r, row[0], row[1], 0, i * (H + gap), H, base, {
+          compact: compact, lead: i === 0 ? r.s.lead : null,
+          corner: f2(row[0]) + "–" + f2(row[1]) + " s", cornerLeft: true
+        }));
+      });
+    } else {
+      W = S * MM_PER_S;
+      total = H;
+      nodes = paper(r, 0, S, 0, 0, H, base, { compact: compact, lead: r.s.lead, corner: compact ? null : speed });
+    }
+    return el("svg", {
+      "class": "ecg-svg ecg-svg--" + layout, viewBox: "0 0 " + f2(W) + " " + f2(total), width: "100%",
+      preserveAspectRatio: "xMidYMid meet", role: "img", "aria-label": label, focusable: "false"
+    }, nodes);
+  }
+
+  function figureTree(spec, opts) {
+    opts = opts || {};
+    var r = build(spec), S = r.s.seconds, compact = !!opts.compact;
+    var layout = opts.layout === "line" || opts.layout === "rows" ? opts.layout : "auto";
+    if (S <= 4) layout = "line";
+    var label = describe(spec), svgs = [];
+    if (layout !== "rows") svgs.push(svgTree(r, label, compact, "line"));
+    if (layout !== "line") svgs.push(svgTree(r, label, compact, "rows"));
+    var fig = el("figure", { "class": "ecg" + (compact ? " ecg--compact" : "") }, [
+      el("div", { "class": "ecg-strip" + (svgs.length > 1 ? " ecg-strip--auto" : "") }, svgs)
+    ]);
+    if (isNum(opts.width) && opts.width > 0) fig.attrs.style = "max-width:" + Math.round(opts.width) + "px";
+    var cap = opts.caption !== undefined ? opts.caption : spec && spec.caption;
+    if (typeof cap === "string" && cap.trim()) fig.children.push(el("figcaption", { "class": "ecg-caption" }, [], cap.trim()));
+    return fig;
+  }
+
+  function esc(t) { return String(t).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }
+
+  function toHtml(node) {
+    var a = "";
+    if (node.tag === "svg") a += " xmlns=\"" + SVG_NS + "\"";
+    for (var k in node.attrs) if (Object.prototype.hasOwnProperty.call(node.attrs, k)) a += " " + k + "=\"" + esc(node.attrs[k]) + "\"";
+    var inner = node.text !== undefined ? esc(node.text) : "";
+    for (var i = 0; i < node.children.length; i++) inner += toHtml(node.children[i]);
+    return "<" + node.tag + a + ">" + inner + "</" + node.tag + ">";
+  }
+
+  function toDom(node, doc, inSvg) {
+    var svg = inSvg || node.tag === "svg";
+    var e = svg ? doc.createElementNS(SVG_NS, node.tag) : doc.createElement(node.tag);
+    for (var k in node.attrs) if (Object.prototype.hasOwnProperty.call(node.attrs, k)) e.setAttribute(k, String(node.attrs[k]));
+    if (node.text !== undefined) e.textContent = node.text;
+    for (var i = 0; i < node.children.length; i++) e.appendChild(toDom(node.children[i], doc, svg));
+    return e;
+  }
+
+  // Container query: below 480 px of width, a strip longer than 4 s is drawn as rows of 3 s
+  // (twice the scale), so a phone shows the same paper at a readable size.
+  var CSS = [
+    ".ecg{margin:0;max-width:100%}",
+    ".ecg-strip{container-type:inline-size;width:100%;line-height:0}",
+    ".ecg-svg{display:block;width:100%;height:auto;border-radius:3px}",
+    ".ecg-strip--auto>.ecg-svg--rows{display:none}",
+    "@container (max-width: 479px){.ecg-strip--auto>.ecg-svg--line{display:none}.ecg-strip--auto>.ecg-svg--rows{display:block}}",
+    ".ecg-caption{margin-top:.4em;font-size:.875em;line-height:1.4}",
+    ".ecg--error{padding:.75em;border:1px dashed currentColor}"
+  ].join("\n");
+
+  function injectStyles(doc) {
+    doc = doc || global.document;
+    if (!doc || !doc.head || doc.getElementById("ccf-ecg-style")) return;
+    var st = doc.createElement("style");
+    st.id = "ccf-ecg-style";
+    st.textContent = CSS;
+    doc.head.insertBefore(st, doc.head.firstChild);   // first, so the game's stylesheet can override it
+  }
+
+  function markup(spec, opts) { return toHtml(figureTree(spec, opts)); }
+
+  function render(spec, opts) {
+    var doc = (opts && opts.document) || global.document;
+    if (!doc) throw new Error("CCF.ECG.render needs a document (use CCF.ECG.markup outside the browser)");
+    if (CCF.ECG.autoStyle !== false) injectStyles(doc);
+    try {
+      return toDom(figureTree(spec, opts), doc);
+    } catch (e) {
+      if (global.console && global.console.warn) global.console.warn("CCF.ECG.render:", e);
+      var fig = doc.createElement("figure"), p = doc.createElement("p");
+      fig.className = "ecg ecg--error";
+      p.textContent = "This ECG strip could not be drawn.";
+      fig.appendChild(p);
+      return fig;
+    }
+  }
+
+  // ------------------------------------------------------------------------------------
+  // Drill specs: realistic, varied strips for "Name that rhythm"
+  // ------------------------------------------------------------------------------------
+
+  function ri(rng, a, b) { return a + Math.floor(rng() * (b - a + 1)); }
+  function pickOne(rng, list) { return list[Math.floor(rng() * list.length)]; }
+
+  var DRILL = {
+    "nsr": function (g) { return { rate: ri(g, 62, 96) }; },
+    "sinus-brady": function (g) { return { rate: ri(g, 38, 56) }; },
+    "sinus-tach": function (g) { return { rate: ri(g, 106, 150) }; },
+    "afib": function (g) { return { rate: ri(g, 72, 150) }; },
+    "aflutter": function (g) { return { conduction: pickOne(g, [2, 3, 4, 4, "variable"]) }; },
+    "pvc": function (g) { return { rate: ri(g, 62, 92), pvc: { pattern: pickOne(g, ["isolated", "isolated", "bigeminy", "couplets", "multifocal"]) } }; },
+    "av-block-1": function (g) { return { rate: ri(g, 56, 88), pr: pickOne(g, [0.24, 0.26, 0.28, 0.30, 0.32, 0.34]) }; },
+    "av-block-2-type1": function (g) { return { rate: ri(g, 48, 72) }; },
+    "av-block-2-type2": function (g) { return { rate: ri(g, 36, 60) }; },
+    "av-block-3": function (g) { return { rate: ri(g, 28, 44), atrialRate: ri(g, 70, 100) }; },
+    "vtach": function (g) { return { rate: ri(g, 150, 210) }; },
+    "vfib": function () { return {}; },
+    "paced": function (g) { return { rate: ri(g, 60, 80) }; }
+  };
+
+  /** A random drill strip. opts.rhythms limits the choice; opts.seconds sets the length (default 6). */
+  function randomSpec(seed, opts) {
+    opts = opts || {};
+    var g = stream(String(isNum(seed) ? Math.floor(seed) : hashString(String(seed))), "drill");
+    var ids = (opts.rhythms || RHYTHMS.map(function (r) { return r.id; })).filter(function (id) { return META[id]; });
+    if (!ids.length) throw new Error("CCF.ECG.randomSpec: no known rhythms to choose from");
+    var id = pickOne(g, ids);
+    var spec = { rhythm: id, seconds: isNum(opts.seconds) ? opts.seconds : 6, lead: "II", seed: Math.floor(g() * 2147483646) + 1 };
+    var extra = DRILL[id](g);
+    for (var k in extra) if (Object.prototype.hasOwnProperty.call(extra, k)) spec[k] = extra[k];
+    return spec;
+  }
+
+  // ------------------------------------------------------------------------------------
+  // Public API
+  // ------------------------------------------------------------------------------------
+
+  RHYTHMS.forEach(function (r) { if (r.rateRange) Object.freeze(r.rateRange); Object.freeze(r.lookalikes); Object.freeze(r); });
+  Object.freeze(RHYTHMS);
+
+  CCF.ECG = {
+    VERSION: VERSION,
+    PAPER: Object.freeze({ mmPerSecond: MM_PER_S, mmPerMv: MM_PER_MV, smallSquare: 0.04, largeSquare: 0.2, sampleRate: 1 / DT }),
+    RHYTHMS: RHYTHMS,
+    rhythm: function (id) { return META[id] || null; },
+    normalize: function (spec) { return copySpec(normalize(spec)); },
+    generate: generate,
+    describe: describe,
+    markup: markup,
+    render: render,
+    injectStyles: injectStyles,
+    randomSpec: randomSpec,
+    CSS: CSS,
+    autoStyle: true
+  };
+})(typeof window !== "undefined" ? window : globalThis);

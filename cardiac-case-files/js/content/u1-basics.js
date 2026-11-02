@@ -684,5 +684,455 @@
     casebook: ["cardiac-output", "mi", "cardiac-rehab", "diagnostic-tests"]
   });
 
-  // @@MORE-U1@@
+  // ---------------------------------------------------------------------------------------
+  // 1.5 Reading the Strip — ECG waves, selected abnormalities, exertional ischemia (medium)
+  // ---------------------------------------------------------------------------------------
+  CCF.defineCase({
+    id: "basics-reading-the-strip",
+    unit: "basics",
+    order: 5,
+    difficulty: "medium",
+    title: "Reading the Strip",
+    teaser: "Her first walk since the chest pressure — with a heart monitor watching every beat.",
+    patient: { name: "Lena Park", age: 58, sex: "F" },
+    setting: "Inpatient cardiac telemetry unit",
+    file: {
+      referral: [
+        "**Order:** physical therapy — evaluate and treat; walk in the hallway on telemetry. Activity cleared by cardiology.",
+        "Dr. Okafor evaluated her yesterday. Today you're taking her for her first walk."
+      ],
+      history: {
+        list: [
+          "**Admitted yesterday** after 20 minutes of chest pressure while carrying groceries up her stairs; it eased with rest before she reached the hospital.",
+          "**In hospital:** two troponin tests normal (no sign of heart-muscle damage); 12-lead ECG at rest normal. An exercise stress test is booked for tomorrow.",
+          "**Past medical history:** high cholesterol; prediabetes. Her mother had a heart attack at 61.",
+          "**Social:** accountant; walks her dog every day; has never smoked."
+        ]
+      },
+      medications: [
+        { name: "Aspirin", dose: "81 mg once a day" },
+        { name: "Metoprolol tartrate", dose: "25 mg twice a day" },
+        { name: "Atorvastatin", dose: "80 mg once a day" },
+        { name: "Nitroglycerin", dose: "0.4 mg under the tongue as needed for chest pain (given by nursing)" }
+      ],
+      allergies: "Sulfa drugs (hives)",
+      vitals: { hr: 70, bp: "128/78", rr: 16, spo2: 98, temp: "98.4 °F", pain: "0/10" },
+      exam: {
+        list: [
+          "Alert, comfortable and keen to get moving.",
+          "Telemetry: a wireless monitor on her chest, watched by the monitor technician at the nurses' station.",
+          "Lungs clear; no ankle swelling."
+        ]
+      },
+      tests: [
+        {
+          id: "troponins", type: "labs", title: "Blood tests",
+          rows: [
+            { name: "Troponin T (high-sensitivity), on arrival", value: 6, unit: "ng/L", ref: "under 14", flag: null },
+            { name: "Troponin T (high-sensitivity), 3 hours later", value: 7, unit: "ng/L", ref: "under 14", flag: null }
+          ],
+          note: "Troponin is released into the blood when heart muscle is damaged. Two normal results make a heart attack unlikely."
+        },
+        {
+          id: "rest-strip", type: "ecg", title: "Telemetry strip at rest this morning (lead II)",
+          rhythm: "nsr", rate: 70, seconds: 6, lead: "II", seed: 1501,
+          caption: "A 6-second strip; the marks along the top are 3 seconds apart."
+        }
+      ]
+    },
+    steps: [
+      {
+        id: "s1",
+        type: "single",
+        prompt: "Look at her resting strip. Which part of each beat shows **ventricular depolarization** — the electrical signal that makes the ventricles contract?",
+        options: [
+          { text: "The QRS complex", correct: true, why: "Yes. The tall, narrow QRS is the ventricles depolarizing — the big electrical event that sets off their contraction." },
+          { text: "The P wave", why: "The small, rounded P wave is atrial depolarization: the atria contracting." },
+          { text: "The T wave", why: "The T wave is ventricular *repolarization* — the ventricles recovering, ready for the next beat." },
+          { text: "The PR interval", why: "The PR interval is the time the impulse takes to travel from the atria through the conduction system to the Purkinje fibers." },
+          { text: "The ST segment", why: "The ST segment marks the beginning of ventricular repolarization. Normally it's flat, level with the baseline." }
+        ],
+        hints: [
+          "The ventricles are the heart's biggest muscle mass — and they make the biggest spike."
+        ],
+        explain: [
+          {
+            table: {
+              head: ["Part", "What it shows"],
+              rows: [
+                ["P wave", "Atrial depolarization (atrial contraction)"],
+                ["PR interval", "Time for the impulse to travel from the atria through the conduction system to the Purkinje fibers"],
+                ["QRS complex", "Ventricular depolarization (ventricular contraction)"],
+                ["ST segment", "Beginning of ventricular repolarization"],
+                ["T wave", "Ventricular repolarization"],
+                ["QT interval", "Electrical systole"]
+              ]
+            }
+          },
+          "Her resting strip: a P wave before every QRS, evenly spaced, about 70 a minute, with a flat ST segment — **normal sinus rhythm**."
+        ]
+      },
+      {
+        id: "s2",
+        type: "classify",
+        prompt: "Before you set off, Dr. Okafor quizzes you on changes you might see on a monitor. Sort each ECG finding by what it suggests.",
+        categories: ["Ischemia", "Injury (a new infarct)", "Infarction (dead muscle)", "Conduction problem"],
+        items: [
+          { text: "ST depression, downsloping 2–3 mm", category: 0, why: "Downsloping ST depression of 2–3 mm may indicate ischemia — heart muscle short of oxygen." },
+          { text: "Inverted T waves in leads V2–V6", category: 0, why: "T-wave inversion is the sign of ischemia; in V2–V6 it is always abnormal." },
+          { text: "ST elevation", category: 1, why: "ST elevation marks injury — a new infarct in progress (it can also come from pericarditis)." },
+          { text: "Pathological Q waves", category: 2, why: "Q waves come from dead, electrically silent muscle: an infarction." },
+          { text: "A wide QRS (0.12 seconds or more)", category: 3, why: "A wide QRS means the impulse spreads slowly through the ventricles — a bundle branch block." },
+          { text: "A PR interval longer than 0.20 seconds", category: 3, why: "A long PR interval means the impulse is held up between the atria and the ventricles — first-degree heart block." }
+        ],
+        hints: [
+          "Picture the zones around a heart attack: dead muscle at the center, injured muscle around it, ischemic muscle on the outside. Each shows up differently on the ECG.",
+          "QRS width and PR length are about timing — how fast the impulse travels."
+        ],
+        explain: [
+          "**Selected ECG abnormalities:** ST elevation — new infarct or injury (or pericarditis) · ST depression, downsloping 2–3 mm — ischemia · inverted T wave — ischemia · Q wave — infarction · wide QRS — bundle branch block · P waves different or absent — atrial or ventricular arrhythmias.",
+          "The **zones of infarction** use the same signs: ischemia (T inversion) on the outside, injury (ST elevation) next, infarction (Q waves) at the center."
+        ]
+      },
+      {
+        id: "s3",
+        update: {
+          title: "Halfway down the hallway…",
+          text: [
+            "Two minutes into the walk, Mrs. Park slows down and rests a hand flat on her chest.",
+            { quote: "It's that pressure again — like yesterday on the stairs.", by: "Mrs. Park" },
+            "At the same moment the monitor technician calls your phone: her ST segments have changed."
+          ],
+          vitals: { hr: 92, bp: "146/88", rr: 20, spo2: 97, pain: "chest pressure 3/10" }
+        },
+        type: "single",
+        prompt: "What do you do first?",
+        options: [
+          { text: "Stop the walk, sit her down, stay with her and call her nurse", correct: true, why: "Yes. Stopping takes the extra demand off her heart. Sit her down where she is, stay with her, call her nurse and monitor her symptoms and vital signs. The nurse gives the ordered nitroglycerin and contacts the physician; you let Dr. Okafor know." },
+          { text: "Slow the pace and finish the lap so she isn't stranded in the hallway", why: "Any walking keeps her heart's oxygen demand up. Stop now and bring help to her — a chair or wheelchair can come to you." },
+          { text: "Fetch a nitroglycerin tablet from the nurses' station for her", why: "Medications are given by her nurse, under the physician's orders — not by the PTA." },
+          { text: "Walk her briskly back to her room so she can lie flat", why: "Walking briskly raises the demand on her heart — and she doesn't need to lie flat. Sit her down right where she is." }
+        ],
+        hints: [
+          "Your first job is to take the extra demand off her heart.",
+          "On a hospital unit, who gives her medications?"
+        ],
+        explain: [
+          "**Chest pressure during activity:** stop the activity, have the patient sit and rest, monitor symptoms and vital signs, and get help — on a hospital unit, her nurse, who gives the ordered nitroglycerin — then notify the supervising PT.",
+          { warn: "If the pressure doesn't ease within a few minutes of rest and nitroglycerin, gets worse, or comes with sweating, nausea or breathlessness, the nurse calls the rapid response team." }
+        ]
+      },
+      {
+        id: "s4",
+        update: {
+          title: "Seated, five minutes later",
+          text: "The pressure is easing. Her nurse prints the strip the monitor recorded at the moment the pressure began and hands it to you.",
+          exhibits: [
+            {
+              id: "walk-strip", type: "ecg", title: "Telemetry strip when the pressure began (lead II)",
+              rhythm: "nsr", rate: 90, seconds: 6, lead: "II", seed: 1502,
+              st: "depression", stMm: 2, stSlope: "downsloping",
+              caption: "A 6-second strip; the marks along the top are 3 seconds apart."
+            }
+          ]
+        },
+        type: "single",
+        prompt: "Compare this strip with her resting strip. What does the change suggest?",
+        options: [
+          { text: "Downsloping ST depression — myocardial ischemia", correct: true, why: "Yes. The ST segment now sits about 2 mm below the baseline and slopes downward. With chest pressure during exertion, that's the picture of myocardial ischemia." },
+          { text: "ST elevation — injury from a heart attack in progress", why: "The ST segment is below the baseline, not above it. ST elevation would mean injury — an infarct in progress." },
+          { text: "Pathological Q waves — an old, completed heart attack", why: "There are no deep, wide Q waves. The change is in the ST segment." },
+          { text: "A wide QRS — a bundle branch block", why: "The QRS is as narrow as it was at rest. The change comes after it, in the ST segment." },
+          { text: "No real change — a dip like this is normal with exercise", why: "A small, quickly upsloping dip can be normal with exercise. A 2 mm *downsloping* depression that comes with chest pressure is not." }
+        ],
+        hints: [
+          "Look at the stretch between the end of the QRS and the start of the T wave. Is it above, level with or below the baseline — and which way does it slope?"
+        ],
+        explain: [
+          "Her ST segment sits about **2 mm below the baseline and slopes downward**. On the lecture's terms, ST depression **may indicate ischemia if downsloping 2–3 mm** — and with chest pressure brought on by walking, this is **myocardial ischemia**: demand has outrun supply.",
+          "The P waves and the QRS look the same as at rest. There's no ST elevation (injury) and there are no Q waves (dead muscle) — and her troponin tests were normal.",
+          "Ischemia that comes with effort and settles with rest is exactly what tomorrow's stress test is designed to find. Her cardiology team now has a strong clue."
+        ]
+      },
+      {
+        id: "s5",
+        type: "numeric",
+        prompt: "What was her heart rate on that strip? Use the 6-second method.",
+        answer: 90,
+        tolerance: 10,
+        unit: "beats/min",
+        traps: [
+          { value: 9, tolerance: 1, why: "That's the number of QRS complexes. On a 6-second strip, multiply by 10 to get beats per minute." },
+          { value: 45, tolerance: 5, why: "Half the strip (3 seconds) × 10 gives only half the rate. Count all 6 seconds, then multiply by 10." }
+        ],
+        hints: [
+          "Count every QRS complex on the 6-second strip, then multiply by 10."
+        ],
+        explain: [
+          "9 QRS complexes in 6 seconds × 10 ≈ **90 beats a minute** (the monitor read 92) — up from about 70 at rest, as you'd expect with walking, and still a sinus rhythm.",
+          "Her metoprolol (a beta blocker) limits how high her rate climbs. Symptoms and the monitor tell you far more about her heart than any target heart rate."
+        ]
+      }
+    ],
+    debrief: {
+      diagnosis: "Exertional myocardial ischemia: chest pressure with downsloping ST depression",
+      summary: [
+        "On her first walk, Mrs. Park's chest pressure came back, and the monitor showed 2 mm of downsloping ST depression at a rate of about 90 — the ECG sign of myocardial ischemia.",
+        "You stopped the walk, sat her down, called her nurse and stayed with her. The strip went to her cardiology team, who now have a clear clue for tomorrow's stress test."
+      ],
+      takeaways: [
+        "P wave = atrial depolarization · PR = conduction from the atria to the Purkinje fibers · QRS = ventricular depolarization · ST = start of ventricular repolarization · T = ventricular repolarization.",
+        "ST elevation = injury (new infarct) · downsloping ST depression of 2–3 mm and inverted T waves = ischemia · Q waves = infarction · wide QRS = bundle branch block.",
+        "6-second method: QRS complexes on a 6-second strip × 10.",
+        "Chest pressure during activity: stop, sit, stay, get help (her nurse, in hospital) and notify the supervising PT."
+      ],
+      sources: [
+        "L1 s18–20 · The ECG and selected abnormalities",
+        "L2 s9 · Ischemia and inverted T waves",
+        "L2 s28–29 · Zones of infarction",
+        "L2 s6–7 · Angina pectoris"
+      ]
+    },
+    casebook: ["ecg-basics", "angina", "warning-signs"]
+  });
+
+  // ---------------------------------------------------------------------------------------
+  // Casebook: concept entries for Heart Basics
+  // ---------------------------------------------------------------------------------------
+
+  CCF.defineEntry({
+    id: "blood-flow", kind: "concept", unit: "basics",
+    title: "Blood flow through the heart",
+    aka: ["circulation", "heart chambers", "heart valves", "cardiac cycle", "coronary arteries"],
+    summary: "The right side of the heart pumps deoxygenated blood to the lungs; the left side pumps oxygenated blood to the body. Four valves keep the blood moving one way.",
+    sections: [
+      {
+        heading: "The path of one drop of blood",
+        body: {
+          olist: [
+            "The **superior and inferior venae cavae** bring deoxygenated blood from the upper and lower body to the **right atrium**.",
+            "Through the **tricuspid valve** (three cusps) into the **right ventricle**.",
+            "Through the **pulmonary (semilunar) valve** into the **pulmonary artery** — the only artery that carries deoxygenated blood — and on to the **lungs**.",
+            "The **pulmonary veins** — the only veins that carry oxygenated blood — bring it back to the **left atrium**.",
+            "Through the **mitral (bicuspid) valve** into the **left ventricle**, whose thick muscular wall pumps it…",
+            "…through the **aortic (semilunar) valve** into the **aorta** and out to the whole body."
+          ]
+        }
+      },
+      {
+        heading: "Chambers and valves",
+        body: {
+          list: [
+            "The atria receive blood; the ventricles pump it out. The **interatrial** and **interventricular septa** separate the right side from the left.",
+            "Valves **open toward the next chamber** to let blood flow forward and **close behind the contracting chamber** to stop backflow.",
+            "The mitral and tricuspid (atrioventricular) valves closing make **S1**; the aortic and pulmonary (semilunar) valves closing make **S2**."
+          ]
+        }
+      },
+      {
+        heading: "The cardiac cycle",
+        body: "**Systole** is contraction; **diastole** is relaxation and filling. In diastole the atria fill and empty into the ventricles. As the ventricles begin to contract, the AV valves close; rising pressure then opens the aortic and pulmonary valves and blood is ejected. When ejection ends those valves close and diastole begins again."
+      },
+      {
+        heading: "The heart's own blood supply",
+        body: {
+          list: [
+            "The **right and left coronary arteries** branch from the ascending aorta, just above the aortic valve.",
+            "The **left main** coronary artery divides into the **left anterior descending (LAD)** and the **circumflex**; together they mainly supply the left atrium and left ventricle. The **right coronary artery** mainly supplies the right atrium and right ventricle.",
+            "**Coronary veins** drain into the **coronary sinus**, which empties into the right atrium."
+          ]
+        }
+      },
+      {
+        heading: "What it means for the PTA",
+        body: {
+          list: [
+            "Knowing the path tells you where blood backs up when one side fails: a failing **left** ventricle backs blood up into the **lungs** (breathlessness, crackles); a failing **right** ventricle backs it up into the **body's veins** (ankle edema, distended neck veins).",
+            "The valve areas are where you listen with a stethoscope — see the auscultation entry."
+          ]
+        }
+      }
+    ],
+    sources: ["L1 s6–8 · Chambers, valves and the direction of blood flow", "L1 s9 · Coronary arteries and veins", "L1 s12, s17 · The cardiac cycle", "L2 s16–17 · The coronary arteries"]
+  });
+
+  CCF.defineEntry({
+    id: "conduction-system", kind: "concept", unit: "basics",
+    title: "The conduction system",
+    aka: ["SA node", "sinoatrial node", "AV node", "bundle of His", "Purkinje fibers", "sinus rhythm", "pacemaker of the heart"],
+    summary: "Every normal heartbeat starts in the sinoatrial (SA) node, the heart's natural pacemaker, and travels a fixed path that makes the atria and then the ventricles contract.",
+    sections: [
+      {
+        heading: "The path of each impulse",
+        body: {
+          olist: [
+            "The **SA node** in the right atrium fires — normally about 70 times a minute (**normal sinus rhythm**; 60–100 is the usual normal range).",
+            "The impulse spreads across both **atria**, which contract (the P wave on the ECG).",
+            "It **pauses briefly at the AV node**, at the base of the right atrium, giving the ventricles time to fill (part of the PR interval).",
+            "It travels down the **bundle of His** (the AV bundle) to the **Purkinje fibers**…",
+            "…and both **ventricles** contract together (the QRS complex)."
+          ]
+        }
+      },
+      {
+        heading: "What sets the rate",
+        body: {
+          list: [
+            "The **cardiac control center in the medulla** adjusts the rate and force of contraction, using information from **baroreceptors** in the walls of the aorta and carotid arteries.",
+            "**Sympathetic** nerves (epinephrine and norepinephrine) make the heart beat faster and more forcefully — with exercise, stress or fear.",
+            "**Parasympathetic** nerves (acetylcholine from the **vagus nerve**) slow the heart, mainly through the SA node. Endurance athletes have a strong vagal influence at rest."
+          ]
+        }
+      },
+      {
+        heading: "Too slow, too fast, out of step",
+        body: {
+          table: {
+            head: ["Finding", "What it can mean"],
+            rows: [
+              ["Sinus rhythm below 60 (sinus bradycardia)", "Normal in trained athletes (athlete's heart) and common with beta blockers; a concern with dizziness, fainting, fatigue or chest pain"],
+              ["Sinus rhythm above 100 (sinus tachycardia)", "Exercise, stress, fever, pain — and an early sign of heart failure"],
+              ["Impulses slowed or blocked between the atria and ventricles", "Heart block: first, second or third degree"],
+              ["Early, wide beats starting in the ventricles", "Premature ventricular contractions (PVCs)"],
+              ["Atria quivering instead of contracting; irregular pulse", "Atrial fibrillation"]
+            ]
+          }
+        }
+      },
+      {
+        heading: "What it means for the PTA",
+        body: {
+          list: [
+            "Check that the pulse is regular, that the rate rises with activity and that it settles with rest.",
+            "A slow or irregular pulse with **dizziness, light-headedness, fainting, unusual fatigue or chest pain**: stop the activity and report it right away.",
+            "A new irregular pulse may be atrial fibrillation: consult the supervising PT immediately."
+          ]
+        }
+      }
+    ],
+    sources: ["L1 s10 · Neural control of the heart", "L1 s11 · Cardiac conduction system", "L1 s18–19 · The ECG", "L1 s3 · Athlete's heart", "L1 s31, s37, s44 · Atrial fibrillation, heart block and syncope"]
+  });
+
+  CCF.defineEntry({
+    id: "cardiac-output", kind: "concept", unit: "basics",
+    title: "Cardiac output, stroke volume and ejection fraction",
+    aka: ["CO", "SV", "EF", "preload", "afterload", "Frank–Starling law", "venous return", "end-diastolic volume"],
+    summary: "How much blood the heart pumps: with each beat (stroke volume), every minute (cardiac output), and as a share of what the ventricle holds (ejection fraction).",
+    sections: [
+      {
+        heading: "The numbers",
+        body: {
+          table: {
+            head: ["Measure", "How it's worked out", "Normal"],
+            rows: [
+              ["Stroke volume (SV)", "End-diastolic volume − end-systolic volume", "60–80 mL"],
+              ["Cardiac output (CO)", "SV × heart rate", "4.5–5 L/min at rest (women slightly less); up to 25 L/min in exercise"],
+              ["Ejection fraction (EF)", "SV ÷ end-diastolic volume × 100", "above 55 % (about 58 %)"]
+            ]
+          }
+        }
+      },
+      {
+        heading: "Worked example",
+        body: [
+          "A left ventricle holds 120 mL at the end of filling and 50 mL after it contracts, beating 70 times a minute:",
+          { list: ["SV = 120 − 50 = **70 mL**", "EF = 70 ÷ 120 = **58 %**", "CO = 70 mL × 70/min = 4,900 mL/min ≈ **4.9 L/min**"] },
+          { tip: "Cardiac output comes out in mL per minute — divide by 1,000 to get liters." }
+        ]
+      },
+      {
+        heading: "Preload, afterload and venous return",
+        body: {
+          list: [
+            "**Preload:** the stretch on the ventricle at the end of diastole — its end-diastolic volume, set by venous filling. **Frank–Starling law:** more filling → more stretch → a stronger contraction and a larger stroke volume (as when venous return rises during exercise).",
+            "**Afterload:** the forces that oppose ejection — mainly the pressure in the aorta and peripheral arteries, the stiffness of the aorta, and the mass and viscosity of the blood. Hypertension raises afterload; ACE inhibitors lower it.",
+            "**Venous return:** the blood returning to the right atrium each minute. Over time it equals the cardiac output."
+          ]
+        }
+      },
+      {
+        heading: "Reduced ejection fraction",
+        body: "When heart muscle is damaged — in **CHF, hypertension, CAD and MI** — the left ventricle ejects less of its blood and the patient's capacity for aerobic activity falls. The lower the EF, the more impaired the ventricle."
+      },
+      {
+        heading: "What it means for the PTA",
+        body: {
+          list: [
+            "A low EF means low exercise tolerance: start at a low level, progress gradually, and monitor vital signs and symptoms.",
+            "A slow heart rate can still give a normal output if the stroke volume is large (athlete's heart). A weak ventricle often beats faster to compensate.",
+            "Beta blockers lower heart rate and contractility, so heart rate rises less with exercise — use the rating of perceived exertion (RPE)."
+          ]
+        }
+      }
+    ],
+    sources: ["L1 s13–14 · Preload, afterload and stroke volume", "L1 s15–16 · Cardiac output and ejection fraction", "L1 s43 · Reduced ejection fraction"]
+  });
+
+  CCF.defineEntry({
+    id: "cardinal-symptoms", kind: "concept", unit: "basics",
+    title: "Cardinal signs and symptoms of heart disease",
+    aka: ["warning symptoms", "chest pain", "dyspnea", "palpitations", "syncope", "cyanosis", "edema", "fatigue", "claudication"],
+    summary: "The symptoms that most often signal heart and vessel disease — and what the PTA does when one shows up during a session.",
+    sections: [
+      {
+        heading: "The cardinal symptoms",
+        body: {
+          list: [
+            "**Chest, neck or arm pain or discomfort** — including angina: pressure, squeezing or tightness behind the breastbone that may spread to the arm, shoulder, neck, jaw, throat or back, and can be mistaken for indigestion.",
+            "**Palpitations** — a noticeably strong, fast or irregular heartbeat.",
+            "**Dyspnea** — difficulty breathing, especially on exertion.",
+            "**Syncope** — light-headedness or fainting from too little oxygen reaching the brain.",
+            "**Fatigue**, **cough**, and **cyanosis** (a bluish color from too little oxygen in the blood).",
+            "From the vessels: **edema** and leg pain on walking (**intermittent claudication**) are the most common symptoms."
+          ]
+        }
+      },
+      {
+        heading: "By body system",
+        body: {
+          table: {
+            head: ["System", "Symptoms"],
+            rows: [
+              ["General", "Weakness, fatigue, weight change, poor exercise tolerance"],
+              ["Skin", "Pressure ulcers, loss of body hair, cyanosis of the lips and nail beds"],
+              ["Nervous system", "Headaches, impaired vision, light-headedness or syncope"],
+              ["Respiratory", "Labored breathing (dyspnea), productive cough"],
+              ["Cardiovascular", "Chest, shoulder, neck, jaw or arm pain; palpitations; peripheral edema; claudication"],
+              ["Genitourinary", "Frequent urination, urinating at night (nocturia), concentrated urine, low urine output"],
+              ["Musculoskeletal", "Muscle fatigue, myalgia, chest, shoulder or arm pain, peripheral edema, claudication"],
+              ["Gastrointestinal", "Nausea and vomiting, ascites (a swollen abdomen)"]
+            ]
+          }
+        }
+      },
+      {
+        heading: "Clues in the details",
+        body: {
+          list: [
+            "**Cyanosis:** central cyanosis (lips, tongue, ears, mucous membranes) goes with lung disease and low oxygen saturation; peripheral cyanosis (fingertips, nail beds, toes, nose) with low cardiac output.",
+            "**Edema:** bilateral pitting edema with breathlessness and fatigue points to congestive heart failure; one swollen leg points to a local cause such as a DVT or peripheral vascular disease. Grade it with the edema scale.",
+            "**Referred pain:** heart pain can be felt in the left shoulder, along the inner arm to the elbow, in the neck and jaw, or between the shoulder blades — sometimes there and nowhere else.",
+            "**Palpitations** can be benign (caffeine, anxiety, exercise, mitral valve prolapse, athlete's heart) or serious (CAD, cardiomyopathy, complete heart block, valve disease)."
+          ]
+        }
+      },
+      {
+        heading: "What the PTA does",
+        body: {
+          table: {
+            head: ["When…", "Do this"],
+            rows: [
+              ["Fatigue comes with dyspnea, headache, chest pain or an arrhythmia", "Stop the activity, have the patient rest, consult the PT"],
+              ["Dyspnea is severe or occurs at rest", "Stop; the patient needs a physician — call for emergency help if it is sudden and severe"],
+              ["The patient faints or becomes light-headed (possible cardiac syncope)", "Alert the PT, nurse or physician immediately"],
+              ["A new irregular pulse (possible atrial fibrillation)", "Consult the supervising PT immediately"],
+              ["New or worsening edema, or a quick weight gain", "Report to the supervising PT"],
+              ["Chest pain at rest, or not relieved by rest or nitroglycerin", "Emergency: call 911 / activate the emergency response"]
+            ]
+          }
+        }
+      }
+    ],
+    sources: ["L1 s2–5 · Cardinal symptoms by system", "L1 s32–36 · Cyanosis, dyspnea, edema and fatigue", "L1 s38–40 · Claudication, pain and palpitations", "L1 s44 · Syncope", "L2 s10 · Referred pain in angina"]
+  });
 })();

@@ -325,10 +325,10 @@
     return text.split(/\s+/)[0] || "";
   }
 
-  /** Tidy a name typed by the player: no control characters, single spaces, at most 24 characters. */
+  /** Tidy a name typed by the player: no control characters, single spaces, at most 40 characters (as CCF.Save). */
   function cleanName(name) {
     var text = String(name || "").replace(/[\u0000-\u001f\u007f]/g, "").replace(/\s+/g, " ").trim();
-    return Array.from(text).slice(0, 24).join("").trim();
+    return Array.from(text).slice(0, 40).join("").trim();
   }
 
   /** URL query parameters (lower-case keys). */

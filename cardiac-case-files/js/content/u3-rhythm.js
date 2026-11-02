@@ -22,7 +22,7 @@
     file: {
       referral: [
         "**Referral:** right knee pain (patellofemoral pain) — evaluate and treat. From the campus health center.",
-        { quote: "Can I ask you something random? All week my heart keeps doing this thump — like it skips a beat and then catches up. It's kind of freaking me out.", by: "Maya" }
+        { quote: "Can I ask you something random? All week my heart keeps doing this thump — like it skips a beat and then catches up. It's kind of freaking me out.", by: "Ms. Chen" }
       ],
       history: {
         list: [
@@ -51,16 +51,16 @@
       {
         id: "s1",
         type: "single",
-        prompt: "Maya calls them “skipped beats”. They're **palpitations** — one of the cardinal symptoms of heart disease. What are palpitations?",
+        prompt: "Ms. Chen calls them “skipped beats”. They're **palpitations** — one of the cardinal symptoms of heart disease. What are palpitations?",
         options: [
-          { text: "An awareness of the heartbeat — a pounding, racing, irregular or “extra” beat", correct: true, why: "Yes. People aren't normally aware of their heartbeat; they notice it when it beats faster, harder or out of step — like Maya's thump and pause." },
-          { text: "Chest pain from a shortage of oxygen to the heart muscle", why: "That's angina. Maya has no chest pain — she notices a thump and a pause." },
+          { text: "An awareness of the heartbeat — a pounding, racing, irregular or “extra” beat", correct: true, why: "Yes. People aren't normally aware of their heartbeat; they notice it when it beats faster, harder or out of step — like Ms. Chen's thump and pause." },
+          { text: "Chest pain from a shortage of oxygen to the heart muscle", why: "That's angina. Ms. Chen has no chest pain — she notices a thump and a pause." },
           { text: "Fainting, or nearly fainting, because too little oxygen-rich blood is reaching the brain", why: "That's syncope. She hasn't fainted or felt light-headed." },
           { text: "Shortness of breath that comes on with effort", why: "That's dyspnea on exertion. Her breathing is comfortable." }
         ],
         hints: [
           "Three of these options describe other cardinal symptoms: angina, syncope and dyspnea.",
-          "Which option matches what Maya is *noticing*, rather than pain or breathlessness?"
+          "Which option matches what Ms. Chen is *noticing*, rather than pain or breathlessness?"
         ],
         explain: [
           "**Palpitations** are an awareness of the heartbeat: pounding, racing, fluttering, or an irregular or “extra” beat. Another name for an abnormal rhythm is an *arrhythmia* (or dysrhythmia).",
@@ -72,23 +72,23 @@
         update: {
           title: "Dr. Okafor clips on the monitor",
           text: [
-            "While Maya rests on the treatment table, Dr. Okafor attaches the clinic's portable heart monitor. A few seconds later Maya says, “There — did you see that?”"
+            "While Ms. Chen rests on the treatment table, Dr. Okafor attaches the clinic's portable heart monitor. A few seconds later Ms. Chen says, “There — did you see that?”"
           ],
           exhibits: [
             {
               id: "strip-rest", type: "ecg", title: "Rhythm strip at rest (lead II)",
               rhythm: "pvc", rate: 80, pvc: { pattern: "isolated", count: 1 }, seconds: 6, lead: "II", seed: 3101,
-              caption: "6 seconds, at rest. Maya felt her “thump” at the moment of the odd beat."
+              caption: "6 seconds, at rest. Ms. Chen felt her “thump” at the moment of the odd beat."
             }
           ]
         },
         type: "single",
-        prompt: "Find the odd beat on Maya's strip. What is it?",
+        prompt: "Find the odd beat on Ms. Chen's strip. What is it?",
         options: [
           { text: "A premature ventricular contraction (PVC)", correct: true, why: "Yes: it comes early, has no P wave in front of it, and its QRS is wide (more than 0.12 s) and bizarre — the impulse started in a ventricle, not in the SA node. The pause after it is typical." },
           { text: "A dropped beat from second-degree heart block", why: "In second-degree block a P wave arrives on time but no QRS follows it — a beat is *missing*. Here an *extra*, early beat appears." },
-          { text: "Atrial fibrillation", why: "In AFib there are no P waves at all and the whole rhythm is irregularly irregular. Maya's beats are regular, each with a P wave, apart from the one odd beat." },
-          { text: "A run of ventricular tachycardia", why: "VT is a run of fast, wide beats one after another. Maya has a single early beat, and then her normal rhythm carries on." }
+          { text: "Atrial fibrillation", why: "In AFib there are no P waves at all and the whole rhythm is irregularly irregular. Ms. Chen's beats are regular, each with a P wave, apart from the one odd beat." },
+          { text: "A run of ventricular tachycardia", why: "VT is a run of fast, wide beats one after another. Ms. Chen has a single early beat, and then her normal rhythm carries on." }
         ],
         hints: [
           "Does the odd beat come early or late? Is there a P wave in front of it? Is its QRS narrow or wide?",
@@ -96,20 +96,20 @@
         ],
         explain: [
           "A **premature ventricular contraction (PVC)** is an early beat that starts in a ventricle instead of the SA node. On the ECG it is **early, has no P wave before it, and has a wide (more than 0.12 s), bizarre QRS**, usually followed by a pause before the next normal beat.",
-          "That pause is the “skip” Maya feels. The next normal beat feels like a thump because the ventricle has had extra time to fill.",
+          "That pause is the “skip” Ms. Chen feels. The next normal beat feels like a thump because the ventricle has had extra time to fill.",
           "PVCs are the most common arrhythmia. When several PVCs all look alike they are **unifocal**; when they look different from each other they are **multifocal** (they start from more than one place)."
         ]
       },
       {
         id: "s3",
         type: "multi",
-        prompt: "Which things in Maya's story are known triggers for PVCs? Select all that apply.",
+        prompt: "Which things in Ms. Chen's story are known triggers for PVCs? Select all that apply.",
         options: [
           { text: "About five espressos a day", correct: true, why: "Caffeine is a classic trigger of PVCs and palpitations." },
           { text: "Exam stress and anxiety", correct: true, why: "Stress and anxiety raise adrenaline, which makes heart cells more excitable." },
           { text: "Vaping nicotine", correct: true, why: "Nicotine is a stimulant. Smoking — and vaping nicotine — can trigger PVCs." },
-          { text: "Drinking alcohol", why: "Alcohol can trigger PVCs too, but Maya doesn't drink — it isn't one of *her* triggers." },
-          { text: "Heart damage from a previous heart attack", why: "PVCs are common after an MI, but Maya is 24 with no heart disease. That's reassuring." }
+          { text: "Drinking alcohol", why: "Alcohol can trigger PVCs too, but Ms. Chen doesn't drink — it isn't one of *her* triggers." },
+          { text: "Heart damage from a previous heart attack", why: "PVCs are common after an MI, but Ms. Chen is 24 with no heart disease. That's reassuring." }
         ],
         hints: [
           "Re-read her history: what is she drinking, inhaling and feeling this week?",
@@ -118,7 +118,7 @@
         explain: [
           "PVCs are seen in healthy people after **caffeine, smoking (nicotine), anxiety or alcohol**. They also occur with heart disease — after an MI, or with ischemia from CAD or heart failure — and with electrolyte imbalance, chronic lung disease and low blood oxygen (hypoxemia).",
           "In a young, healthy person with everyday triggers, isolated PVCs are usually **benign**. Cutting back on caffeine and nicotine and managing stress often settles them.",
-          { tip: "Still tell Dr. Okafor about any new palpitations — and encourage Maya to mention them to her physician, who can decide whether she needs tests such as a Holter monitor." }
+          { tip: "Still tell Dr. Okafor about any new palpitations — and encourage Ms. Chen to mention them to her physician, who can decide whether she needs tests such as a Holter monitor." }
         ]
       },
       {
@@ -126,8 +126,8 @@
         update: {
           title: "Back to the knee",
           text: [
-            "Dr. Okafor talks with Maya and agrees she can do her knee program on the stationary bike today, with the monitor on.",
-            { quote: "So I'm not about to drop dead? Okay. But what should I watch out for?", by: "Maya" }
+            "Dr. Okafor explains that occasional single PVCs like these are common and usually harmless, encourages Ms. Chen to tell her physician about them, and agrees she can do her knee program on the stationary bike today with the monitor on.",
+            { quote: "Okay, that's a relief. So what would be a bad sign?", by: "Ms. Chen" }
           ]
         },
         type: "single",
@@ -143,16 +143,16 @@
           "Only one option describes a warning pattern; the others are normal or even reassuring."
         ],
         explain: [
-          "**During exercise, PVCs are a concern when there are more than 5 a minute, when they come in pairs, or when they are multifocal** (look different from one another). These patterns can progress to ventricular tachycardia or ventricular fibrillation. So can PVCs that come with symptoms: chest pain, dizziness, fainting or breathlessness.",
+          "**During exercise, PVCs are a concern when there are more than 5 a minute, when they come in pairs, or when they are multifocal** (look different from one another). These patterns show an irritable ventricle that can go on to ventricular tachycardia or ventricular fibrillation. PVCs that come with symptoms — chest pain, dizziness, fainting or breathlessness — need attention too.",
           "If you see them: stop the exercise, have the patient rest, keep monitoring, and notify the supervising PT.",
-          "**Note on the slides:** Lecture 1 (slide 41) says PVCs are potentially life-threatening and need immediate attention from the physician. Today, isolated PVCs like Maya's are known to be common and usually benign; it's the warning patterns above — or PVCs with symptoms — that need urgent attention."
+          "**Note on the slides:** Lecture 1 (slide 41) says PVCs are potentially life-threatening and need immediate attention from the physician. Today, isolated PVCs like Ms. Chen's are known to be common and usually benign; it's the warning patterns above — or PVCs with symptoms — that need urgent attention."
         ]
       }
     ],
     debrief: {
-      diagnosis: "Isolated premature ventricular contractions (PVCs) triggered by caffeine, nicotine and stress",
+      diagnosis: "Isolated premature ventricular contractions (PVCs), most likely triggered by caffeine, nicotine and stress",
       summary: [
-        "Maya's “skipped beats” were palpitations from isolated, unifocal **PVCs** — early, wide, bizarre beats from a ventricle, each followed by a pause. In a healthy 24-year-old with no worrying symptoms, five espressos a day, nicotine and exam stress are the likely triggers.",
+        "Ms. Chen's “skipped beats” were palpitations from isolated, unifocal **PVCs** — early, wide, bizarre beats from a ventricle, each followed by a pause. In a healthy 24-year-old with no worrying symptoms, five espressos a day, nicotine and exam stress are the likely triggers.",
         "Isolated PVCs like hers are usually benign. During exercise, the patterns that matter are more than 5 a minute, pairs and multifocal PVCs — or PVCs with symptoms."
       ],
       takeaways: [
@@ -281,10 +281,10 @@
         type: "single",
         prompt: "Dr. Okafor points at the strip: “Notice what's missing before each QRS.” Why does AFib leave him dizzy and breathless?",
         options: [
-          { text: "His atria quiver instead of contracting, so the ventricles lose the atrial kick — and the fast rate cuts their filling time", correct: true, why: "Yes. Less filling means less blood per beat, so cardiac output falls: dizziness, breathlessness, weakness." },
-          { text: "His ventricles are quivering too, so almost no blood leaves the heart", why: "That's ventricular fibrillation — no effective contraction, no pulse, and collapse within seconds. Mr. Morales has a pulse and is talking." },
-          { text: "The irregular rhythm is narrowing his coronary arteries", why: "AFib doesn't narrow the coronary arteries. His symptoms come from the heart pumping less blood each minute." },
-          { text: "His COPD inhaler is lowering his blood oxygen", why: "Tiotropium opens the airways; it doesn't lower oxygen. His SpO2 (94 %) is close to his usual 95 %." }
+          { text: "His ventricles lose the atrial kick, and the fast rate leaves them less time to fill", correct: true, why: "Yes. With no P waves, the atria are only quivering — they no longer top up the ventricles. Less filling means less blood per beat, so cardiac output falls: dizziness, breathlessness, weakness." },
+          { text: "His ventricles are quivering as well, so almost no blood is leaving his heart with each beat", why: "That's ventricular fibrillation — no effective contraction, no pulse, and collapse within seconds. Mr. Morales has a pulse and is talking." },
+          { text: "The irregular rhythm is squeezing and narrowing his coronary arteries", why: "AFib doesn't narrow the coronary arteries. His symptoms come from the heart pumping less blood each minute." },
+          { text: "His COPD inhaler is lowering the oxygen level in his blood", why: "Tiotropium opens the airways; it doesn't lower oxygen. His SpO2 (94 %) is close to his usual 95 %." }
         ],
         hints: [
           "Normally the atria contract just before the ventricles, topping them up. What happens to that top-up when the atria only quiver?",
