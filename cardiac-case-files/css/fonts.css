@@ -1,0 +1,28 @@
+/*
+ * Self-hosted fonts (see assets/fonts/README.md for the licences).
+ *   Special Elite  — typewriter display face (Apache License 2.0)
+ *   Inter          — body text, variable 100–900 (SIL Open Font License 1.1)
+ *   JetBrains Mono — vitals, labs and numbers, variable 100–800 (SIL Open Font License 1.1)
+ * Latin subsets; characters outside them fall back to system fonts.
+ */
+@font-face {
+  font-family: "Special Elite";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("../assets/fonts/special-elite-latin.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("../assets/fonts/inter-latin.woff2") format("woff2");
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 100 800;
+  font-display: swap;
+  src: url("../assets/fonts/jetbrains-mono-latin.woff2") format("woff2");
+}
