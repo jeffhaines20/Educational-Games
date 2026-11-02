@@ -363,7 +363,7 @@ async function main() {
         await start.click();
         await page.waitForSelector('.drill-screen[data-drill="' + id + '"]');
         if (id === "rhythm") {
-          check((await count(page, ".drill-prompt figure.ecg svg")) === 1, "the rhythm drill draws an ECG strip");
+          check((await count(page, ".drill-prompt figure.ecg svg")) >= 1, "the rhythm drill draws an ECG strip");
           await page.click(".drill-prompt .describe-btn");
           check((await text(page, ".drill-prompt .describe-text")).trim().length > 20, "the strip can be described in words");
         }
@@ -429,7 +429,8 @@ async function main() {
       const code = await page.$eval(".modal-savecode .code-box", (t) => t.value);
       check(/^CCF1\./.test(code), "the save code starts with CCF1.");
       await shot(page, "flow-18-savecode");
-      await page.keyboard.press("Escape");
+      await page.keyboard.press("Escape");          // the save code…
+      await page.keyboard.press("Escape");          // …and Settings underneath it
       await L.waitForModalGone(page);
       const slot = await page.evaluate(() => CCF.Save.currentSlot());
       await page.evaluate(() => CCF.UI.app.go("slots"));

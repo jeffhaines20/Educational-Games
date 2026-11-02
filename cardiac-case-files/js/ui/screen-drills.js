@@ -256,17 +256,27 @@
     available: function () { return rhythms().length >= 4 && !!(CCF.ECG && CCF.ECG.render); },
     make: function (rand) {
       var list = rhythms();
-      var r = u.pick(list, rand);
-      var range = Array.isArray(r.rateRange) ? r.rateRange : null;
-      var rate = range ? u.randInt(range[0], range[1], rand) : r.defaultRate;
-      var spec = { rhythm: r.id, seconds: 6, lead: "II", seed: u.randInt(1, 999999, rand) };
-      if (typeof rate === "number") spec.rate = rate;
-      if (r.id === "pvc") spec.pvc = { pattern: u.pick(["isolated", "bigeminy", "couplets", "multifocal"], rand) };
-      var others = list.filter(function (x) { return x.id !== r.id && x.name !== r.name; });
+      var spec = null;
+      if (CCF.ECG.randomSpec) spec = u.safe(function () { return CCF.ECG.randomSpec(Math.floor(rand() * 2147483646) + 1); }, null);
+      if (!spec) {
+        var pick = u.pick(list, rand);
+        var range = Array.isArray(pick.rateRange) ? pick.rateRange : null;
+        spec = { rhythm: pick.id, seconds: 6, lead: "II", seed: u.randInt(1, 999999, rand) };
+        if (range) spec.rate = u.randInt(range[0], range[1], rand);
+        if (pick.id === "pvc") spec.pvc = { pattern: u.pick(["isolated", "bigeminy", "couplets", "multifocal"], rand) };
+      }
+      var r = list.filter(function (x) { return x.id === spec.rhythm; })[0] || list[0];
+      // Distractors: the rhythm's look-alikes first (the useful confusions), then any others.
+      var byId = {};
+      list.forEach(function (x) { byId[x.id] = x; });
+      var pool = (r.lookalikes || []).map(function (id) { return byId[id]; }).filter(function (x) { return x && x.id !== r.id; });
+      var rest = list.filter(function (x) { return x.id !== r.id && pool.indexOf(x) < 0; });
       var picks = [];
-      while (picks.length < 3 && others.length) picks.push(others.splice(Math.floor(rand() * others.length), 1)[0]);
+      while (picks.length < 3 && pool.length) picks.push(pool.splice(Math.floor(rand() * pool.length), 1)[0]);
+      while (picks.length < 3 && rest.length) picks.push(rest.splice(Math.floor(rand() * rest.length), 1)[0]);
       var choices = [{ text: r.name, correct: true }].concat(picks.map(function (x) { return { text: x.name, correct: false }; }));
       var order = u.shuffledIndices(choices.length, Math.floor(rand() * 1e9));
+      var rate = spec.rate;
       return {
         prompt: [UI.exhibits.ecgFigure(spec, { describeLabel: "Describe this strip" })],
         question: "Which rhythm is this?",
