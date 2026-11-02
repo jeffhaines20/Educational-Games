@@ -487,8 +487,7 @@
       }
       screen.title = "Case closed: " + kase.title;
       document.title = screen.title + " · " + u.GAME_NAME;
-      var focusTarget = (fresh ? view.querySelector(".case-h1") : view.querySelector(".case-h1"));
-      u.focusEl(focusTarget, { preventScroll: true });
+      u.focusEl(view.querySelector(".case-h1"), { preventScroll: true });
       u.safe(function () { global.scrollTo(0, 0); });
       app().refreshTopbar();
     }
@@ -678,12 +677,10 @@
       els.dotsWrap.replaceChild(stepDots(), els.dotsWrap.firstChild);
       // A test step opens sealed results: show them in the file.
       var opened = revealedFor(state.step);
-      var changes = file.update();
+      file.update();
       if (opened.length) {
         if (global.matchMedia && global.matchMedia("(min-width: 1100px)").matches) file.showExhibit(opened[0].id);
         else file.select("tests");
-      } else if (changes.testsNew && file.selected() !== "tests") {
-        // nothing to do: the Tests tab is flagged New
       }
       if (state.step === n - 1) finish();
       else save();

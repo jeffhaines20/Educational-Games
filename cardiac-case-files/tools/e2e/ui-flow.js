@@ -4,7 +4,8 @@
  *
  *   node tools/e2e/ui-flow.js                    # full flow + responsive pass
  *   node tools/e2e/ui-flow.js --shots DIR        # …and save screenshots there
- *   node tools/e2e/ui-flow.js --quick            # skip playing every other case
+ *   node tools/e2e/ui-flow.js --quick            # play one case per unit (not all of them)
+ *   node tools/e2e/ui-flow.js --responsive       # only the responsive pass
  *
  * Flow (1440×900): title (no network requests, About) → Begin → name → intro (Dr. Okafor) →
  * board → case 2.1 with an empty check, a wrong answer (feedback on that choice, a strike), a
@@ -29,6 +30,7 @@ const L = require("./lib");
 const args = process.argv.slice(2);
 const SHOTS = args.indexOf("--shots") >= 0 ? path.resolve(args[args.indexOf("--shots") + 1]) : null;
 const QUICK = args.indexOf("--quick") >= 0;
+const RESPONSIVE_ONLY = args.indexOf("--responsive") >= 0;
 
 function log(msg) { process.stdout.write(msg + "\n"); }
 const { check, state } = L.makeChecker(log);
@@ -622,7 +624,7 @@ async function responsivePass() {
   }
 }
 
-main().then(() => {
+(RESPONSIVE_ONLY ? responsivePass() : main()).then(() => {
   log("");
   log(state.failures ? "FAILED: " + state.failures + " of " + state.checks + " checks" : "OK: " + state.checks + " checks passed");
   process.exit(state.failures ? 1 : 0);

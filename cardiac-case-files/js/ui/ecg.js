@@ -225,7 +225,7 @@
       resp: uni(rng, 0, 2 * Math.PI),
       respPeriod: uni(rng, 3.6, 5.0),
       pvcShape: rng() < 0.6 ? "A" : "B",
-      flutterAmp: uni(rng, 0.9, 1.15)
+      flutterAmp: uni(rng, 1.15, 1.35)
     };
   }
 
@@ -790,7 +790,7 @@
       b.morph = m;
       var ventricular = b.kind === "pvc" || b.kind === "vtach" || b.kind === "paced" || (b.kind === "escape" && s.qrs >= 0.12);
       addMorph(buf, b.t, m, ventricular ? 1 : P.sign);
-      if (b.spike) spikes.push(b.t);
+      if (b.spike) { b.spikeAt = Math.round(b.t / DT) * DT; spikes.push(b.spikeAt); }
     });
     smooth(buf);
     spikes.forEach(function (t) {                     // pacing spikes go on after smoothing: razor-thin
@@ -836,7 +836,7 @@
       var o = { t: round(b.t, 4), kind: b.kind, qrs: round(b.qrs, 3), rr: i > 0 ? round(b.t - all[i - 1].t, 4) : null };
       if (b.p !== null && b.p !== undefined) { o.p = round(b.p, 4); o.pr = round(b.t - b.p, 3); }
       if (b.focus) o.focus = b.focus;
-      if (b.spike) o.spike = round(b.t, 4);
+      if (b.spike) o.spike = round(b.spikeAt, 4);
       beats.push(o);
     }
     var ps = mat.ps.filter(function (p) { return p.t >= 0 && p.t < S; });
