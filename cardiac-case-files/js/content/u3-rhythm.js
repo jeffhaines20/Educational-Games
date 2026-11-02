@@ -770,7 +770,7 @@
       medications: [
         { name: "Metoprolol succinate", dose: "50 mg once a day" },
         { name: "Aspirin", dose: "81 mg once a day" },
-        { name: "Ticagrelor", dose: "90 mg twice a day" },
+        { name: "Clopidogrel (Plavix)", dose: "75 mg once a day" },
         { name: "Atorvastatin", dose: "80 mg once a day" },
         { name: "Lisinopril", dose: "5 mg once a day" },
         { name: "Nitroglycerin", dose: "0.4 mg under the tongue as needed for chest pain" }

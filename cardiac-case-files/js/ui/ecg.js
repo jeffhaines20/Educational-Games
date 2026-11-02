@@ -219,7 +219,7 @@
       r: uni(rng, 1.15, 1.45),
       sDepth: uni(rng, 0.16, 0.26),
       q: uni(rng, 0.06, 0.11),
-      p: uni(rng, 0.13, 0.19),
+      p: uni(rng, 0.15, 0.21),
       pDur: uni(rng, 0.085, 0.100),
       t: uni(rng, 0.26, 0.36),
       resp: uni(rng, 0, 2 * Math.PI),
@@ -381,20 +381,20 @@
     }
   }
 
-  /** One flutter wave (lead II): slow downslope, a sharp dip, a quick return. u in [0, 1). */
+  /** One flutter wave (lead II, negative sawtooth): a long gradual downslope, then a sharp upstroke. u in [0, 1). */
   function flutterShape(u) {
     var v;
-    if (u < 0.6) v = 0.10 - 0.16 * (u / 0.6);
-    else if (u < 0.76) v = -0.06 - 0.19 * ((u - 0.6) / 0.16);
-    else v = -0.25 + 0.35 * ((u - 0.76) / 0.24);
-    return v + 0.031;                                     // centred on the baseline
+    if (u < 0.7) v = 0.17 - 0.29 * (u / 0.7);
+    else if (u < 0.8) v = -0.12 - 0.09 * ((u - 0.7) / 0.1);
+    else v = -0.21 + 0.38 * ((u - 0.8) / 0.2);
+    return v + 0.003;                                     // centred on the baseline
   }
 
-  /** Fibrillatory baseline: a few drifting, amplitude-modulated 4.5–8 Hz waves. */
+  /** Fibrillatory baseline: a few drifting, amplitude-modulated 5.5–9 Hz waves (330–540 per minute). */
   function makeFib(rng) {
     var comps = [];
     for (var i = 0; i < 4; i++) {
-      comps.push({ a: uni(rng, 0.018, 0.04), f: uni(rng, 4.6, 7.8), ph: uni(rng, 0, 6.283),
+      comps.push({ a: uni(rng, 0.026, 0.05), f: uni(rng, 5.5, 9.0), ph: uni(rng, 0, 6.283),
         m: uni(rng, 0.25, 0.8), mph: uni(rng, 0, 6.283), b: uni(rng, 0.8, 2.6), g: uni(rng, 0.3, 1.1), gph: uni(rng, 0, 6.283) });
     }
     return function (t) {
@@ -935,7 +935,6 @@
     var secs = (S % 1 === 0 ? S : S.toFixed(1));
     out.push(secs + "-second strip, lead " + s.lead + ".");
     var count = plural(n, "QRS complex", "QRS complexes") + " in " + secs + " seconds";
-    var regular = rrs.length > 1 && sd(rrs) / mean(rrs) < 0.05;
     var sv = beats.filter(function (b) { return b.kind === "sinus" || b.kind === "afib" || b.kind === "flutter"; });
     var qrsW = sv.length ? sv[0].qrs : s.qrs;
     var prs = beats.filter(function (b) { return b.pr !== undefined; }).map(function (b) { return b.pr; });
@@ -1002,7 +1001,6 @@
       out.push("Each upright P wave is followed, about " + sec(prAvg) + " later, by a tall, very narrow vertical spike, and every spike is followed immediately by a wide QRS complex (about " + sec(Math.round(pw / 0.01) * 0.01) + ", " + squares(pw) + ") that points mainly downward, with a T wave pointing upward, the opposite way.");
       out.push(capital(count) + ", evenly spaced: " + rateText(rrs) + ".");
     }
-    if (regular === false && id === "nsr") { /* sinus strips are always regular; nothing to add */ }
     return out.join(" ");
   }
 
