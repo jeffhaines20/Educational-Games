@@ -266,7 +266,10 @@
         ["S4 (atrial gallop)", "Ventricles filling as the atria contract, just before S1", "Abnormal: LV hypertrophy, chronic hypertension, cardiomyopathy, MI"],
         ["Murmur", "Turbulent blood flow", "Graded I (faint) to VI (heard without a stethoscope)"]
       ] } } },
-      { heading: "Technique", body: "Put the diaphragm or bell directly on bare skin with enough pressure to seal, while the patient breathes quietly through the nose." }
+      { heading: "Technique", body: [
+        "Put the diaphragm or bell directly on bare skin with enough pressure to seal, while the patient breathes quietly through the nose.",
+        { tip: "The game's chest diagram numbers the areas 1 aortic, 2 pulmonic, 3 Erb's point, 4 tricuspid, 5 mitral. The lecture's figure (L1 s25) numbers them differently — learn the locations, not the numbers." }
+      ] }
     ],
     sources: ["L1 s21–26 · Heart sounds and auscultation"]
   });

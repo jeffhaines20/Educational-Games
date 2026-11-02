@@ -548,7 +548,7 @@
     // Unknown Casebook ids.
     content.caseList.forEach(function (k) {
       (k.casebook || []).forEach(function (eid) {
-        if (!content._entries[eid]) content.warnings.push({ where: "case " + k.id, message: "casebook id \"" + eid + "\" has no entry (yet)" });
+        if (!content._entries[eid]) content.warnings.push({ where: "case " + k.id + " [" + k._file + "]", message: "casebook id \"" + eid + "\" has no entry (yet)" });
       });
     });
     // Unit order numbers: 1..n without gaps or duplicates.

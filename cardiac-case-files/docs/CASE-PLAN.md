@@ -142,7 +142,7 @@ her, don't wait, don't give medication); STEMI on the paramedics' 12-lead (ST el
 injury); zones of infarction (T inversion / ST elevation / Q waves); LAD most common; troponin
 as today's marker (slides: CPK, AST, LDH).
 Steps: [single] what must be ruled out first · [single] what you do · [single] interpret the
-paramedics' strip (update; `nsr` rate ~104, `st: "elevation", stMm: 3`, lead V2) · [classify]
+paramedics' strip (update; `sinus-tach` rate ~104, `st: "elevation", stMm: 3`, lead V2) · [classify]
 ECG signs → zone (ischemia / injury / infarction; 4+ items) · [single] the most commonly
 blocked artery · optional [multi] why her MI could have been missed.
 Sources: L2 s27–32. Casebook: `mi`, `warning-signs`, `ecg-basics`.

@@ -125,8 +125,9 @@ freely — but each game folder must stand alone, so **copy, don't import**.
 <script src="js/ui/…"></script>   <!-- util, richtext, ecg, diagrams, sound, dialogs, screens; app.js last -->
 ```
 
-Everything hangs off one global, `window.CCF`. Each file starts with
-`var CCF = (window.CCF = window.CCF || {});`. A content file that fails to load (missing,
+Everything hangs off one global, `window.CCF`. Engine and UI files start with
+`var CCF = (window.CCF = window.CCF || {});`; content files simply call `CCF.define…`,
+which `registry.js` has already created. A content file that fails to load (missing,
 or a syntax error) must not stop the game: the registry records which files ran, the
 others' cases are simply absent, and the UI shows a quiet warning.
 `tools/validate_content.js` fails if a `js/content/*.js` file is not referenced by
