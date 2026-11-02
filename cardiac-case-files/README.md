@@ -109,6 +109,7 @@ Add these to the game's address (link and embed only):
 | `?reference=off` | Closed book: hides the Casebook. |
 | `?hints=off` | No hints from Dr. Okafor. |
 | `?sound=off` | Start with sound effects off. |
+| `?motion=reduce` | Turn off animations (the game also follows the device's *reduce motion* setting). |
 
 Combine them with `&`: `…/cardiac-case-files/?unlock=all&reference=off`. For an uploaded
 SCORM package or single file, rebuild with `python3 tools/build.py --reference off`.
@@ -119,7 +120,9 @@ The cases follow the lectures. In a few places the slides are out of date or imp
 the game follows current practice (and says so in the case explanations) — for example,
 troponin as today's main marker of heart-muscle injury, digoxin's role in atrial fibrillation
 (rate control), early walking for patients with DVT once anticoagulated, and current BLS steps.
-The full list is in [`docs/SOURCE-NOTES.md`](docs/SOURCE-NOTES.md) §0.
+The full list is in [`docs/SOURCE-NOTES.md`](docs/SOURCE-NOTES.md) §0, followed by a few
+points the game keeps as the lecture teaches them but that an instructor may want to discuss
+(for example warfarin vs the newer anticoagulants for atrial fibrillation).
 
 ### Privacy and accessibility
 

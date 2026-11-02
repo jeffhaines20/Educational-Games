@@ -39,6 +39,25 @@ explanation gives the current view.
 | L2 s9 | T-wave inversion "always abnormal in V2–V6" | True for most adults; normal variants exist in young people and some athletes. The game says "in adults". |
 | L1 s20 | "Bindle branch" | Bundle branch block. |
 
+### Kept as the lecture teaches it — but worth discussing in class
+
+The medical reviewers flagged these as correct enough to keep, with nuance an instructor may want to add:
+
+* **Anticoagulation in AFib (case 3.2):** warfarin (Coumadin) follows the lecture; today the
+  newer direct oral anticoagulants are usually preferred.
+* **Digoxin levels (case 3.4):** the classic laboratory range 0.5–2.0 ng/mL is used; the target
+  in heart failure is now lower. The patient's level (3.1) is toxic either way.
+* **CPR order (case 3.5):** "check responsiveness and breathing" comes before "shout for help",
+  as in the lay-rescuer sequence; the healthcare-provider algorithm shouts for help first, then
+  checks breathing and pulse together.
+* **Fainting with a pulse of 36 (case 3.3):** the answer follows L1 s44 (alert the PT and physician
+  immediately; the explanation adds when to call 911). Some educators would call 911 at once.
+* **The LAD as the most common infarct site (L2 s28):** attributed to the lecture; the right
+  coronary artery is close behind in published data.
+* **Walking programme for claudication (L2 s49):** "walk to near-maximal pain"; current guidelines
+  also accept walking to moderate pain.
+* **Homan's sign:** the lecture's spelling; the eponym is properly "Homans sign".
+
 ---
 
 ## 1. Anatomy and physiology (L1 s2–19)
