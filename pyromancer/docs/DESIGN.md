@@ -581,7 +581,8 @@ labelled when they stand alone. Animations are tasteful and short, and disabled 
 slot falls back to its icon when its painting is missing or fails to load. The slots are:
 `location-<chapter id>` (map medallion and card banner, chapter header, chapter story
 banner, dimmed challenge-scene backdrop), `portrait-<ada|pip|glitch|hydra>` (story panels,
-Ada's note, Pip's hints), `map` (behind the map path) and `ending` (epilogue, certificate).
+Ada's note, Pip's hints), `map` (behind the map's heading; the prologue's banner) and `ending`
+(epilogue, certificate, the Sanctum station on the map).
 `python3 tools/art.py` crops, compresses and lists them; docs/ART-PROMPTS.md has the
 prompts. Always take URLs from `SS.Art`, because `build.py` inlines the literal paths in the
 manifest.

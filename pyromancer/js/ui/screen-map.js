@@ -193,6 +193,7 @@
     // The final station: the certificate.
     var sanctumMedallion = medallionFor(u.icon("certificate", { className: "medallion-icon" }), "ending",
       overall.total ? overall.completed / overall.total : 0, allDone, allDone ? "complete" : "locked", false, "medallion-sanctum");
+    var sanctumBanner = u.artImg("ending", "station-banner-img");
     var sanctum = h("li", { class: "station station-sanctum station-" + (allDone ? "complete" : "locked") },
       h("button", {
         type: "button", class: "station-btn",
@@ -206,7 +207,8 @@
         }
       },
         sanctumMedallion,
-        h("span", { class: "station-card" },
+        h("span", { class: "station-card" + (sanctumBanner ? " has-banner" : "") },
+          sanctumBanner ? h("span", { class: "station-banner", "aria-hidden": "true" }, sanctumBanner) : null,
           h("span", { class: "station-eyebrow" }, "The summit"),
           h("span", { class: "station-title" }, "The Archmage's Sanctum"),
           h("span", { class: "station-sub" }, allDone ? "Your certificate awaits!" : "Master every spell to earn your certificate"))));
@@ -214,10 +216,9 @@
     list.appendChild(sanctum);
     if (allDone) reachIndex = stations.length - 1;
 
-    // An optional painted map behind the path.
-    var mapArt = u.artImg("map", "trail-art-img");
-    var trail = h("div", { class: "trail" + (mapArt ? " has-art" : "") },
-      mapArt ? h("div", { class: "trail-art", "aria-hidden": "true" }, mapArt) : null, trailSvg, list);
+    // The painted academy (the optional "map" painting) behind the heading.
+    var mapArt = u.artImg("map", "map-hero-img");
+    var trail = h("div", { class: "trail" }, trailSvg, list);
     if (!chapters.length) {
       trail = h("div", { class: "panel empty-state" },
         h("p", null, u.icon("fog"), " No chapters could be loaded. Please tell your instructor."));
@@ -244,7 +245,8 @@
         cta ? h("div", { class: "map-actions" }, cta,
           h("p", { class: "map-actions-help" }, "Your Grimoire, the Practice Chamber, the Save Scroll and Settings are in the bar at the top of the screen.")) : null),
       notices,
-      h("header", { class: "map-heading" },
+      h("header", { class: "map-heading" + (mapArt ? " has-art" : "") },
+        mapArt,
         h("h1", { class: "screen-title" }, "The Grounds of Coilspire Academy"),
         h("p", { class: "screen-lead" }, "Follow the path from the Apprentice's Tower to the Hydra's Lair. Master every spell in an area to open the next.")),
       trail);

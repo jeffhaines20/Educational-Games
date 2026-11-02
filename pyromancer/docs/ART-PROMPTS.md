@@ -25,8 +25,8 @@ add them. The prompts are written to match the title painting:
 | `portrait-pip` | square | Pip's hints and story scenes | second |
 | `portrait-glitch` | square | story scenes | second |
 | `portrait-hydra` | square | story scenes in the last chapter and the ending | second |
-| `map` | wide 16:9 | the background of the academy map | optional |
-| `ending` | landscape 3:2 | the epilogue and the certificate | optional |
+| `map` | wide 16:9 | a banner behind the map's heading, and the first picture of the prologue | optional |
+| `ending` | landscape 3:2 | the epilogue, the certificate and the last stop on the map | optional |
 
 The seven **locations** make the biggest difference: each one appears on the map, at the top
 of its chapter and behind every challenge in that chapter. Start with those.
@@ -227,8 +227,8 @@ ember light glowing from below.
 
 ### Extras
 
-**`map` — Coilspire Academy** (wide 16:9). The game draws the chapter path on top, so keep
-the picture calm, with no strong focal point in the middle.
+**`map` — Coilspire Academy** (wide 16:9). It is shown as a wide banner with the map's heading
+over its lower part, and it opens the prologue, so keep the tower and the sky in the upper half.
 
 ```text
 A wide aerial view of Coilspire Academy at night: a spiralling stone tower rising above

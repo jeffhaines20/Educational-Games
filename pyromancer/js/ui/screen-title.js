@@ -23,6 +23,12 @@
 
   function app() { return UI.app; }
 
+  /** The prologue looks out over the academy, the epilogue celebrates; either falls back to the tower. */
+  function storyBanner(kind) {
+    var slot = kind === "epilogue" ? "ending" : "map";
+    return SS.Art && SS.Art.has(slot) ? slot : "location-tower";
+  }
+
   function rankIconFor(title) {
     var ranks = (SS.Progress && SS.Progress.RANKS) || [];
     for (var i = 0; i < ranks.length; i++) if (ranks[i].title === title) return ranks[i].icon;
@@ -291,8 +297,7 @@
       title: kind === "prologue" ? "Prologue" : "Epilogue",
       finishLabel: kind === "prologue" ? "Enter the academy" : "Receive your certificate",
       skipLabel: "Skip the story",
-      // The prologue arrives at the Apprentice's Tower; the epilogue returns to its top.
-      banner: kind === "epilogue" && SS.Art && SS.Art.has("ending") ? "ending" : "location-tower",
+      banner: storyBanner(kind),
       onDone: finish
     });
     var el = h("section", { class: "story-screen story-" + kind },
