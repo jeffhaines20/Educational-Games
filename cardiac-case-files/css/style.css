@@ -498,7 +498,7 @@ h1[tabindex="-1"]:focus, h2[tabindex="-1"]:focus, h3[tabindex="-1"]:focus, h4[ta
 }
 .title-tab { left: 0; top: -26px; font-size: 0.9rem; }
 .title-folder-inner { position: relative; padding: clamp(1.6rem, 5vw, 3.2rem) clamp(1.2rem, 5vw, 3.4rem) clamp(1.4rem, 4vw, 2.4rem); text-align: center; }
-.title-clip { left: 56px; top: -34px; transform: rotate(-12deg); width: 30px; height: 72px; }
+.title-clip { left: 168px; top: -36px; transform: rotate(-12deg); width: 30px; height: 72px; }
 .title-kicker { font-family: var(--font-display); text-transform: uppercase; letter-spacing: 0.16em; color: var(--ink-2); font-size: 0.82rem; margin-bottom: 0.9rem; }
 .title-h1 {
   font-family: var(--font-display); font-weight: 400;
@@ -926,7 +926,7 @@ h1[tabindex="-1"]:focus, h2[tabindex="-1"]:focus, h3[tabindex="-1"]:focus, h4[ta
 .exhibit, .exhibit-body, .exhibit-list > *, .exhibit-group > *, .step-exhibits > *, .results-inline > *, .drill-prompt > * { min-width: 0; }
 .exhibit-list, .exhibit-group, .step-exhibits, .results-inline, .drill-prompt { grid-template-columns: minmax(0, 1fr); }
 .ecg-wrap figure { margin: 0; }
-.ecg-wrap svg { display: block; width: 100%; height: auto; }
+.describe-btn .icon { width: 1.1rem; height: 1.1rem; }
 .ecg-placeholder { background: var(--ecg-paper); border: 1px solid var(--ecg-major); border-radius: 6px; padding: 0 0 0.6rem; }
 .ecg-placeholder-paper {
   height: 90px; border-bottom: 1px solid var(--ecg-major);
@@ -1197,8 +1197,8 @@ button.step-dot.is-done:hover { background: var(--navy-2); }
   border-radius: 4px 14px 14px 14px; box-shadow: var(--shadow-2);
 }
 .closed-folder .folder-tab { left: 0; }
-.closed-folder-inner { position: relative; padding: clamp(1.3rem, 4vw, 2.2rem); text-align: center; overflow: hidden; }
-.closed-folder .paper-clip { left: 40px; top: -30px; transform: rotate(-10deg); }
+.closed-folder-inner { position: relative; padding: clamp(1.3rem, 4vw, 2.2rem); text-align: center; overflow-x: clip; }
+.closed-folder .paper-clip { left: auto; right: 44px; top: -30px; transform: rotate(10deg); }
 .closed-folder .case-kicker { color: var(--ink-2); }
 .closed-folder .case-h1 { color: #21170d; }
 .stamp-big { font-size: clamp(1.8rem, 6vw, 3.1rem); margin: 1.4rem 0 2.1rem; padding: 0.05em 0.5em; border-width: 5px; transform: rotate(-7deg); }

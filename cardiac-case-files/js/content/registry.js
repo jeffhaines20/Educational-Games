@@ -44,9 +44,9 @@
   };
 
   var UNITS = [
-    { id: "basics", order: 1, title: "Heart Basics", subtitle: "Blood flow, rhythm, cardiac output and the vital signs", icon: "heart-organ" },
-    { id: "coronary", order: 2, title: "Coronary Cases", subtitle: "Angina, heart attack and coronary artery disease", icon: "heart-beats" },
-    { id: "rhythm", order: 3, title: "Rhythm Cases", subtitle: "Palpitations, arrhythmias, heart block and the defibrillator", icon: "pulse" },
+    { id: "basics", order: 1, title: "Heart Basics", subtitle: "Blood flow, rhythm, cardiac output and the vital signs", icon: "stethoscope" },
+    { id: "coronary", order: 2, title: "Coronary Cases", subtitle: "Angina, heart attack and coronary artery disease", icon: "heart-organ" },
+    { id: "rhythm", order: 3, title: "Rhythm Cases", subtitle: "Palpitations, arrhythmias, heart block and the defibrillator", icon: "heart-beats" },
     { id: "pump", order: 4, title: "Pump Failure", subtitle: "Heart failure, pulmonary edema, cardiomyopathy and cor pulmonale", icon: "lungs" },
     { id: "pressure", order: 5, title: "Pressure Cases", subtitle: "Hypertension, low blood pressure, atherosclerosis and aneurysm", icon: "speedometer" },
     { id: "vessels", order: 6, title: "Vessel Cases", subtitle: "Arteries, veins, clots and cold fingers", icon: "leg" }

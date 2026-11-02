@@ -47,7 +47,7 @@
       },
       {
         speaker: "okafor",
-        text: "So it's official: **Chief Cardiac Detective**. Your certificate is ready to print. I'd trust you with any of my patients."
+        text: "So it's official: every case file in this building is **closed**. Your certificate is ready to print — and I'd trust you with any of my patients."
       }
     ]
   });
