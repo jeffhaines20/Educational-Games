@@ -196,7 +196,10 @@
         ["0.41–0.90", "Mild to moderate peripheral arterial disease", "present, limiting"],
         ["0.00–0.40", "Severe peripheral arterial disease", "early, limiting; rest pain"]
       ] } } },
-      { heading: "Good to know", body: "Calcified arteries — common in diabetes — can't be squeezed shut by the cuff, so the ABI reads falsely high. Other tests (Doppler studies, transcutaneous oximetry) are used instead." }
+      { heading: "Good to know", body: [
+        "Calcified arteries — common in diabetes — can't be squeezed shut by the cuff, so the ABI reads falsely high. Other tests (Doppler studies, transcutaneous oximetry) are used instead.",
+        { tip: "The lecture's table puts the non-compressible cut-off at 1.30. Current American Heart Association / American College of Cardiology guidelines use **above 1.40** (and call 1.00–1.40 normal). The cases in this game avoid values between the two." }
+      ] }
     ],
     sources: ["L2 s48–50 · PVD diagnosis and ABI"]
   });

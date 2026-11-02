@@ -28,6 +28,11 @@ explanation gives the current view.
 | L2 s22 | Stage 2 "SBP 140 DBP 90"; crisis "SBP 180 DBP 120" | As the AHA chart on L2 s23 says: stage 2 is ≥ 140 **or** ≥ 90; crisis is > 180 **and/or** > 120. |
 | L2 s27 | MI statistics (1.5 million a year, leading cause of death) | Not used. |
 | L2 s68 | "pulmonary hypotension" (typo) | Pulmonary **hypertension**. |
+| L2 s50 | ABI above 1.30 = non-compressible; 1.00–1.29 normal | Current AHA/ACC guidelines: above **1.40** = non-compressible; 1.00–1.40 normal. Cases and drills avoid ABIs between 1.30 and 1.40, and the Casebook mentions both cut-offs. |
+| L2 s45 | Plaque damages the walls of "both arteries and veins" | Atherosclerosis is a disease of arteries. Not used as a question. |
+| L1 s38 | Claudication "most often" from popliteal artery disease | The femoral and popliteal arteries are the usual sites; cases say "femoral and popliteal". |
+| L2 s49 | Anticoagulants and thrombolytics for PVD | Standard long-term treatment is an antiplatelet plus a statin; clot-dissolving drugs are for a sudden arterial blockage. The Casebook says so. |
+| L2 s51 | "At least 30 %" 5-year mortality in symptomatic PVD | Current estimates vary (roughly 15–30 %); cases say "up to about 30 %". |
 | L1 s20 | "Bindle branch" | Bundle branch block. |
 
 ---
