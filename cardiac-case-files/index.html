@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>The Cardiac Case Files</title>
+  <meta name="description" content="The Cardiac Case Files: a case-based study game in cardiovascular pathology for physical therapist assistants. Work patient case files step by step at the fictional Riverside Heart &amp; Vascular Center. For education only — not medical advice.">
+  <meta name="color-scheme" content="dark light">
+  <meta name="theme-color" content="#0f1726">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect x='4' y='10' width='56' height='46' rx='5' fill='%23e8cf98'/%3E%3Cpath d='M4 16a5 5 0 0 1 5-5h16l5 5' fill='%23d8b977'/%3E%3Cpath d='M9 37h12l4-9 6 18 5-14 3 5h16' fill='none' stroke='%23b3261e' stroke-width='4.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+
+  <!-- Record script files that fail to load (a missing case file, a syntax error) so the game can say so quietly. -->
+  <script>
+    window.CCF_LOAD_ERRORS = [];
+    window.addEventListener("error", function (e) {
+      if (window.CCF_LOAD_DONE) return;
+      var t = e && e.target;
+      if (t && t.tagName === "SCRIPT") window.CCF_LOAD_ERRORS.push({ src: t.getAttribute("src") || "", kind: "missing" });
+      else if (e && e.filename) window.CCF_LOAD_ERRORS.push({ src: e.filename, kind: "error", message: String(e.message || "") });
+    }, true);
+  </script>
+
+  <!-- Self-hosted fonts (assets/fonts): no font service is contacted. -->
+  <link rel="stylesheet" href="css/fonts.css">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <noscript>
+    <div class="noscript">
+      <h1>The Cardiac Case Files</h1>
+      <p>This game needs JavaScript. Please turn JavaScript on, or open the game in another browser.</p>
+    </div>
+  </noscript>
+
+  <div id="desk" aria-hidden="true"></div>
+  <div id="app">
+    <div class="boot" role="status">
+      <div class="boot-pulse" aria-hidden="true"></div>
+      <p>Pulling the case files…</p>
+    </div>
+  </div>
+  <div id="modal-root"></div>
+  <div id="toast-root" aria-live="polite"></div>
+  <div id="sr-live" class="sr-only" aria-live="polite" aria-atomic="true"></div>
+  <div id="sr-alert" class="sr-only" aria-live="assertive" aria-atomic="true"></div>
+  <div id="print-root"></div>
+
+  <!-- Engine -->
+  <script src="js/config.js"></script>
+  <script src="js/engine/scorm.js"></script>
+  <script src="js/engine/save.js"></script>
+  <script src="js/engine/progress.js"></script>
+
+  <!-- Content (a file that fails to load leaves its cases out; the game says so quietly) -->
+  <script src="js/content/registry.js"></script>
+  <script src="js/content/story.js"></script>
+  <script src="js/content/reference.js"></script>
+  <script src="js/content/u1-basics.js"></script>
+  <script src="js/content/u2-coronary.js"></script>
+  <script src="js/content/u3-rhythm.js"></script>
+  <script src="js/content/u4-pump.js"></script>
+  <script src="js/content/u5-pressure.js"></script>
+  <script src="js/content/u6-arteries.js"></script>
+  <script src="js/content/u6-veins.js"></script>
+
+  <!-- Icons (game-icons.net, CC BY 3.0) -->
+  <script src="js/ui/icon-data.js"></script>
+  <script src="js/ui/icons.js"></script>
+
+  <!-- User interface (app.js last: it boots the game on DOMContentLoaded) -->
+  <script src="js/ui/util.js"></script>
+  <script src="js/ui/richtext.js"></script>
+  <script src="js/ui/ecg.js"></script>
+  <script src="js/ui/diagrams.js"></script>
+  <script src="js/ui/sound.js"></script>
+  <script src="js/ui/dialogs.js"></script>
+  <script src="js/ui/exhibits.js"></script>
+  <script src="js/ui/steps.js"></script>
+  <script src="js/ui/panels.js"></script>
+  <script src="js/ui/screen-title.js"></script>
+  <script src="js/ui/screen-board.js"></script>
+  <script src="js/ui/screen-case.js"></script>
+  <script src="js/ui/screen-casebook.js"></script>
+  <script src="js/ui/screen-drills.js"></script>
+  <script src="js/ui/screen-log.js"></script>
+  <script src="js/ui/app.js"></script>
+</body>
+</html>

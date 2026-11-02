@@ -9,6 +9,7 @@ LMS (Blackboard, Canvas, Moodle, D2L…).
 | Game | Teaches | Play | Guide |
 |------|---------|------|-------|
 | 🔥 **[Pyromancer](pyromancer/)** | Python, data structures & algorithms, object-oriented programming (up to dynamic programming) | [`pyromancer/index.html`](pyromancer/index.html) | [README](pyromancer/README.md) |
+| 🩺 **[The Cardiac Case Files](cardiac-case-files/)** | Cardiovascular pathology for physical therapist assistant students: heart anatomy and ECGs, angina and heart attack, arrhythmias, heart failure, hypertension, vascular disease and cardiac drugs, through patient cases | [`cardiac-case-files/index.html`](cardiac-case-files/index.html) | [README](cardiac-case-files/README.md) |
 
 ## Hosting all games for free (GitHub Pages)
 
@@ -19,7 +20,8 @@ LMS (Blackboard, Canvas, Moodle, D2L…).
    **/ (root)**, then **Save** (the games must be on the `main` branch).
 3. After a minute the games are live at
    `https://jeffhaines20.github.io/Educational-Games/` (a menu of all games), e.g.
-   `https://jeffhaines20.github.io/Educational-Games/pyromancer/`.
+   `https://jeffhaines20.github.io/Educational-Games/pyromancer/` or
+   `https://jeffhaines20.github.io/Educational-Games/cardiac-case-files/`.
 
 Each game's README explains how to put it in an LMS (as a link, an embedded page,
 a single HTML file, or a SCORM package that reports scores to the gradebook).

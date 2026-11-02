@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  The Cardiac Case Files: SCORM 1.2 package manifest (template).
+  tools/build.py copies this file to the root of dist/cardiac-case-files-scorm.zip, next to
+  index.html (the single-file build of the game). One SCO: the whole game.
+  The game reports cmi.core.score.raw (the percentage of case files solved, once there is
+  progress), cmi.core.lesson_status (incomplete, then completed once every case is solved, or
+  the share set by CCF_CONFIG.scorm.completionThreshold) and keeps the player's progress in
+  cmi.suspend_data. No mastery score is set, so the LMS never turns "incomplete" into "failed".
+  The ADL schema files are not bundled, so no xsi:schemaLocation is given.
+-->
+<manifest identifier="cardiac-case-files" version="1.0"
+          xmlns="http://www.imsproject.org/xsd/imscp_rootv1p1p2"
+          xmlns:adlcp="http://www.adlnet.org/xsd/adlcp_rootv1p2">
+  <metadata>
+    <schema>ADL SCORM</schema>
+    <schemaversion>1.2</schemaversion>
+  </metadata>
+  <organizations default="cardiac-case-files-org">
+    <organization identifier="cardiac-case-files-org">
+      <title>The Cardiac Case Files</title>
+      <item identifier="cardiac-case-files-item" identifierref="cardiac-case-files-sco" isvisible="true">
+        <title>The Cardiac Case Files</title>
+      </item>
+    </organization>
+  </organizations>
+  <resources>
+    <resource identifier="cardiac-case-files-sco" type="webcontent" adlcp:scormtype="sco" href="index.html">
+      <file href="index.html"/>
+    </resource>
+  </resources>
+</manifest>
