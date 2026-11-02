@@ -91,10 +91,11 @@
  *     wrapping quotes and a trailing full stop are ignored when a code is pasted.
  *   * SCORM mode (an LMS API was found): one profile, no slots. On the first launch it is
  *     created with the learner's name from the LMS. The packed profile (case ids as 6-char
- *     hashes, times in minutes) lives in cmi.suspend_data, always ≤ 4000 characters; if a
- *     profile ever grew past that, optional details are dropped in a fixed order (in-progress
- *     states except the latest, dates, play counts, seen flags, the latest in-progress state,
- *     unsolved records). A copy is kept in localStorage by learner id; on launch the two are
+ *     hashes, times in minutes) lives in cmi.suspend_data, always ≤ 4000 characters (34 solved
+ *     cases and a typical case in progress take about 1 KB); if a profile ever grew past
+ *     that, optional details are dropped in a fixed order (solve dates, play counts, seen
+ *     flags, in-progress states except the latest, the latest one, unsolved records) — a solve
+ *     is never dropped. A copy is kept in localStorage by learner id; on launch the two are
  *     merged (best of each case; the LMS wins for name and settings). A fresh attempt (also
  *     after an instructor reset) keeps only the name and settings. Score: round(100 × solved
  *     ÷ total); status completed/passed once solved ÷ total ≥ completionThreshold. Values are
@@ -909,24 +910,29 @@
   //
   //   C1|<meta>|<name>|<settings>|<seen>|<cases>|<in progress>|<drills>
   //   meta        <profile id>.<created>.<updated>       times: base-36 minutes since 2020-01-01
-  //   name        percent-encoded (only A–Z a–z 0–9 - _ stay as they are)
+  //   name        percent-encoded (only A–Z a–z 0–9 - _ stay as they are), or "~" + base64url
+  //               of its UTF-8 when that is shorter (names in non-Latin scripts)
   //   settings    <flags: sound 1 + reduceMotion 2>.<textSize>[.<base64url JSON of other settings>]
   //   seen        the seen keys, percent-encoded, joined with "."
   //   cases       <key>:<state>[.<best strikes>[.<plays>[.<first solved>[.<last played>]]]] joined with ","
   //               key = the case id (save codes) or its 6-character hash (suspend_data);
   //               state = solved + 2 × best stars (0–7); numbers in base 36 ("" = 0 / none);
-  //               an empty <last played> after a <first solved> means the same time.
+  //               an empty <last played> after a <first solved> means the same time. Without
+  //               dates (LADDER), a case in progress still keeps its <last played>.
   //   in progress <key>:<base64url JSON of `current`> joined with ","
   //   drills      <drill id>:<best>[.<played>] joined with ","
   // ---------------------------------------------------------------------------
 
   var CODE_OPTS = { hash: false, dates: true, plays: true, seen: true, currents: "all", unsolved: true, drills: true, extraSettings: true };
 
+  // suspend_data: what to drop, in order, if a profile ever outgrows the budget. Dates go
+  // first (an in-progress case keeps its last-played time, so merges still know which copy
+  // is newer), in-progress states other than the latest only after counts and seen flags.
   var LADDER = [
     { dates: true, plays: true, seen: true, currents: "all", unsolved: true, drills: true, extraSettings: true },
-    { dates: true, plays: true, seen: true, currents: "recent", unsolved: true, drills: true, extraSettings: true },
-    { dates: false, plays: true, seen: true, currents: "recent", unsolved: true, drills: true, extraSettings: true },
-    { dates: false, plays: false, seen: true, currents: "recent", unsolved: true, drills: true, extraSettings: true },
+    { dates: false, plays: true, seen: true, currents: "all", unsolved: true, drills: true, extraSettings: true },
+    { dates: false, plays: false, seen: true, currents: "all", unsolved: true, drills: true, extraSettings: true },
+    { dates: false, plays: false, seen: false, currents: "all", unsolved: true, drills: true, extraSettings: true },
     { dates: false, plays: false, seen: false, currents: "recent", unsolved: true, drills: true, extraSettings: true },
     { dates: false, plays: false, seen: false, currents: "none", unsolved: true, drills: true, extraSettings: true },
     { dates: false, plays: false, seen: false, currents: "none", unsolved: false, drills: false, extraSettings: false }
@@ -973,10 +979,26 @@
     return !!(rec && (rec.solved || rec.plays > 0 || rec.current || rec.lastPlayedAt));
   }
 
-  function packRecord(key, rec, opts) {
+  /** The name, percent-encoded — or "~" + base64url of its UTF-8 when that is shorter (non-Latin names). */
+  function packName(name) {
+    var escaped = esc(name);
+    var encoded = "~" + base64urlEncode(utf8Encode(String(name)));
+    return encoded.length < escaped.length ? encoded : escaped;
+  }
+
+  function unpackName(text) {
+    text = String(text || "");
+    if (text.charAt(0) === "~") {
+      var bytes = base64urlDecode(text.slice(1));
+      return bytes ? utf8Decode(bytes) : null;
+    }
+    return unesc(text);
+  }
+
+  function packRecord(key, rec, opts, keepLast) {
     var state = rec.solved ? 1 + 2 * Math.min(3, Math.max(1, rec.bestStars)) : 0;
     var first = opts.dates && rec.solved ? minutesOf(rec.firstSolvedAt) : "";
-    var last = opts.dates ? minutesOf(rec.lastPlayedAt) : "";
+    var last = opts.dates || keepLast ? minutesOf(rec.lastPlayedAt) : "";
     if (first && last === first) last = "";
     var fields = [
       rec.solved && rec.bestStrikes ? b36(Math.min(MAX_STRIKES, rec.bestStrikes)) : "",
@@ -1025,43 +1047,43 @@
     var meta = [esc(profile.id), minutesOf(profile.createdAt), minutesOf(profile.updatedAt)].join(".");
     var seen = opts.seen ? Object.keys(profile.seen).filter(function (k) { return profile.seen[k] === true; }).sort().map(esc).join(".") : "";
 
+    // In-progress states first: "recent" keeps only the most recently played one.
+    var busy = opts.currents === "none" ? [] : ids.filter(function (id) { return profile.cases[id].current; });
+    if (opts.currents === "recent" && busy.length > 1) {
+      var latest = busy[0];
+      busy.forEach(function (id) {
+        if (timeOf(profile.cases[id].lastPlayedAt) >= timeOf(profile.cases[latest].lastPlayedAt)) latest = id;
+      });
+      busy = [latest];
+    }
+    var keepLast = Object.create(null);
+    busy.forEach(function (id) { keepLast[id] = true; });
+    var currents = busy.map(function (id) { return keyOf(id) + ":" + b64json(profile.cases[id].current); });
+    if (opts.hash && opts.currents === "all") {
+      Object.keys(scormExtras.currents).sort().forEach(function (h) { currents.push(h + ":" + scormExtras.currents[h]); });
+    }
+
     var entries = [];
     ids.forEach(function (id) {
       var rec = profile.cases[id];
       if (!meaningful(rec) || (!opts.unsolved && !rec.solved)) return;
-      entries.push(packRecord(keyOf(id), rec, opts));
+      entries.push(packRecord(keyOf(id), rec, opts, !!keepLast[id]));
     });
     if (opts.hash) {
       Object.keys(scormExtras.records).sort().forEach(function (h) {
         var rec = scormExtras.records[h];
         if (!opts.unsolved && !rec.solved) return;
-        entries.push(packRecord(h, rec, opts));
+        entries.push(packRecord(h, rec, opts, false));
       });
     }
     if (opts.maxEntries !== undefined) entries = entries.slice(0, opts.maxEntries);
-
-    var currents = [];
-    if (opts.currents !== "none") {
-      var busy = ids.filter(function (id) { return profile.cases[id].current; });
-      if (opts.currents === "recent" && busy.length > 1) {
-        var latest = busy[0];
-        busy.forEach(function (id) {
-          if (timeOf(profile.cases[id].lastPlayedAt) > timeOf(profile.cases[latest].lastPlayedAt)) latest = id;
-        });
-        busy = [latest];
-      }
-      busy.forEach(function (id) { currents.push(keyOf(id) + ":" + b64json(profile.cases[id].current)); });
-      if (opts.hash && opts.currents === "all") {
-        Object.keys(scormExtras.currents).sort().forEach(function (h) { currents.push(h + ":" + scormExtras.currents[h]); });
-      }
-    }
 
     var drills = !opts.drills ? [] : Object.keys(profile.drills).sort().map(function (id) {
       var d = profile.drills[id];
       return id + ":" + b36(d.best) + (opts.plays && d.played ? "." + b36(d.played) : "");
     });
 
-    return [PACK_PREFIX, meta, esc(profile.name), packSettings(profile.settings, opts.extraSettings), seen,
+    return [PACK_PREFIX, meta, packName(profile.name), packSettings(profile.settings, opts.extraSettings), seen,
       entries.join(","), currents.join(","), drills.join(",")].join("|");
   }
 
@@ -1087,7 +1109,7 @@
     if (created) p.createdAt = created;
     p.updatedAt = isoFromMinutes(meta[2] || "") || p.createdAt;
 
-    var name = unesc(parts[2] || "");
+    var name = unpackName(parts[2]);
     p.name = typeof name === "string" ? cleanName(name) : "";
     p.settings = unpackSettings(parts[3]);
 
@@ -1556,9 +1578,8 @@
   }
 
   function ready() {
-    ensureInit();
-    if (readyPromise) return readyPromise;
-    return Promise.resolve(makeInitResult());
+    var result = init();
+    return readyPromise || Promise.resolve(result);
   }
 
   function isScorm() {

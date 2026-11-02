@@ -200,33 +200,46 @@
     return found ? found.value : undefined;
   }
 
+  /** A vital split for display: { value, unit, text: true when it isn't a plain number }. */
+  function vitalParts(key, value) {
+    var def = VITALS.filter(function (v) { return v.key === key; })[0];
+    var text = String(value).trim();
+    var unit = def ? def.unit : "";
+    var bare = key === "bp" ? /^\d{2,3}\s*\/\s*\d{2,3}$/.test(text) : /^\d+(\.\d+)?$/.test(text);
+    if (bare && unit) return { value: text, unit: unit === "%" ? "%" : unit, text: false };
+    var numberish = /^[\d.\s\/%°FCkglb]+$/i.test(text) && text.length <= 12;
+    return { value: text, unit: "", text: !numberish };
+  }
+
   /**
    * readings: [{ label, vitals }] oldest first. opts.newIndex: the reading added by the current
-   * step's update (its tiles get a "New" flag). Every tile shows the latest value; changed values
-   * keep their earlier readings underneath.
+   * step's update (its changed tiles are marked). Every tile shows the latest value; changed
+   * values keep their earlier readings underneath.
    */
   function vitalsPanel(readings, opts) {
     opts = opts || {};
     readings = (readings || []).filter(function (r) { return r && r.vitals; });
     if (!readings.length) return h("p", { class: "muted" }, "No vital signs recorded.");
     var last = readings.length - 1;
+    var hasNew = opts.newIndex !== undefined && opts.newIndex !== null && opts.newIndex > 0;
     var tiles = [];
 
-    function tile(label, full, values) {
-      // values: [{ value, index }] for the readings that include this vital.
+    function tile(label, full, values, key) {
+      // values: [{ text, raw, index }] for the readings that include this vital (changes only).
       var latest = values[values.length - 1];
-      var isNew = opts.newIndex !== undefined && opts.newIndex !== null && latest.index === opts.newIndex && opts.newIndex > 0;
+      var isNew = hasNew && latest.index === opts.newIndex && values.length > 1;
       var earlier = values.slice(0, -1);
       var stale = latest.index !== last;
+      var parts = key ? vitalParts(key, latest.raw) : { value: latest.text, unit: "", text: !/^[\d.\s\/%]+$/.test(latest.text) };
       return h("div", { class: "vital" + (isNew ? " is-new" : "") },
-        h("dt", { class: "vital-label" }, h("abbr", { title: full }, label), isNew ? h("span", { class: "new-flag" }, "New") : null),
-        h("dd", { class: "vital-value" }, latest.text),
+        h("dt", { class: "vital-label" }, h("abbr", { title: full }, label), isNew ? h("span", { class: "sr-only" }, " (changed)") : null),
+        h("dd", { class: "vital-value" + (parts.text ? " is-text" : "") }, parts.value, parts.unit ? h("span", { class: "vital-unit" }, parts.unit) : null),
         earlier.length ? h("dd", { class: "vital-trail" },
-          h("span", { class: "sr-only" }, "Earlier: "),
+          earlier.length === 1 ? "was " : "earlier ",
           earlier.map(function (e, i) {
             return [i ? h("span", { class: "trail-sep", "aria-hidden": "true" }, " → ") : null,
               h("span", { class: "trail-value", title: readings[e.index].label }, e.text)];
-          }), h("span", { class: "trail-sep", "aria-hidden": "true" }, " → now")) : null,
+          })) : null,
         stale && readings.length > 1 ? h("dd", { class: "vital-when" }, readings[latest.index].label) : null);
     }
 
@@ -238,9 +251,9 @@
         if (v === undefined || v === null || v === "") return;
         var text = formatVital(key, v);
         if (values.length && values[values.length - 1].text === text) { values[values.length - 1].index = i; return; }
-        values.push({ text: text, index: i });
+        values.push({ text: text, raw: v, index: i });
       });
-      if (values.length) tiles.push(tile(def.short, def.label, values));
+      if (values.length) tiles.push(tile(def.short, def.label, values, key));
     });
     otherLabels(readings).forEach(function (label) {
       var values = [];
@@ -249,14 +262,15 @@
         if (v === undefined || v === null || v === "") return;
         var text = String(v);
         if (values.length && values[values.length - 1].text === text) { values[values.length - 1].index = i; return; }
-        values.push({ text: text, index: i });
+        values.push({ text: text, raw: v, index: i });
       });
-      if (values.length) tiles.push(tile(label, label, values));
+      if (values.length) tiles.push(tile(label, label, values, null));
     });
 
     var head = h("p", { class: "vitals-now" },
       h("span", { class: "vitals-now-label" }, readings.length > 1 ? "Latest" : "Vital signs"),
-      readings.length > 1 ? [" · ", h("span", { class: "vitals-now-when" }, readings[last].label)] : null);
+      readings.length > 1 ? [" · ", h("span", { class: "vitals-now-when" }, readings[last].label)] : null,
+      hasNew && opts.newIndex === last ? h("span", { class: "new-flag" }, "New reading") : null);
     var out = [head, h("dl", { class: "vitals-grid" }, tiles)];
     if (readings.length > 1) {
       out.push(h("details", { class: "vitals-log" },

@@ -79,29 +79,29 @@
   // Calculate the ABI (Casebook: abi)
   // ------------------------------------------------------------------------------------
 
+  // The lecture's table puts "non-compressible" above 1.30; current AHA/ACC guidance puts it
+  // above 1.40 (normal 1.00–1.40). The drill never generates 1.30–1.40, so both agree, and it
+  // stays at least 0.01 away from every band boundary (lo/hi are the 2-decimal values drawn).
   var ABI_CATS = [
-    { text: "Non-compressible: the reading is unreliable", lo: 1.31, hi: 1.55, range: "above 1.30" },
-    { text: "Normal", lo: 1.0, hi: 1.29, range: "1.00–1.29" },
-    { text: "Borderline", lo: 0.91, hi: 0.99, range: "0.91–0.99" },
-    { text: "Mild to moderate peripheral arterial disease", lo: 0.41, hi: 0.9, range: "0.41–0.90" },
-    { text: "Severe peripheral arterial disease", lo: 0.15, hi: 0.4, range: "0.00–0.40" }
+    { text: "Non-compressible: the reading is unreliable", lo: 1.42, hi: 1.6, range: "above 1.40 (the lecture's table says above 1.30)" },
+    { text: "Normal", lo: 1.01, hi: 1.25, range: "1.00–1.29 in the lecture's table; current guidance allows up to 1.40" },
+    { text: "Borderline", lo: 0.92, hi: 0.98, range: "0.91–0.99" },
+    { text: "Mild to moderate peripheral arterial disease", lo: 0.42, hi: 0.89, range: "0.41–0.90" },
+    { text: "Severe peripheral arterial disease", lo: 0.15, hi: 0.39, range: "0.40 or less" }
   ];
 
+  /** Band of an ABI after rounding to two decimals (non-compressible above 1.40). */
   function abiCat(v) {
     var r = Math.round(v * 100) / 100;
-    if (r > 1.3) return 0;
+    if (r > 1.4) return 0;
     if (r >= 1.0) return 1;
     if (r >= 0.91) return 2;
     if (r >= 0.41) return 3;
     return 4;
   }
 
-  function nearBoundary(v) {
-    return [0.405, 0.905, 0.995, 1.295, 1.305].some(function (b) { return Math.abs(v - b) < 0.007; }) || Math.abs(Math.round(v * 100) / 100 - 1.3) < 0.001;
-  }
-
   function abiCase(rand) {
-    for (var tries = 0; tries < 500; tries++) {
+    for (var tries = 0; tries < 800; tries++) {
       var target = u.randInt(0, 4, rand);
       var c = ABI_CATS[target];
       var want = c.lo + rand() * (c.hi - c.lo);
@@ -110,7 +110,10 @@
       var ankleHigh = Math.round(want * armHigh);
       var ankleLow = Math.max(0, ankleHigh - u.randInt(6, 22, rand));
       var abi = ankleHigh / armHigh;
-      if (abiCat(abi) !== target || nearBoundary(abi)) continue;
+      var r2 = Math.round(abi * 100) / 100;
+      // Rounded value inside the band's drawing range (never 1.30–1.40, never within 0.01 of a boundary).
+      if (r2 < c.lo - 1e-9 || r2 > c.hi + 1e-9 || abiCat(abi) !== target) continue;
+      if (r2 >= 1.3 - 1e-9 && r2 <= 1.4 + 1e-9) continue;
       // Traps must not collide with the answer.
       var traps = [ankleHigh / armLow, ankleLow / armHigh, ankleLow / armLow];
       if (traps.some(function (t) { return Math.abs(t - abi) < 0.025; })) continue;
@@ -194,21 +197,22 @@
   /** A cross-section of the skin with the pit drawn to scale, and a millimetre ruler. */
   function pitDrawing(mm, seconds) {
     var scale = 9;        // px per mm
-    var surface = 30, w = 300, depth = mm * scale;
+    var surface = 34, skinW = 250, w = 330, depth = mm * scale, cx = 125;
     var root = s("svg", { viewBox: "0 0 " + w + " 130", class: "pit-svg", role: "img", "aria-label": "A pit about " + mm + " millimetres deep" + (seconds ? ", taking about " + seconds + " seconds to fill back in." : ", filling back in immediately."), focusable: "false" });
-    var d = "M0 " + surface + " L95 " + surface + " C115 " + surface + " 120 " + (surface + depth) + " 150 " + (surface + depth) +
-      " C180 " + (surface + depth) + " 185 " + surface + " 205 " + surface + " L" + w + " " + surface + " L" + w + " 130 L0 130 Z";
-    root.appendChild(s("path", { d: d, class: "pit-skin" }));
-    root.appendChild(s("path", { d: d.split(" L" + w + " 130")[0], class: "pit-line" }));
-    // Ruler on the right: 0–8 mm.
-    var rx = 250;
+    var top = "M0 " + surface + " L" + (cx - 55) + " " + surface + " C" + (cx - 35) + " " + surface + " " + (cx - 30) + " " + (surface + depth) + " " + cx + " " + (surface + depth) +
+      " C" + (cx + 30) + " " + (surface + depth) + " " + (cx + 35) + " " + surface + " " + (cx + 55) + " " + surface + " L" + skinW + " " + surface;
+    root.appendChild(s("path", { d: top + " L" + skinW + " 130 L0 130 Z", class: "pit-skin" }));
+    root.appendChild(s("path", { d: top, class: "pit-line" }));
+    // Ruler beside the skin: 0–8 mm from the surface.
+    var rx = skinW + 18;
     root.appendChild(s("line", { x1: rx, y1: surface, x2: rx, y2: surface + 8 * scale, class: "pit-ruler" }));
     for (var i = 0; i <= 8; i++) {
       root.appendChild(s("line", { x1: rx, y1: surface + i * scale, x2: rx + (i % 2 ? 6 : 11), y2: surface + i * scale, class: "pit-ruler" }));
       if (i % 2 === 0) root.appendChild(s("text", { x: rx + 15, y: surface + i * scale + 4, class: "pit-label" }, i + " mm"));
     }
-    root.appendChild(s("line", { x1: 150, y1: surface + depth, x2: rx, y2: surface + depth, class: "pit-guide" }));
-    root.appendChild(s("text", { x: 150, y: surface - 10, "text-anchor": "middle", class: "pit-label" }, "thumb pressed here"));
+    root.appendChild(s("line", { x1: skinW + 4, y1: surface, x2: rx, y2: surface, class: "pit-guide" }));
+    root.appendChild(s("line", { x1: cx, y1: surface + depth, x2: rx, y2: surface + depth, class: "pit-guide" }));
+    root.appendChild(s("text", { x: cx, y: surface - 12, "text-anchor": "middle", class: "pit-label" }, "thumb pressed here"));
     return root;
   }
 

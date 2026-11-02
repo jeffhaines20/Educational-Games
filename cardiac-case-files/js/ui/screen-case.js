@@ -49,7 +49,7 @@
 
   function cleanState(cur, n) {
     var st = { step: 0, strikes: 0, hints: 0, answers: [] };
-    if (!cur || typeof cur !== "object") return st;
+    if (!cur || typeof cur !== "object") cur = {};
     st.step = Math.min(n - 1, intOr(cur.step, 0));
     st.strikes = intOr(cur.strikes, 0);
     st.hints = intOr(cur.hints, 0);
@@ -117,6 +117,10 @@
 
   function nextCaseAfter(kase) {
     var p = u.profile();
+    if (CCF.Progress && CCF.Progress.nextAfter) {
+      var n = u.safe(function () { return CCF.Progress.nextAfter(p, kase.id); }, undefined);
+      if (n !== undefined) return n && n.id !== kase.id ? n : null;
+    }
     var later = u.cases(kase.unit).filter(function (k) { return k.order > kase.order; });
     for (var i = 0; i < later.length; i++) {
       var r = u.caseRecord(later[i].id);
@@ -171,7 +175,7 @@
     panels.referral.appendChild(h("div", { class: "file-section" },
       h("h3", { class: "file-h" }, "Referral"),
       h("dl", { class: "patient-facts" },
-        h("div", null, h("dt", null, "Patient"), h("dd", null, p.name || "—")),
+        h("div", { class: "fact-name" }, h("dt", null, "Patient"), h("dd", null, p.name || "—")),
         h("div", null, h("dt", null, "Age"), h("dd", null, p.age ? String(p.age) : "—")),
         h("div", null, h("dt", null, "Sex"), h("dd", null, p.sex === "F" ? "Female" : p.sex === "M" ? "Male" : "—")),
         h("div", { class: "fact-wide" }, h("dt", null, "Setting"), h("dd", null, R().inline(kase.setting || "—")))),
@@ -754,7 +758,7 @@
       if (finished) return;
       finished = true;
       solveResult = u.safe(function () { return CCF.Save.recordSolve(kase.id, { strikes: state.strikes, hints: state.hints, stepCount: n }); }, null);
-      if (!solveResult) solveResult = { stars: starsNow(), xpGained: 0, firstSolve: true, totalXp: undefined, rankUp: null };
+      if (!solveResult || !solveResult.stars) solveResult = { stars: starsNow(), xpGained: 0, firstSolve: true, totalXp: undefined, rankUp: null };
       u.safe(function () { CCF.Save.clearCaseProgress(kase.id); });
       app().refreshTopbar();
     }

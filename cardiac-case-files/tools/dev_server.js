@@ -55,6 +55,7 @@ function createServer(root) {
         res.writeHead(200, {
           "Content-Type": TYPES[path.extname(file).toLowerCase()] || "application/octet-stream",
           "Content-Length": data.length,
+          "Access-Control-Allow-Origin": "*",
           "Cache-Control": "no-store",
         });
         res.end(req.method === "HEAD" ? undefined : data);

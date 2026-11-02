@@ -439,12 +439,23 @@
   var syncTimer = null;
   function onSaveChange(profile, info) {
     refreshTopbar();
-    if (!info || info.type !== "sync") return;
+    var type = info && info.type;
+    if (type === "scorm") {
+      // An LMS connection arrived late: the game now runs on the course's profile.
+      setTimeout(function () { applySettings(); go("title"); }, 0);
+      return;
+    }
+    if (type !== "sync" && type !== "slots") return;
     clearTimeout(syncTimer);
     syncTimer = setTimeout(function () {
       applySettings();
+      if (type === "slots" && state.screen !== "slots" && state.screen !== "title") return;
       if (current && current.refresh && !UI.dialogs.isOpen()) u.safe(function () { current.refresh(); });
     }, 0);
+  }
+
+  function flushSave() {
+    u.safe(function () { if (CCF.Save && CCF.Save.flush) CCF.Save.flush(); });
   }
 
   function boot() {
@@ -469,6 +480,8 @@
       state.bootInfo = { mode: "local", storageOk: false, warning: "Saving isn't available right now, so progress lasts only until this page closes." };
     }).then(function () {
       u.safe(function () { CCF.Save.onChange(onSaveChange); });
+      global.addEventListener("pagehide", flushSave);
+      document.addEventListener("visibilitychange", function () { if (document.visibilityState === "hidden") flushSave(); });
       if (u.profile()) state.slot = activeSlot();
       applySettings();
       go("title");

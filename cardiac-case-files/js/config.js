@@ -9,7 +9,8 @@
  *      (?sound=off and ?motion=reduce belong to the UI; CCF.parseQuery() reads them.)
  *
  * Every known CCF_CONFIG value is validated: a value of the wrong type or out of range keeps
- * the default. Unknown keys are copied as they are (for wrappers and other modules).
+ * the default (on/off switches also take "on"/"off", "yes"/"no", 1/0). Unknown keys are
+ * copied as they are (for wrappers and other modules).
  * URL parameters only work one way round — open every case, hide the Casebook, hide the
  * hints — so a URL can never turn the Casebook or hints back on when the page or the build
  * (`python3 tools/build.py --reference off`) turned them off.
@@ -62,8 +63,19 @@
     };
   }
 
+  var TRUE_WORDS = { "true": true, "on": true, "yes": true, "1": true, "all": true };
+  var FALSE_WORDS = { "false": true, "off": true, "no": true, "0": true, "none": true };
+
+  /** true/false, or the words a teacher might write ("off", "no", "on", "yes", 0, 1). */
   function bool(value, fallback) {
-    return typeof value === "boolean" ? value : fallback;
+    if (typeof value === "boolean") return value;
+    if (typeof value === "number" && (value === 0 || value === 1)) return value === 1;
+    if (typeof value === "string") {
+      var word = value.trim().toLowerCase();
+      if (TRUE_WORDS[word] === true) return true;
+      if (FALSE_WORDS[word] === true) return false;
+    }
+    return fallback;
   }
 
   function text(maxLength) {

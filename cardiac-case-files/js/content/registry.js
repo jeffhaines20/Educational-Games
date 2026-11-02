@@ -80,8 +80,11 @@
 
   function currentFile() {
     try {
-      if (typeof document !== "undefined" && document.currentScript && document.currentScript.src) {
-        var src = document.currentScript.src.split("?")[0];
+      var script = typeof document !== "undefined" ? document.currentScript : null;
+      // The single-file build inlines scripts and records their path in data-inlined.
+      var src = script && (script.getAttribute("data-inlined") || script.src);
+      if (src) {
+        src = src.split("?")[0];
         return src.slice(src.lastIndexOf("/") + 1);
       }
     } catch (e) { /* ignore */ }

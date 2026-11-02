@@ -81,6 +81,7 @@
   }
 
   function canImport() {
+    if (CCF.Save && CCF.Save.canImport) return !!u.safe(function () { return CCF.Save.canImport(); }, !app().isScorm());
     if (!app().isScorm()) return true;
     var sc = u.config().scorm || {};
     return sc.allowImport === true;
@@ -200,7 +201,6 @@
     actions.appendChild(small);
 
     var warning = app().storageWarning();
-    var problems = app().contentProblems();
 
     var el = h("section", { class: "title-screen" },
       h("div", { class: "title-lamp", "aria-hidden": "true" }),
@@ -215,11 +215,10 @@
           warning ? h("div", { class: "banner banner-warn", role: "status" },
             h("span", { class: "banner-icon", "aria-hidden": "true" }, u.icon("warning")),
             h("p", null, warning)) : null,
-          problems.files.length ? h("p", { class: "quiet-notice" }, u.icon("warning"), " Some case files didn't load; the others work normally.") : null,
           actions,
           h("p", { class: "title-disclaimer" }, u.DISCLAIMER)),
         h("div", { class: "title-stamp", "aria-hidden": "true" }, "Confidential")));
-    return { el: el, title: "", hideTopbar: true, focus: el.querySelector(".title-actions .btn") };
+    return { el: el, title: "", hideTopbar: true, focus: el.querySelector(".title-h1") };
   };
 
   // ------------------------------------------------------------------------------------
